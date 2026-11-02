@@ -1,0 +1,29 @@
+{% set rows = [] %}
+{% for pid, a in r0.people.items() %}{% set b = r1.people[pid] %}{% if a.share != b.share or (wpid and pid == wpid) %}{% set _ = rows.append((a, b)) %}{% endif %}{% endfor %}
+{% if not rows and r0.asso_total == r1.asso_total %}
+  <p class="muted">Aucun changement.</p>
+{% else %}
+<b>Aperçu avant / après</b>
+<table style="margin-top:.4rem">
+  <thead><tr><th>Qui</th><th class="num">Avant</th><th class="num">Après</th><th class="num">Écart</th><th class="num">Situation après</th></tr></thead>
+  <tbody>
+  {% for a, b in rows %}
+    <tr><td>{{ a.name }}</td><td class="num">{{ a.share|money }}</td><td class="num"><b>{{ b.share|money }}</b></td>
+      <td class="num {{ 'up' if b.share > a.share else 'down' }}">{{ (b.share - a.share)|money_sign }}</td>
+      <td class="num small">{% if b.balance > 0 %}doit {{ b.balance|money }}{% elif b.balance < 0 %}on lui doit {{ (-b.balance)|money }}{% else %}à jour{% endif %}</td></tr>
+  {% endfor %}
+  {% if r0.asso_total != r1.asso_total %}
+    <tr><td><i>{{ asso_name|capfirst }}</i></td><td class="num">{{ r0.asso_total|money }}</td><td class="num"><b>{{ r1.asso_total|money }}</b></td>
+      <td class="num up">{{ (r1.asso_total - r0.asso_total)|money_sign }}</td><td></td></tr>
+  {% endif %}
+  </tbody>
+</table>
+{% if wpid %}{% set w = r1.people[wpid] %}
+  <p style="margin:.6rem 0 0">
+  {% if w.balance < 0 %}➜ Il faudra lui rembourser <b>{{ (-w.balance)|money }}</b>. <a href="#" onclick="document.getElementById('refund').value='{{ (-w.balance)|amount_input }}';return false">Mettre ce montant</a>
+  {% elif w.balance > 0 %}➜ Il doit encore <b>{{ w.balance|money }}</b> (parts non remboursables).
+  {% else %}➜ Il est à jour, rien à rembourser.{% endif %}</p>
+{% endif %}
+{% for w in r1.warnings if w not in r0.warnings %}<p class="warn-text small">{{ w }}</p>{% endfor %}
+{% endif %}
+<p class="muted small" style="margin-top:.4rem">Total toujours juste : {{ r1.total_cost|money }} {{ '✓' if r1.is_balanced() else '✗' }}</p>

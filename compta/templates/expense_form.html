@@ -1,0 +1,348 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div class="grow">
+  <h1>{{ 'Modifier « ' ~ e.label ~ ' »' if e else 'Nouvelle dépense' }}</h1>
+  <p class="muted">Trois questions : quoi, qui a payé, pour qui.</p>
+</div></div>
+<form method="post" enctype="multipart/form-data" action="/v/{{ trip.id }}/depenses{{ '/%d'|format(e.id) if e }}"
+      style="max-width:900px">
+  <fieldset class="step">
+    <legend><span class="n">1</span> Quoi ?</legend>
+    {% set kind = e.kind if e and e.kind else 'depense' %}
+    <div class="choice" style="margin-bottom:.7rem">
+      <label><input type="radio" name="kind" value="depense" {{ 'checked' if kind != 'recette' }}> Une dépense</label>
+      <label><input type="radio" name="kind" value="recette" {{ 'checked' if kind == 'recette' }}> De l'argent reçu <span class="hint">(remboursement d'un fournisseur, subvention…)</span></label>
+    </div>
+    <div class="grid k2" style="gap:.8rem">
+      <div class="field"><label for="label">Libellé</label>
+        <input type="text" id="label" name="label" value="{{ e.label if e }}" placeholder="ex. Gîte, Péage A7, Sortie bateau" required autofocus></div>
+      <div class="field"><label for="category">Catégorie</label>
+        {% set cur_cat = e.category.name if e and e.category else '' %}
+        <select id="category" name="category">
+          <option value="" {{ 'selected' if not cur_cat }}>— Choisir —</option>
+          {% for c in trip.categories %}<option value="{{ c.name }}" {{ 'selected' if c.name == cur_cat }}>{{ c.name }}</option>{% endfor %}
+          {% if cur_cat and cur_cat not in trip.categories|map(attribute='name')|list %}<option value="{{ cur_cat }}" selected>{{ cur_cat }}</option>{% endif %}
+          <option value="__new__">+ Nouvelle catégorie…</option>
+        </select>
+        <div data-show-when="category=__new__" style="margin-top:.4rem">
+          <label for="category_new" class="sr-only">Nom de la nouvelle catégorie</label>
+          <input type="text" id="category_new" name="category_new" placeholder="Nom de la nouvelle catégorie">
+        </div>
+        <div class="hint"><a href="/v/{{ trip.id }}/categories">Gérer les catégories</a></div>
+        {% set cur_sub = e.subcategory if e else '' %}
+        <label for="subcategory" style="margin-top:.6rem">Sous-catégorie <span class="hint">(facultatif, ex. Péages, Essence)</span></label>
+        <select id="subcategory" name="subcategory" data-current="{{ cur_sub }}">
+          <option value="">— Aucune —</option>
+          {% if cur_sub %}<option value="{{ cur_sub }}" selected>{{ cur_sub }}</option>{% endif %}
+          <option value="__new__">+ Nouvelle sous-catégorie…</option>
+        </select>
+        <div data-show-when="subcategory=__new__" style="margin-top:.4rem">
+          <label for="subcategory_new" class="sr-only">Nom de la nouvelle sous-catégorie</label>
+          <input type="text" id="subcategory_new" name="subcategory_new" placeholder="Nom de la sous-catégorie">
+        </div></div>
+    </div>
+    <div class="grid k3" style="gap:.8rem">
+      <div class="field"><label for="planned">Montant prévu (€)</label>
+        <input class="amount" type="text" inputmode="decimal" id="planned" name="planned" value="{{ e.planned|amount_input if e }}" placeholder="0,00">
+        <div class="hint">L'estimation avant le voyage.</div></div>
+      <div class="field"><label for="actual">Montant réel (€)</label>
+        <input class="amount" type="text" inputmode="decimal" id="actual" name="actual" value="{{ e.actual|amount_input if e }}" placeholder="0,00">
+        <div class="hint">Ce qui a vraiment été payé. Vide = pas encore payé.</div>
+        <button type="button" class="btn link small" id="tickets-open" {{ 'hidden' if e and e.ticket_list }}>+ Plusieurs tickets ?</button></div>
+      <div class="field"><label for="date">Date</label>
+        <input type="date" id="date" name="date" value="{{ e.date if e and e.date else '' }}"></div>
+    </div>
+    {% set tl = e.ticket_list if e else [] %}
+    <div class="tickets-box" id="tickets" {{ 'hidden' if not tl }}>
+      <div class="row" style="justify-content:space-between;align-items:baseline">
+        <b class="small">Plusieurs tickets</b>
+        <span class="small">Montant réel = <b id="tickets-total">{{ e.actual|money if tl else '0,00 €' }}</b></span>
+      </div>
+      <p class="hint" style="margin:.2rem 0 .5rem">Ex. deux pleins d'essence : saisis chaque ticket, le total se calcule tout seul. (On peut aussi taper « 80,12 + 69,10 » dans le montant réel.)</p>
+      <div class="ticket-head small muted" aria-hidden="true"><span></span><span>Montant (€)</span><span>Date <span class="hint">(facultatif)</span></span><span></span></div>
+      <div id="ticket-rows">
+        {% for tk in (tl if tl else [{'cents': None, 'date': None}, {'cents': None, 'date': None}]) %}
+        <div class="ticket-row">
+          <span class="ticket-n small muted">{{ loop.index }}</span>
+          <label class="sr-only" for="ta{{ loop.index }}">Montant du ticket {{ loop.index }}</label>
+          <input class="amount" type="text" inputmode="decimal" id="ta{{ loop.index }}" name="ticket_amount" value="{{ tk.cents|amount_input if tk.cents }}" placeholder="0,00">
+          <label class="sr-only" for="td{{ loop.index }}">Date du ticket {{ loop.index }}</label>
+          <input type="date" id="td{{ loop.index }}" name="ticket_date" value="{{ tk.date or '' }}">
+          <button type="button" class="ticket-x" data-ticket-remove aria-label="Retirer ce ticket" title="Retirer ce ticket">×</button>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="row" style="gap:.8rem;margin-top:.3rem">
+        <button type="button" class="btn small ghost" id="ticket-add">+ Ajouter un ticket</button>
+        <button type="button" class="btn link small" id="tickets-close">Revenir à un seul montant</button>
+      </div>
+    </div>
+    <label class="small" style="display:flex;gap:.45rem;align-items:center"><input type="checkbox" name="pending" value="1" {{ 'checked' if e and e.pending }}> Montant pas encore connu <span class="hint">(la dépense est notée, on mettra le montant plus tard)</span></label>
+    <label class="small" style="display:flex;gap:.45rem;align-items:center;margin-top:.35rem"><input type="checkbox" name="has_refund" value="1" {{ 'checked' if e and e.refund }}> Une partie a été remboursée <span class="hint">(annulation, avoir…)</span></label>
+    <div class="grid k2 refund-fields" data-show-when="has_refund=1" style="gap:.8rem;margin-top:.5rem">
+      <div class="field"><label for="refund">Montant remboursé (€)</label>
+        <input class="amount" type="text" inputmode="decimal" id="refund" name="refund" value="{{ e.refund|amount_input if e and e.refund }}" placeholder="0,00">
+        <div class="hint">Le coût partagé sera le montant payé moins ce remboursement.</div></div>
+      <div class="field"><label for="refund_to">Remboursement reçu par</label>
+        <select id="refund_to" name="refund_to">
+          <option value="asso" {{ 'selected' if not (e and e.refund_to_id) }}>{{ asso_name|capfirst }} (sur son compte)</option>
+          {% for p in payers %}<option value="{{ p.id }}" {{ 'selected' if e and e.refund_to_id == p.id }}>{{ p.name }} (il doit le reverser à {{ asso_name }})</option>{% endfor %}
+        </select></div>
+    </div>
+  </fieldset>
+
+  <fieldset class="step">
+    <legend><span class="n">2</span> <span data-kind-text="Qui a payé ?|Qui l'a reçu ?">{{ "Qui l'a reçu ?" if kind == 'recette' else 'Qui a payé ?' }}</span></legend>
+    {% set payer = (e.payer_id if e and e.payer_id else 'asso')|string %}
+    {% set multi = e and e.multi_payer %}
+    <div class="choice">
+      <label><input type="radio" name="payer_kind" value="asso" {{ 'checked' if payer == 'asso' and not multi }}> {{ asso_name|capfirst }} <span data-kind-text="(depuis sa caisse)|(sur son compte)">{{ '(sur son compte)' if kind == 'recette' else '(depuis sa caisse)' }}</span></label>
+      <label><input type="radio" name="payer_kind" value="p" {{ 'checked' if payer != 'asso' and not multi }}> Un participant <span data-kind-text="(il a avancé l'argent)|(il doit le reverser à {{ asso_name }})">{{ "(il doit le reverser à " ~ asso_name ~ ")" if kind == 'recette' else "(il a avancé l'argent)" }}</span></label>
+      <label><input type="radio" name="payer_kind" value="multi" {{ 'checked' if multi }}> Plusieurs <span class="hint">(ex. une partie par {{ asso_name }}, le reste avancé par quelqu'un)</span></label>
+    </div>
+    <div class="field" data-show-when="payer_kind=multi" id="payers" style="margin-top:.7rem">
+      {% set rows = (e.payments|list if multi else []) %}
+      {% for i in range(8) %}{% set row = rows[i] if i < rows|length else none %}
+      <div class="row payer-row" {{ 'hidden' if i >= [rows|length, 2]|max }} style="gap:.5rem;margin-bottom:.4rem">
+        <select name="mp_{{ i }}" aria-label="Payeur {{ i + 1 }}" style="flex:1 1 12rem;min-width:0">
+          <option value="asso" {{ 'selected' if row and row.payer_id is none }}>{{ asso_name|capfirst }}</option>
+          {% for p in payers %}<option value="{{ p.id }}" {{ 'selected' if row and row.payer_id == p.id }}>{{ p.name }}</option>{% endfor %}
+        </select>
+        <input class="amount" type="text" inputmode="decimal" name="ma_{{ i }}" value="{{ row.amount|amount_input if row }}" placeholder="0,00" aria-label="Montant payé par le payeur {{ i + 1 }}" style="flex:0 1 8rem">
+      </div>
+      {% endfor %}
+      <button type="button" class="btn small ghost" id="add-payer">+ Un payeur</button>
+      <div class="hint">Le total doit faire le montant ; ce qui n'est attribué à personne est compté pour {{ asso_name }}.</div>
+    </div>
+    <div class="field" data-show-when="payer_kind=p" style="margin-top:.7rem;max-width:320px">
+      <label for="payer_sel">Qui ?</label>
+      <select id="payer_sel" onchange="document.getElementById('payer').value=this.value">
+        {% for p in payers %}<option value="{{ p.id }}" {{ 'selected' if payer == p.id|string }}>{{ p.name }}{% if 'organisateur' in p.role_list %} (organisateur){% elif 'co-organisateur' in p.role_list %} (co-organisateur){% endif %}</option>{% endfor %}
+      </select>
+      <div class="hint">Ce montant sera déduit de ce qu'il doit (ou {{ asso_name }} le lui remboursera).</div>
+    </div>
+    <input type="hidden" name="payer" id="payer" value="{{ payer }}">
+  </fieldset>
+
+  <fieldset class="step" id="who">
+    <legend><span class="n">3</span> Pour qui ?</legend>
+    <p class="hint" style="margin-top:0">Coche les personnes concernées : le montant est réparti également entre elles.
+      Pour qu'une personne paie un montant précis, <b>tape-le dans sa case</b> : il est fixé 🔒 et le reste se répartit tout seul entre les autres.</p>
+    <div class="who-chips" data-who-chips>
+      <div class="chip-line"><span class="chip-title">Seulement pour</span>
+        <span class="only-btns">
+          <button type="button" class="only-btn" data-reset="all" aria-pressed="false">Tout le monde</button>
+          <button type="button" class="only-btn" data-reset="none" aria-pressed="false">Personne</button>
+        </span></div>
+      {% if who_roles %}<div class="chip-line"><span class="chip-title sub">Rôles</span>
+        <span class="only-btns">{% for x in who_roles %}<button type="button" class="only-btn" data-only="{{ x.ids|join(',') }}" aria-pressed="false" title="{{ x.names }}">{{ x.label }}</button>{% endfor %}</span></div>{% endif %}
+      {% if who_families %}<div class="chip-line"><span class="chip-title sub">Familles</span>
+        <span class="only-btns">{% for x in who_families %}<button type="button" class="only-btn" data-only="{{ x.ids|join(',') }}" aria-pressed="false" title="{{ x.names }}">{{ x.label }}</button>{% endfor %}</span></div>{% endif %}
+      {% if who_groups %}<div class="chip-line"><span class="chip-title sub">Groupes</span>
+        <span class="only-btns">{% for x in who_groups %}<button type="button" class="only-btn" data-only="{{ x.ids|join(',') }}" aria-pressed="false" title="{{ x.names }}">{{ x.label }}</button>{% endfor %}</span></div>{% endif %}
+      <p class="hint" style="margin:.2rem 0 .4rem" data-only-hint>Clique un ou plusieurs boutons : seules leurs personnes sont cochées. Tu peux ensuite ajuster au cas par cas ci-dessous.</p>
+    </div>
+    <div class="who-list">
+      {% for p in trip.participants %}{% set fx = p.id in fixed %}
+      <div class="who{{ ' is-fixed' if fx }}">
+        <label><input type="checkbox" data-who data-pid="{{ p.id }}" data-companion="{{ 1 if p.companion else 0 }}" name="inc_{{ p.id }}" value="1" {{ 'checked' if p.id in weights }}> {{ p.name }}{% if p.companion %} <span class="hint">(acc.)</span>{% endif %}</label>
+        <span class="who-amt">
+          <input type="hidden" name="w_{{ p.id }}" value="{{ (weights[p.id] if p.id in weights else 1)|string }}" data-weight>
+          <input type="hidden" name="fx_{{ p.id }}" value="{{ '1' if fx }}" data-fixed>
+          <button type="button" class="fix-off" data-unfix title="Ne plus fixer : {{ p.name }} reprend une part égale" aria-label="Ne plus fixer le montant de {{ p.name }}">🔒<span aria-hidden="true">×</span></button>
+          <input class="who-amount amount" type="text" inputmode="decimal" name="m_{{ p.id }}" value="{{ amounts[p.id]|amount_input if p.id in amounts else '' }}" placeholder="0,00" aria-label="Montant pour {{ p.name }} (tape un montant pour le fixer)" {{ 'disabled' if p.id not in weights }}>
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+    <div id="split-status" class="split-status" aria-live="polite"></div>
+  </fieldset>
+
+  <fieldset class="step">
+    <legend><span class="n">+</span> Justificatifs <span class="hint">(facultatif)</span></legend>
+    <div class="field"><label for="files">Ajouter une photo ou un PDF</label>
+      <input type="file" id="files" name="files" multiple accept="image/*,application/pdf" data-file-preview></div>
+    {% if trip.receipts %}
+    <div class="field"><span class="label-like">Ou choisir un justificatif déjà importé</span>
+      <p class="hint" style="margin:.1rem 0 .5rem">Une même photo peut servir à plusieurs dépenses (ex. plusieurs tickets photographiés ensemble). Coche-la ici aussi.</p>
+      <div class="receipt-pick">
+      {% for rec in trip.receipts|sort(attribute='number', reverse=true) %}{% set others = rec.links|map(attribute='expense')|reject('equalto', e)|map(attribute='label')|list %}
+        <label class="rcard">
+          <input type="checkbox" name="receipts" value="{{ rec.id }}" {{ 'checked' if rec.id in linked }}>
+          <span class="rthumb" data-kind="{{ 'PDF' if not rec.content_type.startswith('image/') else '' }}"><img src="/v/{{ trip.id }}/justificatifs/{{ rec.id }}/vignette" alt="" loading="lazy" onerror="this.remove()"></span>
+          <span class="rinfo"><b>{{ rec.code }}</b>
+            <span class="small muted">{% if rec.id in linked and others %}pour cette dépense et : {{ others|join(', ') }}{% elif rec.id in linked %}pour cette dépense{% elif others %}déjà pour : {{ others|join(', ') }}{% else %}pas encore utilisé{% endif %}</span>
+            <a class="small" href="/v/{{ trip.id }}/justificatifs/{{ rec.id }}/fichier" target="_blank" rel="noopener">Voir en grand</a></span>
+        </label>
+      {% endfor %}
+      </div></div>
+    {% endif %}
+    <div class="field"><label for="note">Note <span class="hint">(facultatif)</span></label>
+      <textarea id="note" name="note" rows="3" data-autogrow placeholder="ex. détail des prélèvements, n° de facture…">{{ e.note if e }}</textarea></div>
+  </fieldset>
+
+  <div class="form-bar">
+    <button class="btn">Enregistrer</button>
+    {% if not e %}<button class="btn ghost" name="again" value="1">Enregistrer et en ajouter une autre</button>{% endif %}
+    <a class="btn ghost" href="/v/{{ trip.id }}/depenses">Annuler</a>
+  </div>
+</form>
+{% if e %}
+<form method="post" action="/v/{{ trip.id }}/depenses/{{ e.id }}/supprimer" data-confirm="Supprimer « {{ e.label }} » ?" style="margin-top:1rem">
+  <button class="btn small danger">Supprimer cette dépense</button>
+</form>
+{% endif %}
+<script>
+document.querySelectorAll('input[name=payer_kind]').forEach(function(r){r.addEventListener('change',function(){
+  document.getElementById('payer').value = this.value === 'asso' ? 'asso' : document.getElementById('payer_sel').value;});});
+document.getElementById('add-payer').addEventListener('click', function () {
+  var next = document.querySelector('#payers .payer-row[hidden]');
+  if (next) { next.hidden = false; next.querySelector('select').focus(); }
+  if (!document.querySelector('#payers .payer-row[hidden]')) this.hidden = true;
+});
+// Sous-catégories proposées selon la catégorie choisie
+(function () {
+  var SUB = {{ subcats|tojson }}, cat = document.getElementById('category'), sub = document.getElementById('subcategory');
+  function fill() {
+    var keep = sub.value === '__new__' ? '__new__' : (sub.value || sub.dataset.current || '');
+    var list = (SUB[cat.value] || []).slice();
+    if (keep && keep !== '__new__' && list.indexOf(keep) < 0) list.unshift(keep);
+    sub.innerHTML = '';
+    var add = function (v, t) { var o = document.createElement('option'); o.value = v; o.textContent = t; sub.appendChild(o); };
+    add('', '— Aucune —'); list.forEach(function (x) { add(x, x); }); add('__new__', '+ Nouvelle sous-catégorie…');
+    sub.value = keep; sub.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  cat.addEventListener('change', function () { sub.dataset.current = ''; if (sub.value !== '__new__') sub.value = ''; fill(); });
+  fill();
+})();
+// Plusieurs tickets : le montant réel est leur total
+(function () {
+  var box = document.getElementById('tickets'), rowsEl = document.getElementById('ticket-rows');
+  var actual = document.getElementById('actual'), openBtn = document.getElementById('tickets-open');
+  var totalEl = document.getElementById('tickets-total');
+  function euros(v) { v = (v || '').replace(/\s|€/g, '').replace(',', '.'); var n = parseFloat(v); return isNaN(n) ? 0 : Math.round(n * 100); }
+  function input(c) { return (c / 100).toFixed(2).replace('.', ','); }
+  function rows() { return Array.prototype.slice.call(rowsEl.querySelectorAll('.ticket-row')); }
+  function sync() {
+    if (box.hidden) { actual.readOnly = false; return; }
+    var sum = rows().reduce(function (s, r) { return s + euros(r.querySelector('[name=ticket_amount]').value); }, 0);
+    totalEl.textContent = input(sum).replace(/\B(?=(\d{3})+(?!\d))/g, '\u202f') + ' €';
+    actual.value = sum ? input(sum) : '';
+    actual.readOnly = true;
+    actual.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  function addRow(c) {
+    var r = rows()[0].cloneNode(true), n = rows().length + 1;
+    r.querySelectorAll('input').forEach(function (i) { i.value = ''; i.id = i.id.replace(/\d+$/, n); });
+    r.querySelectorAll('label').forEach(function (l) { l.htmlFor = l.htmlFor.replace(/\d+$/, n); });
+    if (c) r.querySelector('[name=ticket_amount]').value = input(c);
+    rowsEl.appendChild(r); renumber(); return r;
+  }
+  function renumber() { rows().forEach(function (r, i) { var n = r.querySelector('.ticket-n'); if (n) n.textContent = i + 1; }); }
+  function open(parts) {
+    box.hidden = false; openBtn.hidden = true;
+    var first = rows();
+    first.forEach(function (r) { r.querySelector('[name=ticket_amount]').value = ''; });
+    parts = parts || (euros(actual.value) ? [euros(actual.value)] : []);
+    parts.forEach(function (c, i) { var r = rows()[i] || addRow(); r.querySelector('[name=ticket_amount]').value = input(c); });
+    var empty = rows().filter(function (r) { return !r.querySelector('[name=ticket_amount]').value; })[0];
+    (empty || addRow()).querySelector('[name=ticket_amount]').focus();
+    sync();
+  }
+  openBtn.addEventListener('click', function () { open(); });
+  document.getElementById('ticket-add').addEventListener('click', function () { addRow().querySelector('input').focus(); sync(); });
+  document.getElementById('tickets-close').addEventListener('click', function () {
+    box.hidden = true; openBtn.hidden = false;
+    rows().forEach(function (r, i) { if (i > 1) r.remove(); else r.querySelectorAll('input').forEach(function (x) { x.value = ''; }); });
+    sync(); actual.focus();
+  });
+  rowsEl.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-ticket-remove]'); if (!b) return;
+    var r = b.closest('.ticket-row');
+    if (rows().length > 1) r.remove(); else r.querySelectorAll('input').forEach(function (x) { x.value = ''; });
+    renumber(); sync();
+  });
+  rowsEl.addEventListener('input', sync);
+  // « 80,12 + 69,10 » tapé dans le montant réel : on ouvre les tickets
+  actual.addEventListener('change', function () {
+    if (actual.readOnly || actual.value.replace(/^\s*\+/, '').indexOf('+') < 0) return;
+    open(actual.value.split('+').map(euros).filter(function (c) { return c; }));
+  });
+  if (!box.hidden) sync();
+})();
+// « Pour qui ? » : parts égales ; un montant tapé est fixé 🔒 et le reste se répartit entre les autres
+(function () {
+  var list = document.querySelector('.who-list'), status = document.getElementById('split-status');
+  var form = list.closest('form');
+  function euros(v) { v = (v || '').replace(/\s|€/g, '').replace(',', '.'); var n = parseFloat(v); return isNaN(n) ? 0 : Math.round(n * 100); }
+  function fmt(c) { return (c / 100).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '\u202f') + ' €'; }
+  function input(c) { return (c / 100).toFixed(2).replace('.', ','); }
+  function total() {
+    var a = form.querySelector('#actual'), p = form.querySelector('#planned');
+    var t = 0; String(a.value || '').split('+').forEach(function (x) { t += euros(x); });
+    if (t) return t; String(p.value || '').split('+').forEach(function (x) { t += euros(x); }); return t;
+  }
+  function rows() { return Array.prototype.slice.call(list.querySelectorAll('.who')); }
+  function on(r) { return r.querySelector('input[data-who]').checked; }
+  function isFixed(r) { return r.querySelector('[data-fixed]').value === '1'; }
+  function setFixed(r, v) { r.querySelector('[data-fixed]').value = v ? '1' : ''; r.classList.toggle('is-fixed', v); }
+  function weight(r) { return parseFloat(r.querySelector('[data-weight]').value.replace(',', '.')) || 1; }
+  // recalcule les montants des personnes non fixées (plus forts restes : la somme tombe juste)
+  function refresh() {
+    var t = total(), act = rows().filter(on), fx = act.filter(isFixed), free = act.filter(function (r) { return !isFixed(r); });
+    rows().forEach(function (r) {
+      var inp = r.querySelector('.who-amount'); inp.disabled = !on(r);
+      if (!on(r)) { inp.value = ''; setFixed(r, false); }
+    });
+    var fixedSum = fx.reduce(function (s, r) { return s + euros(r.querySelector('.who-amount').value); }, 0);
+    var rest = t - fixedSum, tw = free.reduce(function (s, r) { return s + weight(r); }, 0);
+    if (t && free.length && rest >= 0) {
+      var raw = free.map(function (r) { return rest * weight(r) / tw; }), base = raw.map(Math.floor);
+      var left = rest - base.reduce(function (a, b) { return a + b; }, 0);
+      raw.map(function (v, i) { return [v - base[i], i]; }).sort(function (a, b) { return b[0] - a[0] || a[1] - b[1]; })
+         .slice(0, left).forEach(function (x) { base[x[1]] += 1; });
+      free.forEach(function (r, i) { r.querySelector('.who-amount').value = input(base[i]); });
+    } else {
+      free.forEach(function (r) { r.querySelector('.who-amount').value = ''; });
+    }
+    // message
+    status.className = 'split-status';
+    if (!act.length) { status.textContent = ''; return true; }
+    if (!fx.length) {
+      status.textContent = t ? fmt(t) + ' réparti' + (act.length > 1 ? ' entre ' + act.length + ' personnes' : ' sur 1 personne') + '.' : '';
+      return true;
+    }
+    if (!t) { status.className += ' warn'; status.textContent = 'Indique d’abord le montant de la dépense.'; return false; }
+    if (rest < 0) { status.className += ' warn'; status.textContent = 'Les montants fixés font ' + fmt(fixedSum) + ', plus que la dépense (' + fmt(t) + ').'; return false; }
+    if (!free.length && rest > 0) { status.className += ' warn'; status.textContent = 'Il reste ' + fmt(rest) + ' : tous les montants sont fixés. Libère au moins une personne (🔒×) ou corrige les montants.'; return false; }
+    status.className += ' ok';
+    status.textContent = '🔒 ' + fx.length + ' montant' + (fx.length > 1 ? 's fixés' : ' fixé') + ' (' + fmt(fixedSum) + ')'
+      + (free.length ? ' · le reste, ' + fmt(rest) + ', est réparti entre ' + (free.length > 1 ? 'les ' + free.length + ' autres.' : 'l’autre personne.') : ' · le compte est bon.');
+    return true;
+  }
+  list.addEventListener('input', function (ev) {
+    var inp = ev.target.closest('.who-amount'); if (!inp) return;
+    var r = inp.closest('.who'); if (!isFixed(r)) setFixed(r, true);
+    refresh();
+  });
+  list.addEventListener('change', function (ev) { if (ev.target.matches('input[data-who]')) refresh(); });
+  list.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-unfix]'); if (!b) return;
+    setFixed(b.closest('.who'), false); refresh();
+  });
+  // les boutons « Seulement pour » cochent / décochent par programme
+  list.addEventListener('who-changed', refresh);
+  document.querySelectorAll('[data-who-chips] button').forEach(function (b) { b.addEventListener('click', function () { setTimeout(refresh, 0); }); });
+  ['#actual', '#planned'].forEach(function (sel) { form.querySelector(sel).addEventListener('input', refresh); });
+  form.addEventListener('ticketsChanged', refresh);
+  form.addEventListener('submit', function (ev) { if (!refresh()) { ev.preventDefault(); status.scrollIntoView({block: 'center'}); } });
+  refresh();
+})();
+// Dépense ou argent reçu : les libellés de « Qui a payé ? » s'adaptent
+function kindTexts() {
+  var inc = (document.querySelector('input[name=kind]:checked') || {}).value === 'recette';
+  document.querySelectorAll('[data-kind-text]').forEach(function (el) { el.textContent = el.dataset.kindText.split('|')[inc ? 1 : 0]; });
+}
+document.querySelectorAll('input[name=kind]').forEach(function (r) { r.addEventListener('change', kindTexts); });
+</script>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div class="grow">
+  <h1>Catégories</h1>
+  <p class="muted">Elles servent à ranger les dépenses (et le bilan du trésorier).</p>
+</div></div>
+
+<div class="cat-columns">
+  <section class="card" aria-labelledby="voyage">
+    <h3 id="voyage">Catégories de ce voyage</h3>
+    <p class="hint" style="margin-top:0">Proposées quand tu saisis une dépense, avec leurs sous-catégories (ex. Péages, Essence).</p>
+    <ul class="cat-rows" id="selected">
+      {% for c in trip.categories %}
+      {% set subs = subcats.get(c.name, []) %}
+      <li class="cat-row" id="c{{ c.id }}">
+        <div class="cat-row-main"><span class="cat-left">
+          <b class="cat-name">{{ c.name }}</b>
+          </span><span class="cat-actions">
+          <button type="button" class="btn link small" data-toggle-row="#subadd{{ c.id }}" aria-expanded="false" aria-controls="subadd{{ c.id }}">+ Sous-catégorie</button>
+          <form method="post" action="/v/{{ trip.id }}/categories/{{ c.id }}/retirer" class="inline">
+            <button class="btn link danger small" title="Retirer « {{ c.name }} » de ce voyage (elle reste disponible)">Retirer</button>
+          </form></span>
+        </div>
+        {% if subs %}<div class="cat-subs">
+          {% for sub in subs %}
+          <form method="post" action="/v/{{ trip.id }}/categories/{{ c.id }}/sous-categories/supprimer" class="inline" data-confirm="Supprimer la sous-catégorie « {{ sub }} » ? Les dépenses concernées resteront dans « {{ c.name }} ».">
+            <input type="hidden" name="name" value="{{ sub }}">
+            <span class="sub-chip">{{ sub }} <button class="sub-x" aria-label="Supprimer la sous-catégorie {{ sub }}" title="Supprimer">×</button></span>
+          </form>
+          {% endfor %}
+        </div>{% endif %}
+        <form method="post" action="/v/{{ trip.id }}/categories/{{ c.id }}/sous-categories" class="sub-add-row" id="subadd{{ c.id }}" hidden>
+          <label for="sub{{ c.id }}" class="sr-only">Nouvelle sous-catégorie de {{ c.name }}</label>
+          <input type="text" id="sub{{ c.id }}" name="name" placeholder="Nouvelle sous-catégorie de {{ c.name }} (ex. Péages)" required>
+          <button class="btn small">Ajouter</button>
+          <button type="button" class="btn small ghost" data-toggle-row="#subadd{{ c.id }}">Fermer</button>
+        </form>
+      </li>
+      {% else %}<li class="muted small">Aucune catégorie : les dépenses iront dans « Divers ».</li>{% endfor %}
+    </ul>
+    <p class="hint">Une catégorie retirée qui contient des dépenses : elles passent dans « Divers ».</p>
+  </section>
+  <section class="card" aria-labelledby="dispo">
+    <h3 id="dispo">Catégories disponibles</h3>
+    <p class="hint" style="margin-top:0">Communes à tous tes voyages. Clique pour en ajouter une à ce voyage.</p>
+    <div class="cat-pills" id="available">
+      {% for n in available %}
+      <span class="cat-pill-wrap">
+        <form method="post" action="/v/{{ trip.id }}/categories/ajouter" class="inline">
+          <input type="hidden" name="name" value="{{ n }}">
+          <button class="cat-pill" title="Ajouter « {{ n }} » à ce voyage">+ {{ n }}</button>
+        </form>{% if sort_key(n) in custom %}<form method="post" action="/v/{{ trip.id }}/categories/oublier" class="inline" data-confirm="Ne plus proposer « {{ n }} » dans tes voyages ?">
+          <input type="hidden" name="name" value="{{ n }}">
+          <button class="sub-x" aria-label="Supprimer « {{ n }} » de la liste" title="Ne plus la proposer">×</button>
+        </form>{% endif %}
+      </span>
+      {% else %}<p class="muted small">Toutes les catégories sont déjà dans ce voyage.</p>{% endfor %}
+    </div>
+    <form method="post" action="/v/{{ trip.id }}/categories" class="row" style="margin-top:1rem;gap:.5rem;flex-wrap:nowrap">
+      <label for="newname" class="sr-only">Nouvelle catégorie</label>
+      <input type="text" id="newname" name="name" placeholder="Nouvelle catégorie (ex. Sortie bateau)" required style="flex:1;min-width:0">
+      <button class="btn small">Créer</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

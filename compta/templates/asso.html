@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% from "_macros.html" import mode_note with context %}
+{% block content %}
+<div class="page-head">
+  <div class="grow">
+    <h1>🏛️ {{ asso_name|capfirst }}</h1>
+    <p class="muted">{% if cashier %}Pas d'asso pour ce voyage : c'est <b>{{ cashier.name }}</b> qui tient la caisse. Il reçoit les versements et paie avec cet argent.{% else %}Le compte de l'asso pour ce voyage : l'argent qu'elle a reçu et celui qu'elle a payé.{% endif %} Seuls les montants réellement payés ou reçus comptent dans la caisse.</p>
+    {{ mode_note(mode) }}
+  </div>
+  <div class="row" style="gap:.5rem;align-items:flex-start">
+  <details class="asso-rename">
+    <summary class="btn small ghost">Qui tient la caisse ?</summary>
+    <form method="post" action="/v/{{ trip.id }}/asso/caisse" style="margin-top:.5rem">
+      <div class="choice small">
+        <label><input type="radio" name="cashier" value="" {{ 'checked' if not cashier }}> {{ asso_real|capfirst }} <span class="hint">(voyage organisé par l'asso)</span></label>
+        <label><input type="radio" name="cashier" value="p" {{ 'checked' if cashier }}> Un participant <span class="hint">(voyage sans asso)</span></label>
+      </div>
+      <label for="cashier-p" class="sr-only">Participant qui tient la caisse</label>
+      <select id="cashier-p" name="participant">{% for p in trip.participants %}<option value="{{ p.id }}" {{ 'selected' if cashier and cashier.id == p.id }}>{{ p.name }}</option>{% endfor %}</select>
+      <button class="btn small" style="margin-top:.4rem">Enregistrer</button>
+    </form>
+    <p class="hint">Si un participant tient la caisse, on lui verse l'argent ; il n'a pas à se rembourser lui-même : son propre compte se règle avec la caisse.</p>
+  </details>
+  {% if not cashier %}
+  <details class="asso-rename">
+    <summary class="btn small ghost">{{ "Renommer" if asso_custom else "Donner un nom à l'asso" }}</summary>
+    <form method="post" action="/v/{{ trip.id }}/asso/nom" class="row" style="gap:.5rem;margin-top:.5rem;flex-wrap:nowrap">
+      <label for="asso-name" class="sr-only">Nom de l'asso</label>
+      <input type="text" id="asso-name" name="name" value="{{ asso_name if asso_custom }}" placeholder="ex. Club de plongée de Niort" style="flex:1;min-width:0">
+      <button class="btn small">Enregistrer</button>
+    </form>
+    <p class="hint">Commun à tous tes voyages. Laisse vide pour revenir à « l'asso ».</p>
+  </details>
+  {% endif %}
+  </div>
+</div>
+
+<div class="grid k2" style="align-items:start">
+<div class="card statement">
+  <h3>Caisse du voyage</h3>
+  <p class="hint" style="margin-top:0"><b class="cre">Entrées</b> = argent reçu par {{ asso_name }}. <b class="deb">Sorties</b> = argent payé par {{ asso_name }}. Clique sur une ligne pour voir le détail.</p>
+  {% if not A.groups %}<p class="muted">Aucun mouvement pour l'instant.</p>{% else %}
+  <div class="table-wrap">
+  <table class="ledger person-account">
+    <thead><tr><th>Quoi</th><th class="date-col"><span class="sr-only">Date</span></th><th class="num cre">Entrées</th><th class="num deb">Sorties</th></tr></thead>
+    {% for g in A.groups %}
+    <tbody class="acc-group collapsed" id="ag{{ loop.index }}">
+      <tr class="group-row">
+        <td colspan="2"><button type="button" class="group-toggle" data-toggle-group aria-expanded="false" aria-controls="ag{{ loop.index }}">
+          <span class="chev" aria-hidden="true">▸</span> {{ g.name }} <span class="muted small">({{ g['items']|length }})</span></button></td>
+        <td class="num cre">{{ g.cash_in|money if g.cash_in }}</td>
+        <td class="num deb">{{ g.cash_out|money if g.cash_out }}</td>
+      </tr>
+      {% for it in g['items'] %}
+      <tr class="item">
+        <td>{% if it.eid %}<a href="/v/{{ trip.id }}/depenses/{{ it.eid }}/modifier">{{ it.label }}</a>{% else %}{{ it.label }}{% endif %}
+          {% if it.note %} <span class="muted small">· {{ it.note }}</span>{% endif %}</td>
+        <td class="date-col small">{{ it.date|date if it.date else '' }}</td>
+        <td class="num cre">{{ it.cash_in|money if it.cash_in }}</td>
+        <td class="num deb">{{ it.cash_out|money if it.cash_out }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    {% endfor %}
+    <tfoot>
+      <tr><td colspan="2">Total</td><td class="num">{{ A.cash_in|money }}</td><td class="num">{{ A.cash_out|money }}</td></tr>
+    </tfoot>
+  </table>
+  </div>
+  <p class="row small" style="gap:.8rem;margin:.4rem 0 0"><button type="button" class="btn link small" data-toggle-all="open">Tout déplier</button><button type="button" class="btn link small" data-toggle-all="close">Tout replier</button></p>
+  {% endif %}
+  <div class="bottom-line {{ 'ok' if A.cash >= 0 else 'doit' }}">
+    {% if A.cash >= 0 %}➜ Il reste {{ A.cash|money }} dans la caisse pour ce voyage{% else %}➜ {{ asso_name|capfirst }} a avancé {{ (-A.cash)|money }} de sa trésorerie{% endif %}
+  </div>
+</div>
+
+<div>
+  <div class="card">
+    <h3>Pour terminer le voyage</h3>
+    <table>
+      <tr><td>Dans la caisse aujourd'hui</td><td class="num">{{ A.cash|money_sign }}</td></tr>
+      {% set st = r.settlements() %}
+      {% set owe = st|rejectattr(0, 'equalto', ASSO)|sort(attribute=2, reverse=true)|list %}
+      {% set due = st|selectattr(0, 'equalto', ASSO)|sort(attribute=2, reverse=true)|list %}
+      <tr><td>{{ who_details('+ Encore à recevoir', 'de', owe, 'versement', 1) }}</td><td class="num">{{ A.to_collect|money }}</td></tr>
+      <tr><td>{{ who_details('− Encore à rendre', 'à', due, 'remboursement', 2) }}</td><td class="num">{{ A.to_refund|money }}</td></tr>
+      {% if A.holder %}
+      <tr><td>{{ '+' if A.holder_balance >= 0 else '−' }} Le compte de {{ A.holder.name }} lui-même
+        <div class="muted small">{% if A.holder_balance > 0 %}il doit encore cette somme à la caisse ; comme c'est lui qui la tient, rien à verser{% elif A.holder_balance < 0 %}la caisse lui doit cette somme ; comme c'est lui qui la tient, il la garde : rien à virer{% else %}à jour{% endif %}</div></td>
+        <td class="num">{{ (A.holder_balance|abs)|money }}</td></tr>
+      {% endif %}
+      {% if A.unpaid %}
+      <tr><td>− Dépenses de {{ asso_name }} pas encore payées <span class="muted small">(montant prévu)</span>
+        <div class="muted small">{% for u in A.unpaid %}{{ u.label }} {{ u.amount|money }}{{ ', ' if not loop.last }}{% endfor %}</div></td>
+        <td class="num">{{ A.unpaid_total|money }}</td></tr>
+      {% endif %}
+    </table>
+    <div class="bottom-line {{ 'ok' if A.final >= 0 else 'doit' }}">
+      {% if A.final > 0 %}➜ Une fois tout réglé, le voyage rapporte {{ A.final|money }} à {{ asso_name }}
+      {% elif A.final < 0 %}➜ Une fois tout réglé, le voyage coûte {{ (-A.final)|money }} à {{ asso_name }}
+      {% else %}➜ Une fois tout réglé, le voyage ne coûte rien à {{ asso_name }} ✓{% endif %}
+    </div>
+    {% if A.rounding or A.charges %}
+    <div class="why-result small">
+      <b>D'où vient ce résultat ?</b>
+      <table>
+        {% if A.rounding %}<tr><td>+ Les arrondis au centime <span class="muted">(chaque part est arrondie au centime supérieur)</span></td><td class="num">{{ A.rounding|money }}</td></tr>{% endif %}
+        {% if A.charges %}<tr><td>
+          <details><summary>− Ce que {{ asso_name }} prend à sa charge</summary>
+            <ul class="charge-list">{% for c in A.charges %}<li>{{ c.label }} <span class="muted">— {{ c.reason }}</span> : {{ c.cents|money }}</li>{% endfor %}</ul>
+          </details></td><td class="num">{{ A.charges_total|money }}</td></tr>{% endif %}
+      </table>
+      {% if mode == 'reel' %}<p class="muted" style="margin:.4rem 0 0">{% if A.final == A.expected_final %}✓ Les comptes tombent juste.{% else %}⚠ À vérifier : le résultat devrait être {{ A.expected_final|money_sign }}.{% endif %}</p>{% endif %}
+    </div>
+    {% elif mode == 'reel' %}
+    <p class="small muted" style="margin-top:.6rem">{% if A.final == A.expected_final %}✓ Les comptes tombent juste.{% else %}⚠ À vérifier : le résultat devrait être {{ A.expected_final|money_sign }}.{% endif %}</p>
+    {% endif %}
+  </div>
+</div>
+</div>
+{% endblock %}
+
+{% macro who_details(title, prep, rows, kind, idx) -%}
+{% if rows %}
+<details class="who-owes">
+  <summary>{{ title }} <span class="muted small">{{ prep }} {{ rows|length }} {{ 'personnes ou familles' if rows|length > 1 else 'personne ou famille' }}</span></summary>
+  <table class="small who-owes-table">
+    {% for a, b, c in rows %}{% set acc = a if kind == 'versement' else b %}
+    <tr><td><a href="/v/{{ trip.id }}/participants/comptes?p={{ acc.referent }}#p{{ acc.referent }}">{{ acc.name }}</a></td>
+      <td class="num">{{ c|money }}</td>
+      <td class="row-actions"><a class="btn link small" href="/v/{{ trip.id }}/argent?k={{ kind }}&p={{ acc.referent }}&a={{ c|amount_input }}#ajout">Enregistrer</a></td></tr>
+    {% endfor %}
+  </table>
+</details>
+{% else %}{{ title }} <span class="muted small">— personne</span>{% endif %}
+{%- endmacro %}

@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div class="grow">
+  <h1>Argent reçu et rendu</h1>
+  <p class="muted">{% if tab == 'regler' %}Ce qui reste à recevoir des participants ou à leur rendre pour que tout soit réglé.{% else %}Tout l'argent que {{ asso_name }} a reçu et rendu pour ce voyage.{% endif %}</p>
+</div></div>
+<nav class="subtabs" aria-label="Argent">
+  <a href="/v/{{ trip.id }}/argent" class="{{ 'on' if tab == 'regler' }}" {{ 'aria-current=page' if tab == 'regler' }}>Reste à régler</a>
+  <a href="/v/{{ trip.id }}/argent/mouvements" class="{{ 'on' if tab == 'mouvements' }}" {{ 'aria-current=page' if tab == 'mouvements' }}>Mouvements</a>
+</nav>
+
+{% if tab == 'regler' %}
+<div class="settle-card">
+  {% set st = r.settlements() %}
+  {% set owe = st|rejectattr(0, 'equalto', ASSO)|sort(attribute=2, reverse=true)|list %}
+  {% set due = st|selectattr(0, 'equalto', ASSO)|sort(attribute=2, reverse=true)|list %}
+  {% if not st %}<p class="pill ok">🟢 Tout est réglé</p>{% endif %}
+  {% for title, rows, kind, cls, btn in [('À recevoir', owe, 'versement', 'doit', '✓ Reçu'), ('À rendre', due, 'remboursement', 'du', '✓ Remboursé')] if rows %}
+  <div class="settle-block {{ cls }}">
+    <div class="settle-head"><b>{{ title }}</b> <span class="muted small">{{ rows|length }} {{ 'personnes ou familles' if rows|length > 1 else 'personne ou famille' }}</span>
+      <span class="grow"></span><b class="num">{{ rows|sum(attribute=2)|money }}</b></div>
+    <table class="settle-table">
+      {% for a, b, c in rows %}{% set acc = a if kind == 'versement' else b %}
+      <tr><td><a href="/v/{{ trip.id }}/participants/comptes?p={{ acc.referent }}#p{{ acc.referent }}">{{ acc.name }}</a>{% if acc.is_family %} <span class="muted small">(à {{ r.people[acc.referent].name }})</span>{% endif %}</td>
+        <td class="num amt">{{ c|money }}</td>
+        <td class="row-actions"><button type="button" class="btn small ghost" data-toggle-row="#pay-{{ kind }}-{{ acc.referent }}" aria-expanded="false">{{ btn }}</button></td></tr>
+      <tr class="edit-row" id="pay-{{ kind }}-{{ acc.referent }}" hidden><td colspan="3">
+        <form method="post" action="/v/{{ trip.id }}/argent" class="pay-form">
+          <input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="participant" value="{{ acc.referent }}">
+          <input type="hidden" name="next" value="/v/{{ trip.id }}/argent">
+          <div class="field"><label for="pa-{{ kind }}-{{ acc.referent }}">Montant {{ 'reçu' if kind == 'versement' else 'remboursé' }} (€)</label>
+            <input class="amount" type="text" inputmode="decimal" id="pa-{{ kind }}-{{ acc.referent }}" name="amount" value="{{ c|amount_input }}" required></div>
+          <div class="field"><label for="pd-{{ kind }}-{{ acc.referent }}">Date</label><input type="date" id="pd-{{ kind }}-{{ acc.referent }}" name="date" value=""></div>
+          <div class="field grow"><label for="pn-{{ kind }}-{{ acc.referent }}">Note <span class="hint">(facultatif)</span></label><input type="text" id="pn-{{ kind }}-{{ acc.referent }}" name="note" placeholder="ex. chèque, virement, acompte…"></div>
+          <div class="row" style="gap:.4rem;align-self:end"><button type="button" class="btn small ghost" data-toggle-row="#pay-{{ kind }}-{{ acc.referent }}">Fermer</button><button class="btn small">Enregistrer</button></div>
+        </form>
+        <p class="hint" style="margin:.2rem 0 0">Un paiement partiel ? Change le montant : le reste restera à régler.</p>
+      </td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endfor %}
+</div>
+{% if pending %}
+<h2>Montants pas encore connus</h2>
+<p class="muted small">Ces dépenses sont notées mais comptent pour 0 € tant que leur montant n'est pas saisi.</p>
+<div class="card table-wrap"><table>
+  <thead><tr><th>Dépense</th><th>Qui paie</th><th></th></tr></thead>
+  <tbody>{% for e in pending %}<tr><td>{{ e.label }}</td><td>{{ payer_label(e, names, asso_name) }}</td>
+    <td class="row-actions"><a class="btn link small" href="/v/{{ trip.id }}/depenses/{{ e.id }}/modifier">Saisir le montant</a></td></tr>{% endfor %}</tbody>
+</table></div>
+{% endif %}
+{% if to_pay %}
+<h2>À payer par {{ asso_name }}</h2>
+<p class="muted small">{{ asso_name|capfirst }} n'a pas encore réglé ces dépenses : seul le montant prévu est connu. Saisis le montant réel quand c'est payé.</p>
+<div class="card table-wrap"><table>
+  <thead><tr><th>Dépense</th><th class="num">Prévu</th><th></th></tr></thead>
+  <tbody>{% for e in to_pay %}<tr><td>{{ e.label }}</td><td class="num">{{ e.planned|money }}</td><td class="row-actions"><a class="btn link small" href="/v/{{ trip.id }}/depenses/{{ e.id }}/modifier">Saisir le montant réel</a></td></tr>{% endfor %}</tbody>
+</table></div>
+{% endif %}
+
+{% else %}
+<div class="row" style="justify-content:flex-end;margin-bottom:.6rem"><button type="button" class="btn small" data-toggle-row="#ajout" aria-expanded="{{ 'true' if open_form else 'false' }}">+ Enregistrer un mouvement</button></div>
+<form class="card" method="post" action="/v/{{ trip.id }}/argent" id="ajout" {{ '' if open_form else 'hidden' }}>
+  <input type="hidden" name="next" value="/v/{{ trip.id }}/argent/mouvements">
+  <h3>Enregistrer un mouvement</h3>
+  <div class="choice" style="margin-bottom:.8rem">
+    <label><input type="radio" name="kind" value="versement" {{ 'checked' if kind != 'remboursement' }}> Un participant a versé de l'argent à {{ asso_name }}</label>
+    <label><input type="radio" name="kind" value="remboursement" {{ 'checked' if kind == 'remboursement' }}> {{ asso_name|capfirst }} a remboursé un participant</label>
+  </div>
+  <div class="grid k2" style="gap:.8rem">
+    <div class="field"><label for="participant">Qui ?</label>
+      <select id="participant" name="participant" required>
+        <option value="">— choisir —</option>
+        {% for a in r.accounts %}{% if a.is_family %}<optgroup label="{{ a.name }}{% if a.balance > 0 %} — doit {{ a.balance|money }}{% elif a.balance < 0 %} — on lui doit {{ (-a.balance)|money }}{% endif %}">{% for m in a.members %}<option value="{{ m.id }}" {{ 'selected' if sel == m.id|string }}>{{ m.name }}{{ ' (paie pour la famille)' if m.id == a.referent }}</option>{% endfor %}</optgroup>{% else %}{% set ps = a.members[0] %}<option value="{{ ps.id }}" {{ 'selected' if sel == ps.id|string }}>{{ ps.name }}{% if ps.balance > 0 %} — doit {{ ps.balance|money }}{% elif ps.balance < 0 %} — on lui doit {{ (-ps.balance)|money }}{% endif %}</option>{% endif %}{% endfor %}
+      </select></div>
+    <div class="field"><label for="amount">Montant (€)</label>
+      <input class="amount" type="text" inputmode="decimal" id="amount" name="amount" value="{{ prefill }}" placeholder="0,00" required></div>
+  </div>
+  <div class="grid k2" style="gap:.8rem">
+    <div class="field"><label for="date">Date</label><input type="date" id="date" name="date" value=""></div>
+    <div class="field"><label for="note">Note <span class="hint">(facultatif)</span></label><input type="text" id="note" name="note" placeholder="ex. acompte, solde…"></div>
+  </div>
+  <div class="row" style="gap:.5rem;justify-content:flex-end"><button type="button" class="btn small ghost" data-toggle-row="#ajout">Fermer</button><button class="btn small">Enregistrer</button></div>
+</form>
+
+<h2 style="margin-top:.4rem">Entrées et sorties de la caisse</h2>
+<div class="legend-box small">
+  <div><span class="src-tag mv">💶 Mouvement</span> versement ou remboursement saisi ici : <b>Modifier</b> ou <b>Supprimer</b> directement sur la ligne.</div>
+  <div><span class="src-tag exp">🧾 Dépense</span> paiement qui vient d'une dépense : pour le changer ou le retirer, <b>Modifier la dépense</b> (qui a payé, montant… ou la supprimer depuis sa fiche).</div>
+</div>
+<div class="card table-wrap">
+<table>
+  <thead><tr><th>Date</th><th>Opération</th><th class="num">Entrées</th><th class="num">Sorties</th><th></th></tr></thead>
+  <tbody>
+  {% for x in rows %}
+    <tr><td>{{ x.date|date }}</td><td><span class="src-tag {{ 'mv' if x.mid else 'exp' }}" title="{{ 'Mouvement saisi ici' if x.mid else 'Vient d’une dépense' }}">{{ '💶' if x.mid else '🧾' }}</span> {{ x.label }}{% if x.note %} <span class="muted small">· {{ x.note }}</span>{% endif %}</td>
+      <td class="num" style="color:var(--ok)">{{ x.inc|money if x.inc }}</td>
+      <td class="num">{{ x.out|money if x.out }}</td>
+      <td class="row-actions">{% if x.mid %}{% set m = x.m %}
+        <button type="button" class="btn link small" data-toggle-row="#edit-m{{ m.id }}" aria-expanded="false" aria-controls="edit-m{{ m.id }}">Modifier</button>
+        <form method="post" action="/v/{{ trip.id }}/argent/{{ m.id }}/supprimer" class="inline" data-confirm="Supprimer ce mouvement ?"><button class="btn link danger small">Supprimer</button></form>
+      {% else %}<a class="btn link small" href="/v/{{ trip.id }}/depenses/{{ x.eid }}/modifier" title="Cette ligne vient de la dépense : on la change (ou on la supprime) depuis la dépense elle-même.">Modifier la dépense</a>{% endif %}</td></tr>
+    {% if x.mid %}{% set m = x.m %}
+    <tr class="edit-row" id="edit-m{{ m.id }}" hidden><td colspan="5">
+      <form method="post" action="/v/{{ trip.id }}/argent/{{ m.id }}" class="mv-edit">
+        <div class="choice small">
+          <label><input type="radio" name="kind" value="versement" {{ 'checked' if m.kind == 'versement' }}> Versé à {{ asso_name }}</label>
+          <label><input type="radio" name="kind" value="remboursement" {{ 'checked' if m.kind == 'remboursement' }}> Rendu par {{ asso_name }}</label>
+        </div>
+        <div class="field"><label for="mp{{ m.id }}">Qui ?</label>
+          <select id="mp{{ m.id }}" name="participant">{% for p in trip.participants %}<option value="{{ p.id }}" {{ 'selected' if p.id == m.participant_id }}>{{ p.name }}</option>{% endfor %}</select></div>
+        <div class="field"><label for="ma{{ m.id }}">Montant (€)</label><input class="amount" type="text" inputmode="decimal" id="ma{{ m.id }}" name="amount" value="{{ m.amount|amount_input }}" required></div>
+        <div class="field"><label for="md{{ m.id }}">Date</label><input type="date" id="md{{ m.id }}" name="date" value="{{ m.date or '' }}"></div>
+        <div class="field"><label for="mn{{ m.id }}">Note</label><input type="text" id="mn{{ m.id }}" name="note" value="{{ m.note }}"></div>
+        <div class="row"><button class="btn small">Enregistrer</button>
+          <button type="button" class="btn small ghost" data-toggle-row="#edit-m{{ m.id }}">Fermer</button></div>
+      </form>
+    </td></tr>
+    {% endif %}
+  {% else %}<tr><td colspan="5" class="muted">Aucun mouvement pour l'instant.</td></tr>{% endfor %}
+  </tbody>
+  <tfoot><tr><td></td><td>Total</td><td class="num">{{ total_in|money }}</td><td class="num">{{ total_out|money }}</td><td></td></tr>
+    <tr><td></td><td>{% if total_in >= total_out %}Il reste dans la caisse pour ce voyage{% else %}{{ asso_name|capfirst }} a avancé de sa trésorerie (en attendant les versements){% endif %}</td><td class="num" colspan="2">{{ (total_in - total_out)|abs|money }}</td><td></td></tr></tfoot>
+</table>
+</div>
+
+
+{% endif %}
+{% endblock %}

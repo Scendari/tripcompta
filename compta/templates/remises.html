@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "_macros.html" import people_tabs with context %}
+{% block content %}
+<div class="page-head"><div class="grow"><h1>Participants</h1>
+<p class="muted">Une remise ou un supplément sur tout le voyage d'une personne : par exemple 50 € de remise pour l'encadrant, ou un supplément pour une chambre seule. Sa part change aussitôt dans les comptes.</p></div></div>
+{{ people_tabs(trip, 'remises') }}
+
+<section class="card remises-card" id="remises">
+  {% if not open_remise %}<button type="button" class="btn small" data-toggle-row="#remise-form" style="margin-bottom:.8rem">+ Ajouter une remise ou un supplément</button>{% endif %}
+  {% set ed = remise_edit %}
+  <form method="post" action="/v/{{ trip.id }}/remises" id="remise-form" class="remise-form"{{ '' if open_remise else ' hidden' }}>
+    {% if ed %}<input type="hidden" name="aid" value="{{ ed.id }}">{% endif %}
+    {% set sel = ed.participant_id if ed else remise_for %}
+    <div class="remise-grid">
+      <div class="field"><label for="rp">Personne</label>
+        <select id="rp" name="participant" required><option value="">— choisir —</option>
+          {% for p in trip.participants|sort(attribute='name') %}<option value="{{ p.id }}" {{ 'selected' if sel == p.id }}>{{ p.name }}</option>{% endfor %}
+        </select></div>
+      <div class="field"><span class="label-like">Type</span><div class="choice">
+        <label><input type="radio" name="kind" value="reduce" {{ 'checked' if not ed or ed.value < 0 }}> Remise</label>
+        <label><input type="radio" name="kind" value="increase" {{ 'checked' if ed and ed.value > 0 }}> Supplément</label></div></div>
+      <div class="field"><label for="rv">Montant (€)</label><input class="amount" type="text" inputmode="decimal" id="rv" name="value" value="{{ ed.value|abs|amount_input if ed else '' }}" placeholder="0,00" required></div>
+      <div class="field"><label for="rr">Pourquoi ?</label><input type="text" id="rr" name="reason" value="{{ ed.reason if ed else '' }}" placeholder="ex. encadrant, chambre seule…"></div>
+      <div class="field"><span class="label-like">Qui compense ?</span><div class="choice">
+        <label><input type="radio" name="by" value="asso" {{ 'checked' if not ed or ed.compensation == 'asso' }}> {{ asso_name|capfirst }}</label>
+        <label><input type="radio" name="by" value="others" {{ 'checked' if ed and ed.compensation != 'asso' }}> Les autres participants</label></div></div>
+    </div>
+    <div class="row" style="gap:.5rem;justify-content:flex-end">
+      {% if open_remise and remises %}<a class="btn small ghost" href="/v/{{ trip.id }}/participants/remises">Annuler</a>{% elif not open_remise %}<button type="button" class="btn small ghost" data-toggle-row="#remise-form">Fermer</button>{% endif %}
+      <button class="btn small">{{ 'Enregistrer la modification' if ed else 'Enregistrer' }}</button>
+    </div>
+  </form>
+  {% if remises or old_adjs %}
+  <table class="remises-table">
+    {% for a in remises %}
+    <tr class="{{ 'editing' if ed and ed.id == a.id }}"><td><b>{{ a.participant.name }}</b></td>
+      <td>{{ 'Remise' if a.value < 0 else 'Supplément' }} <b>{{ a.value|abs|money }}</b>{% if a.reason %} <span class="muted">· {{ a.reason }}</span>{% endif %}</td>
+      <td class="muted small">{{ ('offerte par ' if a.value < 0 else 'reversé à ') ~ asso_name if a.compensation == 'asso' else ('compensée par les autres' if a.value < 0 else 'réparti en moins sur les autres') }}</td>
+      <td class="row-actions"><a class="btn link small" href="/v/{{ trip.id }}/participants/remises?rm={{ a.id }}">Modifier</a>
+        <form method="post" action="/v/{{ trip.id }}/remises/{{ a.id }}/supprimer" class="inline" data-confirm="Supprimer cette {{ 'remise' if a.value < 0 else 'supplément' }} de {{ a.participant.name }} ?"><button class="btn link danger small">Supprimer</button></form></td></tr>
+    {% endfor %}
+    {% for a in old_adjs %}
+    <tr><td><b>{{ a.participant.name }}</b></td>
+      <td>Ancien ajustement : {% if a.fixed %}🔒 fixé à {{ a.value|money }}{% else %}{{ 'réduction' if a.value < 0 else 'supplément' }} de {{ a.value|abs|money }}{% endif %} sur {{ a.expense.label }}{% if a.reason %} <span class="muted">· {{ a.reason }}</span>{% endif %}</td>
+      <td class="muted small">à refaire dans la dépense si besoin</td>
+      <td class="row-actions"><form method="post" action="/v/{{ trip.id }}/remises/{{ a.id }}/supprimer" class="inline" data-confirm="Supprimer cet ancien ajustement ?"><button class="btn link danger small">Supprimer</button></form></td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted small" style="margin:0">Aucune pour l'instant.</p>{% endif %}
+</section>
+{% endblock %}

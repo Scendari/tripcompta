@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_macros.html" import mode_note with context %}
+{% block content %}
+<div class="page-head"><div class="grow">
+  <h1>Exporter le bilan</h1>
+  <p class="muted">Pour le trésorier de {{ asso_name }} : un bilan PDF lisible sans être comptable, et un ZIP avec tous les justificatifs numérotés.</p>
+  {{ mode_note(mode) }}
+</div></div>
+<div class="grid k2" style="align-items:start">
+  <div class="card">
+    <h3>📄 Bilan du voyage (PDF)</h3>
+    <p class="small">Le voyage en un coup d'œil, les participants, ce que {{ asso_name }} a pris en charge, les dépenses, les mouvements d'argent, et une fiche détaillée par personne.</p>
+    <a class="btn" href="/v/{{ trip.id }}/export.pdf">Télécharger le PDF</a>
+  </div>
+  <div class="card">
+    <h3>🗂 Justificatifs (ZIP)</h3>
+    <p class="small">{{ trip.receipts|length }} justificatif(s) renommé(s) J01, J02… + le bilan PDF + une liste qui dit à quoi correspond chaque fichier.</p>
+    <a class="btn" href="/v/{{ trip.id }}/export.zip">Télécharger le ZIP</a>
+  </div>
+</div>
+{% set blocking = alerts|selectattr('level', 'in', ['warn', 'error'])|list %}
+{% if blocking %}
+<h2>Avant d'envoyer, à vérifier</h2>
+<ul class="alerts">{% for a in blocking %}<li class="{{ a.level }}">{% if a.link %}<a href="{{ a.link }}">{{ a.text }}</a>{% else %}{{ a.text }}{% endif %}</li>{% endfor %}</ul>
+{% endif %}
+<p class="muted small" style="margin-top:1rem">Les comptes « Entre nous » ne figurent pas dans ce bilan : ils concernent les participants entre eux.</p>
+{% endblock %}

@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% from "_macros.html" import mode_note with context %}
+{% block content %}
+<div class="page-head"><div class="grow">
+  <h1>Le voyage en images</h1>
+  <p class="muted">Où part l'argent, ce que paie chacun et où en sont les règlements. Passe la souris sur une barre (ou touche-la) pour voir le détail.</p>
+  {{ mode_note(mode) }}
+</div></div>
+{% if not trip.expenses or not trip.participants %}
+<div class="card empty">Ajoute des participants et des dépenses pour voir les graphiques.</div>
+{% else %}
+
+{# ---------------------------------------------------------------- chiffres clés #}
+<div class="viz-kpis">
+  <div class="card kpi"><div class="label">Coût du voyage</div><div class="value">{{ V.total|money }}</div>
+    <div class="sub">{{ V.n_people }} participants</div></div>
+  <div class="card kpi"><div class="label">Part la plus courante</div><div class="value">{{ V.median|money }}</div>
+    <div class="sub">de {{ V.share_min|money }} à {{ V.share_max|money }} selon les personnes</div></div>
+  <div class="card kpi"><div class="label">Désistements</div>
+    <div class="value">{{ V.wd_n }} sur {{ V.n_people }} <span class="kpi-pct">({{ V.wd_pct }} %)</span></div>
+    {% if V.wd_n %}<div class="sub">ils paient quand même {{ V.wd_kept|money }}{% if V.wd_refund %} · {{ V.wd_refund|money }} à leur rendre{% endif %}</div>
+    <div class="sub muted small">{{ V.wd_names|join(', ') }}</div>{% else %}<div class="sub">personne ne s'est désisté</div>{% endif %}</div>
+</div>
+
+{# ---------------------------------------------------------------- 1. où part l'argent #}
+<section class="card viz-card" aria-labelledby="v1">
+  <h2 id="v1">Où part l'argent</h2>
+  <p class="muted small">Ce que coûte chaque catégorie, de la plus chère à la moins chère. Clique sur une catégorie marquée ▶ pour voir ses sous-catégories.</p>
+  <div class="hbars">
+  {% for c in V.costs %}
+    {% set w = (c.cents * 100 / V.costs[0].cents)|round(1) %}
+    {% if c.subs %}<details class="hbar-group">
+      <summary class="hbar" tabindex="0">
+    {% else %}<div class="hbar">{% endif %}
+        <span class="hbar-label">{% if c.subs %}<span class="caret" aria-hidden="true">▶</span>{% endif %}{{ c.name }}</span>
+        <span class="hbar-track"><span class="seg s{{ c.slot }} end" style="width:{{ w }}%" tabindex="{{ -1 if c.subs else 0 }}"
+              data-tip="{{ c.name }} : {{ c.cents|money }} ({{ c.pct }} % du voyage)" aria-label="{{ c.name }} : {{ c.cents|money }}, {{ c.pct }} % du voyage"></span></span>
+        <span class="hbar-value">{{ c.cents|money }} <span class="muted">· {{ c.pct }} %</span></span>
+    {% if c.subs %}</summary>
+      {% for sb in c.subs %}{% set ws = (sb.cents * 100 / V.costs[0].cents)|round(1) %}
+      <div class="hbar sub">
+        <span class="hbar-label">{{ sb.name }}</span>
+        <span class="hbar-track"><span class="seg s{{ c.slot }} faded end" style="width:{{ ws }}%" tabindex="0"
+              data-tip="{{ sb.name }} : {{ sb.cents|money }} ({{ sb.pct }} % de {{ c.name }})" aria-label="{{ sb.name }} : {{ sb.cents|money }}"></span></span>
+        <span class="hbar-value">{{ sb.cents|money }} <span class="muted">· {{ sb.pct }} %</span></span>
+      </div>{% endfor %}
+    </details>{% else %}</div>{% endif %}
+  {% endfor %}
+  </div>
+  <details class="viz-table"><summary>Voir en tableau</summary>
+    <table><thead><tr><th>Catégorie</th><th class="num">Montant</th><th class="num">Part du voyage</th></tr></thead><tbody>
+    {% for c in V.costs %}<tr><td>{{ c.name }}</td><td class="num">{{ c.cents|money }}</td><td class="num">{{ c.pct }} %</td></tr>
+      {% for sb in c.subs %}<tr class="muted"><td style="padding-left:1.4rem">{{ sb.name }}</td><td class="num">{{ sb.cents|money }}</td><td class="num">{{ sb.pct }} % de la catégorie</td></tr>{% endfor %}{% endfor %}
+    </tbody></table></details>
+</section>
+
+{# ---------------------------------------------------------------- 2. ce que paie chacun #}
+<section class="card viz-card" aria-labelledby="v2">
+  <h2 id="v2">Ce que paie chacun</h2>
+  <p class="muted small">La part de chaque personne, découpée par catégorie : on voit d'où viennent les différences.</p>
+  <ul class="viz-legend" aria-label="Légende">
+    {% for c in V.legend %}<li><span class="sw s{{ c.slot }}"></span>{{ c.name }}</li>{% endfor %}
+    {% if V.people|selectattr('segs')|map(attribute='segs')|sum(start=[])|selectattr('slot', 'equalto', 0)|list %}<li><span class="sw s0"></span>Arrondis et ajustements</li>{% endif %}
+  </ul>
+  <div class="hbars">
+  {% for p in V.people %}
+    <div class="hbar">
+      <span class="hbar-label">{{ p.name }}{% if p.withdrawn %} <span class="muted small">(désisté)</span>{% endif %}</span>
+      <span class="hbar-track stack">{% for sg in p.segs %}<span class="seg s{{ sg.slot }}{{ ' end' if loop.last }}" style="width:{{ (sg.cents * 100 / V.pmax)|round(2) }}%" tabindex="0"
+            data-tip="{{ p.name }} · {{ sg.name }} : {{ sg.cents|money }}" aria-label="{{ p.name }}, {{ sg.name }} : {{ sg.cents|money }}"></span>{% endfor %}</span>
+      <span class="hbar-value"><b>{{ p.share|money }}</b></span>
+    </div>
+  {% endfor %}
+  </div>
+  <details class="viz-table"><summary>Voir en tableau</summary>
+    <div class="table-wrap"><table><thead><tr><th>Personne</th>{% for c in V.legend %}<th class="num">{{ c.name }}</th>{% endfor %}<th class="num">Total</th></tr></thead><tbody>
+    {% for p in V.people %}<tr><td>{{ p.name }}</td>{% for c in V.legend %}{% set sg = p.segs|selectattr('name', 'equalto', c.name)|first %}<td class="num">{{ sg.cents|money if sg else '—' }}</td>{% endfor %}<td class="num"><b>{{ p.share|money }}</b></td></tr>{% endfor %}
+    </tbody></table></div></details>
+</section>
+
+{# ---------------------------------------------------------------- 3. règlements #}
+<section class="card viz-card" aria-labelledby="v3">
+  <h2 id="v3">Où en sont les règlements</h2>
+  <p class="muted small">Ce que chacun a déjà donné (versements et dépenses avancées) face à ce qu'il doit.</p>
+  {% set pc = (V.covered * 100 / V.owed)|round(0)|int if V.owed else 100 %}
+  <div class="seg-total" role="img" aria-label="Déjà réglé {{ V.covered|money }} ({{ pc }} %), reste à recevoir {{ V.to_collect|money }}">
+    <span class="part s1" style="width:{{ (V.covered * 100 / V.owed)|round(2) if V.owed else 100 }}%" tabindex="0" data-tip="Déjà réglé : {{ V.covered|money }} ({{ pc }} %)">{% if pc >= 12 %}{{ pc }} % réglé{% endif %}</span>{% if V.to_collect %}<span class="part rest" style="width:{{ (V.to_collect * 100 / V.owed)|round(2) }}%" tabindex="0" data-tip="Reste à recevoir : {{ V.to_collect|money }} ({{ 100 - pc }} %)">{% if 100 - pc >= 12 %}{{ 100 - pc }} % à recevoir{% endif %}</span>{% endif %}
+  </div>
+  <div class="viz-facts">
+    <span><span class="sw s1"></span>Déjà réglé <b>{{ V.covered|money }}</b></span>
+    <span><span class="sw rest"></span>Reste à recevoir <b>{{ V.to_collect|money }}</b></span>
+    <span><span class="sw s2"></span>À rendre <b>{{ V.to_refund|money }}</b></span>
+  </div>
+  <div class="hbars">
+  {% for a in V.settle %}
+    <div class="hbar">
+      <span class="hbar-label">{{ a.name }}</span>
+      <span class="hbar-track stack">
+        {% if a.covered %}<span class="seg s1" style="width:{{ (a.covered * 100 / V.smax)|round(2) }}%" tabindex="0" data-tip="{{ a.name }} a donné {{ a.credit|money }} sur {{ a.debit|money }}"></span>{% endif %}
+        {% if a.balance > 0 %}<span class="seg rest end" style="width:{{ (a.balance * 100 / V.smax)|round(2) }}%" tabindex="0" data-tip="{{ a.name }} doit encore {{ a.balance|money }}"></span>
+        {% elif a.balance < 0 %}<span class="seg s2 end" style="width:{{ (-a.balance * 100 / V.smax)|round(2) }}%" tabindex="0" data-tip="On doit rendre {{ (-a.balance)|money }} à {{ a.name }}"></span>{% endif %}
+      </span>
+      <span class="hbar-value">{% if a.balance > 0 %}doit {{ a.balance|money }}{% elif a.balance < 0 %}on lui doit {{ (-a.balance)|money }}{% else %}✓ à jour{% endif %}</span>
+    </div>
+  {% endfor %}
+  </div>
+  <details class="viz-table"><summary>Voir en tableau</summary>
+    <table><thead><tr><th>Personne ou famille</th><th class="num">Doit</th><th class="num">A donné</th><th class="num">Reste</th></tr></thead><tbody>
+    {% for a in V.settle %}<tr><td>{{ a.name }}</td><td class="num">{{ a.debit|money }}</td><td class="num">{{ a.credit|money }}</td>
+      <td class="num">{% if a.balance > 0 %}doit {{ a.balance|money }}{% elif a.balance < 0 %}on lui doit {{ (-a.balance)|money }}{% else %}à jour{% endif %}</td></tr>{% endfor %}
+    </tbody></table></details>
+</section>
+
+{# ---------------------------------------------------------------- 4. prévu ou réel #}
+<section class="card viz-card" aria-labelledby="v4">
+  <h2 id="v4">Prévu ou réel</h2>
+  {% if V.plan %}
+  <p class="muted small">Par catégorie, le budget prévu face au montant réel (pour les dépenses qui ont les deux).</p>
+  <ul class="viz-legend" aria-label="Légende"><li><span class="sw prev"></span>Prévu</li><li><span class="sw s1"></span>Réel</li></ul>
+  <div class="hbars">
+  {% for c in V.plan %}
+    <div class="hbar pair">
+      <span class="hbar-label">{{ c.name }}{% if c.waiting %}<span class="muted small d-block">{{ c.waiting }} sans montant réel</span>{% endif %}</span>
+      <span class="hbar-pair">
+        <span class="hbar-track"><span class="seg prev end" style="width:{{ (c.planned * 100 / V.plan_max)|round(2) }}%" tabindex="0" data-tip="{{ c.name }} · prévu : {{ c.planned|money }}"></span></span>
+        <span class="hbar-track"><span class="seg s1 end" style="width:{{ (c.actual * 100 / V.plan_max)|round(2) }}%" tabindex="0" data-tip="{{ c.name }} · réel : {{ c.actual|money }}"></span></span>
+      </span>
+      <span class="hbar-value">{% if c.n == 0 %}<span class="muted">pas encore de réel</span>{% elif c.diff > 0 %}▲ {{ c.diff|money }} de plus{% elif c.diff < 0 %}▼ {{ (-c.diff)|money }} de moins{% else %}= comme prévu{% endif %}</span>
+    </div>
+  {% endfor %}
+  </div>
+  <details class="viz-table"><summary>Voir en tableau</summary>
+    <table><thead><tr><th>Catégorie</th><th class="num">Prévu</th><th class="num">Réel</th><th class="num">Écart</th></tr></thead><tbody>
+    {% for c in V.plan %}<tr><td>{{ c.name }}</td><td class="num">{{ c.planned|money }}</td><td class="num">{{ c.actual|money }}</td><td class="num">{{ c.diff|money_sign }}</td></tr>{% endfor %}
+    </tbody></table></details>
+  {% else %}
+  <p class="muted">Aucune dépense n'a de montant <b>prévu</b> : ce graphique apparaîtra quand tu saisiras un budget prévu sur des dépenses (champ « Prévu » de la dépense).</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

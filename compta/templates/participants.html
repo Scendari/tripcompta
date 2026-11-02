@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status, role_pills, people_tabs %}
+{% block content %}
+{% set nc = trip.participants|selectattr('companion')|list|length %}
+<div class="page-head"><div class="grow"><h1>Participants</h1>
+<p class="muted">{{ trip.participants|length }} personne{{ 's' if trip.participants|length > 1 }} inscrite{{ 's' if trip.participants|length > 1 }}{% if nc %}, dont {{ nc }} accompagnant{{ 's' if nc > 1 }}{% endif %}{% if trip.families %} · {{ trip.families|length }} famille{{ 's' if trip.families|length > 1 }}{% endif %}{% if groups %} · {{ groups|length }} groupe{{ 's' if groups|length > 1 }}{% endif %}.</p></div></div>
+{{ people_tabs(trip, 'liste') }}
+
+<div class="people-toolbar">
+{% if trip.participants %}<button type="button" class="btn small ghost export-btn" data-toggle-row="#export" aria-expanded="false" aria-controls="export">⤓ Exporter</button>{% endif %}
+<details class="card add-person" id="ajout" {{ 'open' if open_add or not trip.participants }}>
+  <summary class="btn small">+ Ajouter un participant</summary>
+  <form method="post" action="/v/{{ trip.id }}/participants" id="add-form" style="margin-top:.8rem">
+    <div class="person-edit">
+      <div class="field"><label for="a-name">Nom <span class="hint">(prénom et nom)</span></label><input type="text" id="a-name" name="name" required autocomplete="off" {{ 'autofocus' if open_add }}></div>
+      <div class="field"><label for="a-phone">Téléphone</label><input type="tel" id="a-phone" name="phone" placeholder="06 12 34 56 78"></div>
+      <div class="field"><label for="a-email">E-mail</label><input type="email" id="a-email" name="email"></div>
+      <div class="field wide"><label for="a-note">Note</label><input type="text" id="a-note" name="note" placeholder="ex. niveau 2, allergie…"></div>
+      {{ person_chips(None, 'a') }}
+    </div>
+    <div class="row" style="margin-top:.6rem;gap:.5rem;justify-content:flex-end">
+      <button type="button" class="btn small ghost" onclick="this.closest('details').open=false">Fermer</button>
+      <button class="btn small">Ajouter</button>
+    </div>
+  </form>
+</details>
+</div>
+{% if trip.participants %}
+<div class="card export-panel" id="export" hidden data-export="/v/{{ trip.id }}/participants/export">
+  <div class="row" style="justify-content:space-between;align-items:baseline"><h3 style="margin:0">Exporter la liste</h3>
+    <button type="button" class="btn link small" data-toggle-row="#export">Fermer</button></div>
+  <p class="hint" style="margin:.3rem 0 .6rem">Coche les informations à exporter.</p>
+  <div class="export-cols">
+    {% for k, title, on in export_cols %}<label class="chk"><input type="checkbox" value="{{ k }}" {{ 'checked' if on }} {{ 'disabled' if k == 'nom' }}> {{ title }}</label>{% endfor %}
+  </div>
+  {% if withdrawn %}<label class="chk" style="margin-top:.5rem"><input type="checkbox" data-export-wd checked> Inclure les désistés ({{ withdrawn|length }})</label>{% endif %}
+  <div class="row export-actions">
+    <button type="button" class="btn small ghost" data-export-do="tsv">📋 Copier en tableau</button>
+    <button type="button" class="btn small ghost" data-export-do="txt">📋 Copier en texte</button>
+    <button type="button" class="btn small ghost" data-export-do="csv">⤓ Télécharger (CSV)</button>
+    <span class="small" data-export-msg aria-live="polite"></span>
+  </div>
+  <p class="hint" style="margin:.5rem 0 0"><b>Tableau</b> : à coller dans Excel, Numbers ou Google Sheets. <b>Texte</b> : une personne par ligne, pour un message WhatsApp ou un mail. <b>CSV</b> : un fichier qui s'ouvre dans Excel.</p>
+</div>
+<script>
+(function () {
+  var box = document.getElementById('export'); if (!box) return;
+  var KEY = 'compta-export-cols';
+  var boxes = Array.prototype.slice.call(box.querySelectorAll('.export-cols input'));
+  try { var saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (saved && saved.length) boxes.forEach(function (b) { if (!b.disabled) b.checked = saved.indexOf(b.value) >= 0; }); } catch (e) {}
+  function url(fmt) {
+    var cols = boxes.filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
+    try { localStorage.setItem(KEY, JSON.stringify(cols)); } catch (e) {}
+    var wd = box.querySelector('[data-export-wd]');
+    return box.dataset.export + '?format=' + fmt + '&cols=' + cols.join(',') + (wd && !wd.checked ? '&desistes=0' : '');
+  }
+  var msg = box.querySelector('[data-export-msg]');
+  function say(t, ok) { msg.textContent = t; msg.className = 'small ' + (ok ? 'ok-text' : 'warn-text'); }
+  box.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-export-do]'); if (!b) return;
+    var fmt = b.dataset.exportDo;
+    if (fmt === 'csv') { window.location.href = url('csv'); say('Fichier téléchargé.', true); return; }
+    fetch(url(fmt)).then(function (r) { return r.text(); }).then(function (text) {
+      var n = text.trim() ? text.trim().split('\n').length - (fmt === 'tsv' ? 1 : 0) : 0;
+      return navigator.clipboard.writeText(text).then(function () {
+        say('✓ Copié (' + n + ' personne' + (n > 1 ? 's' : '') + ') : colle-le où tu veux.', true);
+      });
+    }).catch(function () { say('La copie n’a pas marché : utilise plutôt « Télécharger (CSV) ».', false); });
+  });
+})();
+</script>
+{% endif %}
+<datalist id="families">{% for f in trip.families %}<option value="{{ f.name }}">{% endfor %}</datalist>
+
+<div class="card table-wrap">
+  {% if not trip.participants %}<p class="muted">Personne pour l'instant.</p>{% else %}
+  <table class="people-table">
+    <thead><tr><th>Nom</th><th>Groupes</th><th class="num">Situation</th><th><span class="sr-only">Actions</span></th></tr></thead>
+    <tbody>
+    {% for a in r.accounts %}
+      {% if a.is_family %}
+      <tr class="family-row">
+        <td colspan="2"><b>👪 {{ a.name }}</b> <span class="muted small">· {{ a.members|length }} personnes · paie : {{ r.people[a.referent].name }}</span></td>
+        <td class="num"><a class="status-link" href="/v/{{ trip.id }}/participants/comptes?p={{ a.referent }}#p{{ a.referent }}" title="Voir le compte de la famille">{{ status(a) }}</a></td>
+        <td class="row-actions"><a class="btn link small" href="/v/{{ trip.id }}/participants/organisation#familles">Gérer</a></td>
+      </tr>
+      {% endif %}
+      {% for ps in a.members %}{% set p = (trip.participants|selectattr('id', 'equalto', ps.id)|first) %}
+      <tr class="{{ 'withdrawn' if p.id in withdrawn }}">
+        <td{% if a.is_family %} class="fam-member{{ ' fam-last' if loop.last }}"{% endif %}><button type="button" class="name-btn" data-toggle-row="#pe{{ p.id }}" aria-expanded="false" aria-controls="pe{{ p.id }}" title="Modifier {{ p.name }}"><b>{{ p.name }}</b></button>{{ role_pills(roles.get(p.id)) }}
+          {% if p.id in withdrawn %} <a class="pill withdrawn-pill" href="/v/{{ trip.id }}/participants/comptes?p={{ p.id }}#p{{ p.id }}" title="Voir son désistement et ce qu'on lui doit">Désisté</a>{% endif %}
+          {% if p.phone or p.email or p.note %}<div class="muted small">{{ p.phone }}{% if p.phone and p.email %} · {% endif %}{{ p.email }}{% if p.note %}{% if p.phone or p.email %} · {% endif %}{{ p.note }}{% endif %}</div>{% endif %}</td>
+        <td>{% for g in pgroups.get(p.id, []) %}<span class="chip">{{ g }}</span>{% endfor %}</td>
+        <td class="num"><a class="status-link" href="/v/{{ trip.id }}/participants/comptes?p={{ p.id }}#p{{ p.id }}" title="Voir son compte">{% if a.is_family %}<span class="muted small">sa part {{ ps.share|money }}</span>{% else %}{{ status(ps) }}{% endif %}</a></td>
+        <td class="row-actions"><button type="button" class="btn link small" data-toggle-row="#pe{{ p.id }}" aria-expanded="false" aria-controls="pe{{ p.id }}">Modifier</button></td>
+      </tr>
+      <tr class="edit-row" id="pe{{ p.id }}"{{ '' if open_edit == p.id else ' hidden' }}><td colspan="4">
+        <form method="post" action="/v/{{ trip.id }}/participants/{{ p.id }}">
+          <div class="person-edit">
+            <div class="field"><label for="n{{ p.id }}">Nom</label><input type="text" id="n{{ p.id }}" name="name" value="{{ p.name }}" required></div>
+            <div class="field"><label for="t{{ p.id }}">Téléphone</label><input type="tel" id="t{{ p.id }}" name="phone" value="{{ p.phone }}" placeholder="06 12 34 56 78"></div>
+            <div class="field"><label for="m{{ p.id }}">E-mail</label><input type="email" id="m{{ p.id }}" name="email" value="{{ p.email }}"></div>
+            <div class="field wide"><label for="no{{ p.id }}">Note</label><input type="text" id="no{{ p.id }}" name="note" value="{{ p.note }}"></div>
+            {{ person_chips(p, 'e' ~ p.id) }}
+          </div>
+          <div class="row" style="margin-top:.5rem;gap:.5rem;justify-content:flex-end">
+            <button type="button" class="btn small ghost" data-toggle-row="#pe{{ p.id }}">Fermer</button>
+            <button class="btn small">Enregistrer</button>
+          </div>
+        </form>
+        <div class="danger-zone">
+          <a class="btn link small" href="/v/{{ trip.id }}/participants/comptes?p={{ p.id }}#p{{ p.id }}">Voir son compte</a>
+          {% if p.id in withdrawn %}
+            <span class="small muted grow">{{ p.name }} s'est désisté{% if withdrawn_dates.get(p.id) %} le {{ withdrawn_dates[p.id]|date }}{% endif %}.</span>
+            <a class="btn small ghost" href="/v/{{ trip.id }}/desistement?p={{ p.id }}">Modifier le désistement</a>
+            <form method="post" action="/v/{{ trip.id }}/desistement/{{ p.id }}/annuler" class="inline" data-confirm="{{ p.name }} revient dans le voyage ? Ses parts redeviennent celles d'un participant."><input type="hidden" name="next" value="/v/{{ trip.id }}/participants"><button class="btn small warn">Annuler le désistement</button></form>
+          {% else %}
+            <a class="btn small warn" href="/v/{{ trip.id }}/desistement?p={{ p.id }}" title="Il ne vient plus : on choisit ce qu'il paie quand même, qui reprend le reste, et ce qu'on lui rend">Désister…</a>
+          {% endif %}
+          <form method="post" action="/v/{{ trip.id }}/participants/{{ p.id }}/supprimer" class="inline" data-confirm="Supprimer {{ p.name }} du voyage ? (Possible seulement s'il n'a encore rien versé ni payé.)"><button class="btn small danger" title="Seulement s'il n'a encore rien versé ni payé ; sinon, utilise « Désister »">Supprimer du voyage</button></form>
+        </div>
+      </td></tr>
+      {% endfor %}
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{# Pastilles : rôles (plongeur / accompagnant + rôles d'équipe), famille (une seule), groupes (plusieurs) #}
+{% macro person_chips(p, k) -%}
+<div class="field wide"><span class="label-like">Rôles</span>
+  <input type="hidden" name="roles_form" value="1">
+  <div class="choice small" data-none-group>
+    <label><input type="checkbox" data-none {{ 'checked' if not p or not p.role_list }}> Aucun</label>
+    {% for rk, v in trip_roles.items() %}<label title="{{ ROLE_TITLES.get(rk, '') }}"><input type="checkbox" name="r_{{ rk }}" value="1" {% if rk in ('plongeur', 'accompagnant') %}data-pair="plonge" {% endif %}{{ 'checked' if p and rk in p.role_list }}> {{ v }}</label>{% endfor %}
+  </div></div>
+<div class="field wide"><span class="label-like">Famille</span>
+  <div class="choice small" data-family-pick>
+    <label><input type="radio" name="family_pick" value="" {{ 'checked' if not p or not p.family }}> Aucune</label>
+    {% for f in trip.families %}<label><input type="radio" name="family_pick" value="{{ f.name }}" {{ 'checked' if p and p.family_id == f.id }}> {{ f.name }}</label>{% endfor %}
+    <label><input type="radio" name="family_pick" value="__new__"> + Nouvelle…</label>
+    <input type="text" name="family_new" class="family-new" placeholder="Nom de famille, ex. Lebrun" aria-label="Nom de la nouvelle famille">
+  </div></div>
+<div class="field wide"><span class="label-like">Groupes</span>
+  <input type="hidden" name="groups_form" value="1">
+  <div class="choice small" data-none-group>
+    <label><input type="checkbox" data-none {{ 'checked' if not p or not pgroups.get(p.id) }}> Aucun</label>
+    {% for g in groups %}<label><input type="checkbox" name="groups" value="{{ g.name }}" {{ 'checked' if p and p.id in g.ids }}> {{ g.name }}</label>{% endfor %}
+  </div>
+</div>
+{%- endmacro %}

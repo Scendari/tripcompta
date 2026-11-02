@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div class="grow">
+  <h1>{% if wcur %}Modifier le désistement de {{ sel.name }}{% else %}Quelqu'un se désiste{% endif %}</h1>
+  <p class="muted">On indique ce que la personne garde à sa charge (ce qui n'est pas remboursable), et qui paie le reste.</p>
+</div></div>
+<div class="field" style="max-width:380px">
+  <label for="who">Qui se désiste ?</label>
+  <select id="who" data-nav="/v/{{ trip.id }}/desistement?p=">
+    <option value="">— choisir —</option>
+    {% for p in trip.participants %}<option value="{{ p.id }}" {{ 'selected' if sel and sel.id == p.id }}>{{ p.name }}{{ ' — déjà désisté (modifier)' if p.id in withdrawn }}</option>{% endfor %}
+  </select>
+</div>
+{% if sel %}
+{% set ps = r.people[sel.id] %}
+<div class="grid k2" style="align-items:start">
+<form method="post" action="/v/{{ trip.id }}/desistement" data-preview="/v/{{ trip.id }}/desistement/apercu" data-preview-target="#preview">
+  <input type="hidden" name="participant" value="{{ sel.id }}">
+  <div class="card" style="margin-bottom:1rem">
+    {% if wcur %}<b>{{ sel.name }}</b> s'est désisté{% if wcur.date %} le {{ wcur.date|date }}{% endif %} : sa part est aujourd'hui de <b>{{ ps.share|money }}</b> (elle serait de {{ r_full.people[sel.id].share|money }} sans désistement), il a déjà donné <b>{{ (ps.paid + ps.advanced)|money }}</b>. Change ce qu'il faut ci-dessous : l'aperçu montre l'effet.
+    {% else %}<b>{{ sel.name }}</b> : sa part actuelle est de <b>{{ ps.share|money }}</b>, il a déjà donné <b>{{ (ps.paid + ps.advanced)|money }}</b>.{% endif %}
+  </div>
+  <fieldset class="step">
+    <legend><span class="n">1</span> Quand ?</legend>
+    <input type="date" name="date" value="{{ wcur.date if wcur and wcur.date else '' }}" style="max-width:200px" aria-label="Date du désistement">
+  </fieldset>
+  <fieldset class="step">
+    <legend><span class="n">2</span> Ce qu'il paie quand même</legend>
+    <p class="hint" style="margin-top:0">Coche ce que {{ sel.name }} doit quand même payer (ex. acompte non remboursable). Le reste lui sera retiré.</p>
+    {% for e in exps %}
+      <label style="font-weight:500;display:flex;gap:.5rem;padding:.25rem 0"><input type="checkbox" name="kept" value="{{ e.id }}" {{ 'checked' if wcur and e.id in wcur.kept_ids }}>
+        {{ e.label }} <span class="muted">— sa part : {{ r_full.share(sel.id, e.id)|money }}</span></label>
+    {% else %}<p class="muted">Il ne participe à aucune dépense.</p>{% endfor %}
+  </fieldset>
+  <fieldset class="step">
+    <legend><span class="n">3</span> Qui paie ce qui lui est retiré ?</legend>
+    <div class="choice">
+      <label><input type="radio" name="absorber" value="group" {{ 'checked' if not wcur or wcur.absorber != 'asso' }}> Le groupe (réparti sur les autres)</label>
+      <label><input type="radio" name="absorber" value="asso" {{ 'checked' if wcur and wcur.absorber == 'asso' }}> {{ asso_name|capfirst }}</label>
+    </div>
+  </fieldset>
+  <fieldset class="step">
+    <legend><span class="n">4</span> Remboursement</legend>
+    <div class="field"><label for="refund">Montant remboursé maintenant (€) <span class="hint">(facultatif)</span></label>
+      <input class="amount" type="text" inputmode="decimal" id="refund" name="refund" placeholder="0,00">
+      <div class="hint">L'aperçu ci-dessous te dit combien lui rendre. Tu peux aussi le faire plus tard.</div></div>
+    <div class="field"><label for="note">Note <span class="hint">(facultatif)</span></label><input type="text" id="note" name="note" value="{{ wcur.note if wcur and wcur.note }}"></div>
+  </fieldset>
+  <div class="preview" id="preview" aria-live="polite"></div>
+  <div class="form-bar"><button class="btn">{{ 'Enregistrer les modifications' if wcur else 'Valider le désistement' }}</button>
+    {% if wcur %}<a class="btn ghost" href="/v/{{ trip.id }}/participants/comptes?p={{ sel.id }}">Annuler</a>{% endif %}</div>
+</form>
+<div class="card">
+  <h3>Comment ça marche ?</h3>
+  <p class="small">Si le gîte est réservé pour tout le groupe, la part de {{ sel.name }} doit être payée par quelqu'un :</p>
+  <ul class="small">
+    <li>soit <b>{{ sel.name }}</b> la garde (coche-la à l'étape 2),</li>
+    <li>soit <b>le groupe</b> se la partage,</li>
+    <li>soit <b>{{ asso_name }}</b> la prend en charge.</li>
+  </ul>
+  <p class="small">Pour une dépense qui baisse vraiment (ex. une plongée annulée), modifie plutôt la dépense elle-même.</p>
+</div>
+</div>
+{% endif %}
+{% if withdrawn %}
+<h2>Déjà désistés</h2>
+<ul>{% for p in trip.participants if p.id in withdrawn %}<li><a href="/v/{{ trip.id }}/p/{{ p.id }}">{{ p.name }}</a> · <a class="small" href="/v/{{ trip.id }}/desistement?p={{ p.id }}">modifier</a></li>{% endfor %}</ul>
+{% endif %}
+{% endblock %}

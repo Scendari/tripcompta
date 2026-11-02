@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% macro eur(x) %}{{ ((x or 0) * 100)|round|int|money }}{% endmacro %}
+{% block content %}
+<div class="page-head"><div class="grow">
+  <h1>🤖 Faire remplir par une IA</h1>
+  <p class="muted">Pour ce voyage (n°{{ trip.id }}). Ça marche avec n'importe quelle IA (Claude, ChatGPT, Le Chat…) : {{ 'tu remplis le modèle' if ia_mode == INIT else 'tu décris ce qui change' }}, l'IA te pose ses questions et te rend un texte à coller ici. Tu vois l'avant / après avant d'enregistrer.</p>
+</div></div>
+
+<div class="tabs" role="tablist" aria-label="Choix du modèle">
+  <a role="tab" href="/v/{{ trip.id }}/ia?modele={{ INIT }}" class="{{ 'on' if ia_mode == INIT }}" aria-selected="{{ 'true' if ia_mode == INIT else 'false' }}">Démarrer le voyage</a>
+  <a role="tab" href="/v/{{ trip.id }}/ia?modele={{ UPDATE }}" class="{{ 'on' if ia_mode == UPDATE }}" aria-selected="{{ 'true' if ia_mode == UPDATE else 'false' }}">Mettre à jour le voyage</a>
+</div>
+<p class="hint" style="margin-top:.3rem">{% if ia_mode == INIT %}Pour un voyage encore vide : participants, rôles, familles, dépenses prévues, premiers versements…{% else %}Pour dire ce qui a changé : nouvelles dépenses, montants réels, versements reçus, corrections, désistements… L'IA reçoit l'état actuel du voyage.{% endif %}</p>
+
+<div style="max-width:960px">
+<fieldset class="step">
+  <legend><span class="n">1</span> {{ 'Remplis le modèle' if ia_mode == INIT else "Décris la mise à jour" }}</legend>
+  {% if ia_mode == INIT %}
+  <p class="hint" style="margin-top:0">Écris comme tu parles, directement ici. Les lignes « Exemple : » sont là pour t'aider : remplace-les ou efface-les. Ce que tu ne sais pas, laisse vide : l'IA te posera la question. Tu as un tableur, des notes ou des photos de tickets ? Tu pourras les donner à l'IA en plus.</p>
+  {% else %}
+  <p class="hint" style="margin-top:0">Décris la mise à jour à faire, comme tu parles. Pas besoin de tout redire : l'état actuel du voyage (participants, dépenses, qui doit quoi) est joint automatiquement au message pour l'IA. Tu as des photos de tickets ou un tableur ? Tu pourras les donner à l'IA en plus.</p>
+  {% endif %}
+  <div class="field">
+    <label for="modele">{{ 'Les informations de ton voyage' if ia_mode == INIT else 'La mise à jour à faire' }}</label>
+    <textarea id="modele" class="modele{{ " modele-libre" if ia_mode != INIT }}" rows="{{ 24 if ia_mode == INIT else 9 }}" spellcheck="true" lang="fr"{% if ia_mode != INIT %} placeholder="Ex. : Hugo a versé 150 € le 20/04/2026. Le gîte a coûté 1 740 € au final. Le péage, c'est Marie qui l'a payé, pas Luc."{% endif %}>{{ draft if draft is not none else modele }}</textarea>
+    <div class="hint" id="modele-status" role="status" aria-live="polite">{% if draft_saved %}✓ Brouillon enregistré sur ton ordinateur ({{ draft_saved.strftime('%d/%m à %H:%M') }}).{% else %}Ce que tu écris est enregistré automatiquement sur ton ordinateur.{% endif %}</div>
+  </div>
+  {% if ia_mode != INIT %}
+  <details class="ia-ideas"><summary>Des idées de ce qu'on peut demander</summary>
+    <ul class="small">
+      <li><b>Personnes</b> : « Zoé vient aussi, accompagnante, dans la famille Lebrun », « Luc sera DP », « nouveau groupe : voiture de Marie avec Hugo et Antoine ».</li>
+      <li><b>Dépenses</b> : « Pot de fin, 45 € avancés par Marie, pour tous », « le gîte a coûté 1 740 € au final », « péage de Luc : deux tickets, 12,40 € et 8,60 € ».</li>
+      <li><b>Montant fixé</b> : « sur le gîte, Tom paie 60 € (enfant), le reste partagé entre les autres ».</li>
+      <li><b>Argent</b> : « Hugo a versé 150 € le 20/04/2026 », « la caisse a rendu 92,40 € à Luc le 05/11/2026 », « l'hébergeur a remboursé 90 € à Luc ».</li>
+      <li><b>Cas particuliers</b> : « Hugo, 50 € de remise offerte par l'asso (encadrant) », « Antoine se désiste le 02/05/2026, il paie quand même le gîte ».</li>
+      <li><b>Corrections</b> : « le péage, c'est Marie qui l'a payé, pas Luc », « les glaces sont saisies deux fois : en supprimer une ».</li>
+    </ul>
+  </details>
+  {% endif %}
+  <div class="row">
+    <button type="button" class="btn small ghost" id="modele-reset">{{ 'Remettre le modèle au propre' if ia_mode == INIT else 'Effacer le texte' }}</button>
+    <button type="button" class="btn small ghost" id="modele-restore" {{ '' if has_prev else 'hidden' }}>Récupérer mon brouillon précédent</button>
+    <button type="button" class="btn small ghost" id="modele-dl">Télécharger mon texte</button>
+  </div>
+  {% if legacy %}<p class="hint">Un brouillon de l'ancienne version a été gardé : {% for n in legacy %}<a href="/ia/ancien-brouillon/{{ n }}">{{ n }}</a>{{ ', ' if not loop.last }}{% endfor %}.</p>{% endif %}
+</fieldset>
+
+<fieldset class="step">
+  <legend><span class="n">2</span> Donne-le à l'IA</legend>
+  <p class="hint" style="margin-top:0">Le bouton copie <b>un seul message</b> : le numéro du voyage, le mode d'emploi de l'application pour l'IA{% if ia_mode == UPDATE %}, l'état actuel du voyage{% endif %} et ton texte. Ouvre ton IA, colle le message (et joins tes fichiers si tu en as).</p>
+  <div class="row">
+    <button type="button" class="btn" id="copy-msg">Copier le message pour l'IA</button>
+    <button type="button" class="btn ghost" id="dl-msg">Télécharger le message</button>
+  </div>
+  <ul class="small" style="padding-left:1.2rem;line-height:1.7;margin-bottom:0">
+    <li>L'IA lit le <a href="/ia/guide_ia.md">mode d'emploi pour l'IA</a> : comment l'application calcule, et le format attendu.</li>
+    <li>Elle te pose ses questions (« Le péage, c'est Luc qui l'a payé ? », « Hugo fait 4 ou 6 plongées ? »). Réponds-lui.</li>
+    <li>Elle te montre un récapitulatif puis un bloc de texte qui commence par <code>{"voyage_id": {{ trip.id }}</code>. Copie toute sa réponse.</li>
+  </ul>
+</fieldset>
+
+<fieldset class="step" id="apercu">
+  <legend><span class="n">3</span> Colle la réponse de l'IA</legend>
+  <form method="post" action="/v/{{ trip.id }}/ia/apercu">
+    <input type="hidden" name="modele" value="{{ ia_mode }}">
+    <div class="field">
+      <label for="texte">Réponse de l'IA <span class="hint">(tu peux coller toute la réponse : je retrouve le bloc tout seul)</span></label>
+      <textarea id="texte" name="texte" rows="8" placeholder='{ "voyage_id": {{ trip.id }}, … }' style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem">{{ texte }}</textarea>
+    </div>
+    <button class="btn">Voir l'aperçu (rien n'est enregistré)</button>
+  </form>
+
+  {% if errors %}
+  <div style="margin-top:1.2rem">
+    <h3>À corriger avant d'enregistrer</h3>
+    <ul class="alerts" id="errors">{% for e in errors %}<li class="error">{{ e }}</li>{% endfor %}</ul>
+    <p class="small">Copie ces messages à l'IA : elle corrigera et te redonnera le bloc complet.</p>
+    <button type="button" class="btn small ghost" id="copy-errors">Copier les messages pour l'IA</button>
+  </div>
+  {% endif %}
+
+  {% if res %}{% set a = res.apercu %}
+  <div style="margin-top:1.2rem" id="resultat">
+    <h3>Ce qui va changer</h3>
+    {% if res.actions %}
+    <ul class="small changes" id="actions">{% for x in res.actions %}<li>{{ x }}</li>{% endfor %}</ul>
+    {% else %}<p class="muted">Rien à changer.</p>{% endif %}
+
+    {% if res.a_verifier or res.avertissements %}
+    <h4>Points à vérifier</h4>
+    <ul class="alerts">{% for x in res.a_verifier %}<li class="warn">{{ x }}</li>{% endfor %}{% for x in res.avertissements %}<li class="warn">{{ x }}</li>{% endfor %}</ul>
+    {% endif %}
+
+    {% if res.changements %}
+    {% set fresh = res.changements|rejectattr('reste_avant', 'none')|list|length == 0 %}
+    {% if fresh %}
+    <h4>Qui doit quoi après ces changements</h4>
+    <div class="table-wrap"><table id="avant-apres">
+      <thead><tr><th>Personne ou famille</th><th class="num">Situation</th></tr></thead>
+      <tbody>{% for c in res.changements %}{% set v = c.reste_apres %}<tr><td>{{ c.personne }}</td>
+        <td class="num">{% if v > 0 %}<span class="pill doit">doit {{ eur(v) }}</span>{% elif v < 0 %}<span class="pill du">on lui doit {{ eur(-v) }}</span>{% else %}<span class="pill ok">à jour</span>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}
+    <h4>Qui doit quoi : avant → après</h4>
+    <p class="hint" style="margin-top:0">« Avant » = ce que chacun doit aujourd'hui dans l'application ; « Après » = une fois ces changements enregistrés. Seules les personnes dont la situation change sont listées.</p>
+    <div class="table-wrap"><table id="avant-apres">
+      <thead><tr><th>Personne ou famille</th><th class="num">Avant</th><th class="num">Après</th></tr></thead>
+      <tbody>{% for c in res.changements %}<tr><td>{{ c.personne }}</td>
+        {% for v in (c.reste_avant, c.reste_apres) %}<td class="num">{% if v is none %}<span class="muted">nouveau</span>{% elif v > 0 %}<span class="pill doit">doit {{ eur(v) }}</span>{% elif v < 0 %}<span class="pill du">on lui doit {{ eur(-v) }}</span>{% else %}<span class="pill ok">à jour</span>{% endif %}</td>{% endfor %}
+      </tr>{% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+    {% endif %}
+    <p class="small">Après : coût du voyage <b>{{ eur(a.cout_total) }}</b> · déjà reçu {{ eur(a.deja_recu) }} · reste à recevoir <b>{{ eur(a.reste_a_recevoir) }}</b>{% if a.reste_a_rembourser %} · à rembourser {{ eur(a.reste_a_rembourser) }}{% endif %}
+      · {% if a.equilibre %}<span class="pill ok">Comptes équilibrés ✓</span>{% else %}<span class="pill doit">Comptes déséquilibrés</span>{% endif %}</p>
+
+    <details>
+      <summary>Voir toutes les dépenses après ces changements</summary>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Dépense</th><th>Catégorie</th><th class="num">Prévu</th><th class="num">Réel</th><th>Payé par</th><th>Pour qui</th></tr></thead>
+        <tbody>{% for e in a.depenses %}{% set ws = e.pour.values()|list %}{% set divers = a.participants|rejectattr('accompagnant')|map(attribute='nom')|list %}<tr>
+          <td>{{ e.libelle }}</td><td>{{ e.categorie or '' }}</td>
+          <td class="num">{{ eur(e.prevu) if e.prevu is not none else '—' }}</td><td class="num">{{ eur(e.reel) if e.reel is not none else '—' }}</td>
+          <td>{{ e.paye_par }}</td>
+          <td class="small">{% if e.pour|length == a.participants|length and ws|select('ne', 1)|list|length == 0 %}tous{% elif divers|length < a.participants|length and e.pour.keys()|list|sort == divers|sort and ws|select('ne', 1)|list|length == 0 %}les plongeurs{% else %}{% for n, w in e.pour.items() %}{{ n }}{% if w != 1 %} ×{{ w|weight }}{% endif %}{{ ', ' if not loop.last }}{% endfor %}{% endif %}</td>
+        </tr>{% endfor %}</tbody>
+      </table></div>
+    </details>
+
+    <form method="post" action="/v/{{ trip.id }}/ia/importer" style="margin-top:1rem">
+      <input type="hidden" name="texte" value="{{ texte }}">
+      <input type="hidden" name="modele" value="{{ ia_mode }}">
+      <button class="btn">Enregistrer ces changements</button>
+      <span class="hint">Tout s'enregistre d'un coup ; le bouton « ↶ Défaire » du message qui suit les retire tout d’un coup.</span>
+    </form>
+  </div>
+  {% endif %}
+</fieldset>
+
+<details class="card" style="margin-top:.5rem">
+  <summary><b>Pour aller plus loin : travailler avec Claude Desktop, Claude Code ou VS Code</b> <span class="hint">(facultatif)</span></summary>
+  <p class="small">Avec un « connecteur », Claude saisit lui-même dans l'application, sans copier-coller. Dis-lui simplement : <i>« Travaille sur le voyage n°{{ trip.id }} ({{ trip.name }}) »</i>.</p>
+  <p class="small">Claude Desktop → Réglages → Développeur → <i>Modifier la config</i>, colle ceci puis redémarre Claude :</p>
+  <pre id="conf" style="background:var(--bg-2);padding:.8rem;border-radius:8px;overflow-x:auto;font-size:.78rem">{{ conf }}</pre>
+  <button type="button" class="btn small ghost" data-copy="#conf">Copier</button>
+  <p class="small" style="margin-top:1rem">Claude Code (terminal, ou extension Claude Code dans VS Code) :</p>
+  <pre id="cli" style="background:var(--bg-2);padding:.8rem;border-radius:8px;overflow-x:auto;font-size:.78rem;white-space:pre-wrap">{{ cli }}</pre>
+  <button type="button" class="btn small ghost" data-copy="#cli">Copier</button>
+  <p class="small" style="margin-top:1rem">Pour les développeurs : API JSON documentée sur <a href="/api/docs" target="_blank">{{ api }}</a> (import : <code>POST /api/import</code> avec <code>"voyage": "{{ trip.id }}"</code> ; toutes les écritures acceptent <code>"simulation": true</code>).</p>
+</details>
+</div>
+
+<script>
+(function () {
+  const TRIP = {{ trip.id }}, MODE = {{ ia_mode|tojson }}, TRIP_NAME = {{ trip.name|tojson }};
+  const GUIDE = {{ guide|tojson }};
+  const STATE = {{ state|tojson }};
+  const KEY = "compta-ia-" + TRIP + "-" + MODE;
+  const SAVE_URL = "/v/" + TRIP + "/ia/brouillon/" + MODE;
+  const ta = document.getElementById("modele");
+  const blank = {{ modele|tojson }};
+  const serverTime = {{ (draft_saved.timestamp() * 1000)|int if draft_saved else 0 }};
+  const status = document.getElementById("modele-status");
+  try { ["compta-modele-ia-md", "compta-modele-ia", "compta-modele-ia-texte"].forEach(k => localStorage.removeItem(k)); } catch (e) {}
+  // Copie de secours dans le navigateur, si elle est plus récente que celle de l'ordinateur (ex. application arrêtée)
+  let pendingLocal = false;
+  try {
+    const local = JSON.parse(localStorage.getItem(KEY) || "null");
+    if (local && local.text && local.t > serverTime && local.text !== ta.value) { ta.value = local.text; pendingLocal = true; }
+  } catch (e) {}
+  ta.addEventListener("input", () => changed());
+  const getModel = () => ta.value;
+  const setModel = v => { ta.value = v; };
+  window.iaModel = getModel;
+  // ---- Enregistrement à la volée : navigateur tout de suite, ordinateur après une courte pause de frappe
+  let timer = null, dirty = false, saving = false;
+  function changed() {
+    dirty = true;
+    try { localStorage.setItem(KEY, JSON.stringify({text: getModel(), t: Date.now()})); } catch (e) {}
+    status.textContent = "Modification en cours…";
+    clearTimeout(timer); timer = setTimeout(save, 700);
+  }
+  async function save() {
+    if (saving) { clearTimeout(timer); timer = setTimeout(save, 300); return; }
+    saving = true; dirty = false;
+    try {
+      const r = await fetch(SAVE_URL, {method: "PUT", body: getModel(), headers: {"Content-Type": "text/plain;charset=utf-8"}});
+      if (!r.ok) throw new Error(r.status);
+      const j = await r.json();
+      if (!dirty) status.textContent = "✓ Enregistré sur ton ordinateur à " + j.enregistre;
+    } catch (e) {
+      dirty = true;
+      status.textContent = "⚠ Pas pu enregistrer sur l'ordinateur (l'application est-elle arrêtée ?). Ton texte est gardé dans ce navigateur ; relance l'application.";
+      clearTimeout(timer); timer = setTimeout(save, 5000);
+    } finally { saving = false; }
+  }
+  function flush() {
+    if (!dirty) return;
+    try { navigator.sendBeacon(SAVE_URL, new Blob([getModel()], {type: "text/plain;charset=utf-8"})); dirty = false; } catch (e) {}
+  }
+  window.addEventListener("pagehide", flush);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flush(); });
+  if (pendingLocal) { dirty = true; save(); }
+
+  const restoreBtn = document.getElementById("modele-restore");
+  document.getElementById("modele-reset").addEventListener("click", async () => {
+    if (!confirm("Remettre le modèle au propre ?\nTon brouillon actuel est gardé : tu pourras le récupérer avec « Récupérer mon brouillon précédent ».")) return;
+    clearTimeout(timer); dirty = false;
+    await fetch(SAVE_URL, {method: "PUT", body: getModel(), headers: {"Content-Type": "text/plain;charset=utf-8"}});
+    await fetch(SAVE_URL + "/vider", {method: "POST"});
+    setModel(blank); clearTimeout(timer); dirty = false;
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    restoreBtn.hidden = false;
+    status.textContent = "Modèle remis au propre. Ton ancien brouillon est gardé.";
+  });
+  restoreBtn.addEventListener("click", async () => {
+    clearTimeout(timer);
+    if (dirty) await save();
+    const r = await fetch(SAVE_URL + "/recuperer", {method: "POST"});
+    if (!r.ok) { status.textContent = "Pas de brouillon précédent."; return; }
+    setModel((await r.json()).modele); clearTimeout(timer); dirty = false;
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    status.textContent = "✓ Brouillon précédent récupéré (le texte que tu viens de quitter est gardé à sa place).";
+  });
+  function download(name, text, type) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([text], {type: type + ";charset=utf-8"}));
+    a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  document.getElementById("modele-dl").addEventListener("click", () => download("voyage_" + TRIP + "_" + MODE + ".txt", getModel(), "text/plain"));
+
+  function message() {
+    const intro = MODE === "initialisation"
+      ? "Je démarre ce voyage (il est encore vide) : aide-moi à le remplir."
+      : "Ce voyage est déjà en cours dans l'application : aide-moi à le mettre à jour avec ce qui a changé. Ne redonne pas ce qui existe déjà.";
+    return "Bonjour ! J'utilise l'application « Compta Voyages » pour les comptes d'un voyage de mon association.\n"
+      + "Voyage n°" + TRIP + " : « " + TRIP_NAME + " » (recopie \"voyage_id\": " + TRIP + " en haut de ton bloc JSON).\n"
+      + intro + "\n"
+      + "Lis d'abord le mode d'emploi ci-dessous. Pose-moi tes questions si quelque chose n'est pas clair "
+      + "(regroupées), puis donne-moi le récapitulatif et le bloc JSON à coller dans l'application.\n\n"
+      + "=== MODE D'EMPLOI POUR L'IA ===\n\n" + GUIDE
+      + "\n\n=== ÉTAT ACTUEL DU VOYAGE n°" + TRIP + " ===\n\n" + STATE
+      + "\n\n=== MES INFORMATIONS ===\n\n" + getModel() + "\n";
+  }
+  function copy(text, btn, done) {
+    const ok = () => { const old = btn.textContent; btn.textContent = done || "Copié ✓"; setTimeout(() => btn.textContent = old, 2500); };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(ok, () => fallback(text, ok));
+    else fallback(text, ok);
+  }
+  function fallback(text, ok) {
+    const t = document.createElement("textarea"); t.value = text; t.setAttribute("aria-hidden", "true");
+    t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select();
+    try { document.execCommand("copy"); ok(); } catch (e) {} t.remove();
+  }
+  window.iaMessage = message;
+  document.getElementById("copy-msg").addEventListener("click", e => copy(message(), e.currentTarget, "Copié ✓ — colle-le dans ton IA"));
+  document.getElementById("dl-msg").addEventListener("click", () => download("message_pour_ia_voyage_" + TRIP + ".txt", message(), "text/plain"));
+  const ce = document.getElementById("copy-errors");
+  if (ce) ce.addEventListener("click", () => copy("L'application a refusé ces changements avec ces messages. Corrige et redonne-moi le bloc JSON complet (avec \"voyage_id\": " + TRIP + ") :\n- "
+      + [...document.querySelectorAll("#errors li")].map(li => li.textContent).join("\n- "), ce));
+  document.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", () => copy(document.querySelector(b.dataset.copy).innerText, b)));
+  {% if focus %}document.getElementById("{{ 'resultat' if res else 'apercu' }}").scrollIntoView();{% endif %}
+})();
+</script>
+{% endblock %}

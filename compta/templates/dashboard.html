@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status, mode_note, role_pills with context %}
+{% block content %}
+<div class="page-head"><div class="grow"><h1>Où j'en suis ?</h1>{{ mode_note(mode) }}</div></div>
+
+<section class="trip-info" aria-labelledby="h-trip">
+  <div class="row section-head">
+    <h2 id="h-trip">Le voyage <span class="muted" style="font-weight:500">· {{ trip.name }}</span></h2>
+    <button type="button" class="btn small ghost" data-toggle-row="#trip-edit" aria-expanded="false" aria-controls="trip-edit">✎ Modifier le voyage</button>
+  </div>
+  {% set o = trip.participants|selectattr('role_list', 'contains', 'organisateur')|list %}
+  {% set co = trip.participants|selectattr('role_list', 'contains', 'co-organisateur')|list %}
+  {% set dp = trip.participants|selectattr('role_list', 'contains', 'dp')|list %}
+  {% set nc = trip.participants|selectattr('companion')|list|length %}
+  <div class="grid k4 trip-tiles" id="team">
+    <div class="card kpi"><div class="label">Quand</div>
+      <div class="value small-value">{% if trip.start %}{% if trip.end and trip.end.month == trip.start.month and trip.end.year == trip.start.year %}{{ trip.start.strftime('%d') }}{% else %}{{ trip.start|date }}{% endif %}{% if trip.end %} → {{ trip.end|date }}{% endif %}{% else %}<span class="muted">à préciser</span>{% endif %}</div>
+      <div class="sub">{% if trip.start and trip.end %}{{ (trip.end - trip.start).days + 1 }} jours{% endif %}</div></div>
+    <div class="card kpi"><div class="label">Où</div>
+      <div class="value small-value">{{ trip.place or '—' }}</div></div>
+    <div class="card kpi"><div class="label">Participants</div>
+      <div class="value small-value"><a href="/v/{{ trip.id }}/participants">{{ trip.participants|length }}</a></div>
+      <div class="sub">{% if nc %}dont {{ nc }} accompagnant{{ 's' if nc > 1 }}{% endif %}</div></div>
+    <div class="card kpi"><div class="label">Équipe</div>
+      <div class="value small-value">{% if o %}<a href="/v/{{ trip.id }}/p/{{ o[0].id }}">{{ o[0].name }}</a>{% elif trip.organizer %}{{ trip.organizer }}{% else %}<a class="muted" href="/v/{{ trip.id }}/participants/organisation#roles">à désigner</a>{% endif %}</div>
+      <div class="sub">{% if o or trip.organizer %}organisateur{% endif %}{% if co %} · avec {% for x in co %}<a href="/v/{{ trip.id }}/p/{{ x.id }}">{{ x.name }}</a>{{ ', ' if not loop.last }}{% endfor %}{% endif %}
+        {% if dp %}<br><span title="Directeur de plongée">DP</span> : {% for x in dp %}<a href="/v/{{ trip.id }}/p/{{ x.id }}">{{ x.name }}</a>{{ ', ' if not loop.last }}{% endfor %}{% endif %}</div></div>
+  </div>
+  {% if trip.note %}<p class="trip-note small" id="trip-note"><span class="muted">Notes :</span> {{ trip.note }}</p>{% endif %}
+<div class="card trip-edit" id="trip-edit" hidden>
+    <form method="post" action="/v/{{ trip.id }}/modifier">
+      <div class="trip-edit-grid">
+        <div class="field"><label for="t_name">Nom</label><input id="t_name" type="text" name="name" value="{{ trip.name }}"></div>
+        <div class="field"><label for="t_place">Lieu</label><input id="t_place" type="text" name="place" value="{{ trip.place }}"></div>
+        <div class="field"><label for="t_start">Du</label><input id="t_start" type="date" name="start" value="{{ trip.start or '' }}"></div>
+        <div class="field"><label for="t_end">Au</label><input id="t_end" type="date" name="end" value="{{ trip.end or '' }}"></div>
+        <div class="field wide"><label for="t_note">Notes <span class="hint">(club, lieu de départ, infos utiles…)</span></label><textarea id="t_note" name="note" rows="2" data-autogrow>{{ trip.note or '' }}</textarea></div>
+        {% set o = trip.participants|selectattr('role_list', 'contains', 'organisateur')|list %}
+        {% if o %}<input type="hidden" name="organizer" value="{{ trip.organizer }}">
+        {% else %}<div class="field wide"><label for="t_organizer">Organisateur <span class="hint">(s'il ne vient pas au voyage ; sinon, donne-lui le rôle Organisateur)</span></label><input id="t_organizer" type="text" name="organizer" value="{{ trip.organizer }}"></div>{% endif %}
+      </div>
+      <div class="row" style="gap:.5rem;justify-content:flex-end;align-items:center">
+        <span class="hint grow">Organisateur, co-organisateurs et DP : <a href="/v/{{ trip.id }}/participants/organisation#roles">Participants → Organisation</a></span>
+        <button type="button" class="btn small ghost" data-toggle-row="#trip-edit">Fermer</button>
+        <button class="btn small">Enregistrer</button>
+      </div>
+    </form>
+    <div class="danger-zone">
+      <form method="post" action="/v/{{ trip.id }}/supprimer" class="inline" data-confirm="Supprimer définitivement ce voyage ? (Tu pourras encore cliquer sur « Défaire » juste après.)"><button class="btn small danger">Supprimer le voyage</button></form>
+    </div>
+  </div>
+</section>
+
+
+
+<h2 class="sec-sep">Les comptes</h2>
+<div class="grid k4 money-kpis">
+  <div class="card kpi"><div class="label">Coût du voyage</div><div class="value">{{ r.total_cost|money }}</div>
+    {% set adv = adv_total %}
+    <div class="sub">{{ trip.expenses|length }} dépense{{ 's' if trip.expenses|length > 1 }}{% if adv %}, dont <a href="/v/{{ trip.id }}/participants/avances">{{ adv|money }} avancés par des participants</a>{% endif %}{% if r.asso_total %} · {{ r.asso_total|money }} pris en charge par {{ asso_name }}{% endif %}</div></div>
+  <div class="card kpi green"><div class="label">Déjà versé à {{ asso_name }}</div><div class="value">{{ r.total_paid|money }}</div>
+    <div class="sub">Versements des participants</div></div>
+  <div class="card kpi orange"><div class="label">Reste à recevoir</div><div class="value">{{ r.to_collect|money }}</div>
+    <div class="sub">{% set n = r.accounts|selectattr('balance','gt',0)|list|length %}{% if n %}de {{ n }} {{ 'personnes ou familles' if n > 1 else 'personne ou famille' }}{% else %}tout le monde a payé{% endif %}</div></div>
+  <div class="card kpi blue"><div class="label">Reste à rembourser</div><div class="value">{{ r.to_refund|money }}</div>
+    <div class="sub">{% set n = r.accounts|selectattr('balance','lt',0)|list|length %}{% if n %}à {{ n }} {{ 'personnes ou familles' if n > 1 else 'personne ou famille' }}{% else %}rien à rembourser{% endif %}</div></div>
+</div>
+
+<div class="grid k2" style="margin-top:1rem;align-items:start">
+  <div class="card">
+    <h3>Participants</h3>
+    {% if not trip.participants %}
+      <p class="muted">Aucun participant. <a href="/v/{{ trip.id }}/participants">Les ajouter</a></p>
+    {% else %}
+    <div class="table-wrap"><table class="people-table">
+      <tbody>
+      {% for a in r.accounts %}
+        {% if a.is_family %}
+        <tr class="family-row">
+          <td><b>Famille {{ a.name.replace('Famille ', '') }}</b> <span class="muted small">· {{ a.members|length }} personnes · paie : {{ r.people[a.referent].name }}</span></td>
+          <td class="num">{{ a.share|money }}</td>
+          <td class="num"><a class="status-link" href="/v/{{ trip.id }}/p/{{ a.referent }}">{{ status(a) }}</a></td>
+        </tr>
+        {% for m in a.members %}
+        <tr class="{{ 'withdrawn' if m.withdrawn }}">
+          <td class="fam-member{{ ' fam-last' if loop.last }}"><a href="/v/{{ trip.id }}/p/{{ m.id }}">{{ m.name }}</a>{{ role_pills(roles.get(m.id)) }}{% if m.withdrawn %} <span class="pill withdrawn-pill">Désisté</span>{% endif %}</td>
+          <td class="num muted">{{ m.share|money }}</td>
+          <td></td>
+        </tr>
+        {% endfor %}
+        {% else %}{% set ps = a.members[0] %}
+        <tr class="{{ 'withdrawn' if a.withdrawn }}">
+          <td><a href="/v/{{ trip.id }}/p/{{ ps.id }}">{{ ps.name }}</a>{{ role_pills(roles.get(ps.id)) }}{% if ps.withdrawn %} <span class="pill withdrawn-pill">Désisté</span>{% endif %}</td>
+          <td class="num">{{ a.share|money }}</td>
+          <td class="num"><a class="status-link" href="/v/{{ trip.id }}/p/{{ ps.id }}">{{ status(a) }}</a></td>
+        </tr>
+        {% endif %}
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% endif %}
+  </div>
+  <div class="card">
+    <h3>Dépenses par catégorie</h3>
+    {% if cat_totals %}
+    <table>
+      <tbody>
+      {% for c, v in cat_totals.items() %}<tr><td>{{ c }}</td><td class="num">{{ v|money }}</td></tr>{% endfor %}
+      </tbody>
+      <tfoot><tr><td>Total</td><td class="num">{{ r.total_cost|money }}</td></tr></tfoot>
+    </table>
+    {% else %}<p class="muted">Aucune dépense. <a href="/v/{{ trip.id }}/depenses/nouvelle">En ajouter une</a></p>{% endif %}
+    {% if r.rounding_gain %}<p class="muted small" style="margin-top:.6rem">Arrondis au centime : {{ r.rounding_gain|money }} au profit de {{ asso_name }}.</p>{% endif %}
+  </div>
+</div>
+
+{% if alerts %}
+<h2 class="sec-sep">À regarder</h2>
+<ul class="alerts">
+  {% for a in alerts %}<li class="{{ a.level }}">{% if a.link %}<a href="{{ a.link }}">{{ a.text }}</a>{% else %}{{ a.text }}{% endif %}</li>{% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,29 @@
+{% macro status(ps) -%}
+{% if ps.withdrawn and ps.balance == 0 %}<span class="pill grey">désisté · à jour</span>
+{% elif ps.balance > 0 %}<span class="pill doit">doit encore {{ ps.balance|money }}</span>
+{% elif ps.balance < 0 %}<span class="pill du">on lui doit {{ (-ps.balance)|money }}</span>
+{% else %}<span class="pill ok">à jour</span>{% endif %}
+{%- endmacro %}
+{% macro mode_note(mode) -%}
+{% if estimated %}<span class="small est-note" title="{{ estimated|map(attribute='label')|join(', ') }}"><span class="est">≈</span> {{ estimated|length }} dépense{{ 's' if estimated|length > 1 }} {{ 'sont comptées' if estimated|length > 1 else 'est comptée' }} sur {{ 'leur' if estimated|length > 1 else 'son' }} <span class="est">montant prévu</span> : le réel n'est pas encore saisi. <a href="/v/{{ trip.id }}/depenses">Voir</a></span>{% endif %}
+{%- endmacro %}
+{% macro role_pills(rs) -%}
+{% for r in rs or [] %} <span class="pill role role-{{ r if r in ROLES else 'perso' }}" title="{{ ROLE_TITLES.get(r, '') }}">{{ r|role_label }}</span>{% endfor %}
+{%- endmacro %}
+
+{% macro tip(content, lines, title) -%}
+{% if lines %}<span class="tip" tabindex="0" role="button" aria-label="{{ title }} : détail">{{ content }}<span class="tip-box" role="tooltip"><b>{{ title }}</b>{% for l in lines %}<span>{{ l }}</span>{% endfor %}</span></span>{% else %}{{ content }}{% endif %}
+{%- endmacro %}
+
+{% macro people_tabs(trip, cur) -%}
+{% set ng = trip_groups_count if trip_groups_count is defined else 0 %}
+<nav class="subtabs" aria-label="Participants">
+  <a href="/v/{{ trip.id }}/participants" class="{{ 'on' if cur == 'liste' }}" {{ 'aria-current=page' if cur == 'liste' }}>Liste <span class="n">{{ trip.participants|length }}</span></a>
+  <a href="/v/{{ trip.id }}/participants/organisation" class="{{ 'on' if cur == 'orga' }}" {{ 'aria-current=page' if cur == 'orga' }}>Organisation</a>
+  <a href="/v/{{ trip.id }}/participants/soldes" class="{{ 'on' if cur == 'soldes' }}" {{ 'aria-current=page' if cur == 'soldes' }}>Comptes</a>
+  <a href="/v/{{ trip.id }}/participants/comptes" class="{{ 'on' if cur == 'comptes' }}" {{ 'aria-current=page' if cur == 'comptes' }}>Détail des comptes</a>
+  <a href="/v/{{ trip.id }}/participants/avances" class="{{ 'on' if cur == 'avances' }}" {{ 'aria-current=page' if cur == 'avances' }}>Payé / reçu</a>
+  {% set nr = trip.adjustments|selectattr('expense_id', 'none')|list|length %}
+  <a href="/v/{{ trip.id }}/participants/remises" class="{{ 'on' if cur == 'remises' }}" {{ 'aria-current=page' if cur == 'remises' }}>Remises / suppléments{% if nr %} <span class="n">{{ nr }}</span>{% endif %}</a>
+</nav>
+{%- endmacro %}
