@@ -1,20 +1,62 @@
 {% extends "base.html" %}
 {% block page %}
-<div class="page-head">
+{% macro new_trip_form(first=false, panel=false) -%}
+<form class="card home-form{{ ' panel' if panel }}" method="post" action="/voyages">
+  <h2 class="home-h">{{ '✨ Créer ton premier voyage' if first else 'Nouveau voyage' }}</h2>
+  <div class="field"><label for="name">Nom du voyage</label>
+    <input type="text" id="name" name="name" placeholder="ex. Plongée Port-Cros mai 2027" required {{ 'autofocus' if first }}></div>
+  <div class="home-pair">
+    <div class="field"><label for="start">Du</label><input type="date" id="start" name="start"></div>
+    <div class="field"><label for="end">Au</label><input type="date" id="end" name="end"></div>
+  </div>
+  <div class="home-pair">
+    <div class="field"><label for="place">Lieu <span class="hint">(facultatif)</span></label><input type="text" id="place" name="place"></div>
+    <div class="field"><label for="organizer">Organisateur <span class="hint">(facultatif)</span></label><input type="text" id="organizer" name="organizer"></div>
+  </div>
+  <div class="row home-btns">{% if panel %}<button type="button" class="btn ghost" data-toggle-row="#nouveau">Fermer</button>{% endif %}<button class="btn">Créer le voyage</button></div>
+</form>
+{%- endmacro %}
+{% macro import_form(first=false, panel=false) -%}
+<form class="card home-form{{ ' panel' if panel }}" method="post" action="/importer" enctype="multipart/form-data" id="importer">
+  <h2 class="home-h">{{ 'Ou importer un voyage existant' if first else 'Importer un voyage' }}</h2>
+  <p class="small muted" style="margin-top:0">Un fichier <b>.zip</b> exporté depuis un autre ordinateur (menu du voyage → <b>📦 Exporter le voyage</b>). Il est <b>ajouté</b> à tes voyages, sans rien remplacer.</p>
+  <div class="field"><label for="fichier">Fichier du voyage (.zip)</label><input type="file" id="fichier" name="fichier" accept=".zip,application/zip" required></div>
+  <div class="row home-btns">{% if panel %}<button type="button" class="btn ghost" data-toggle-row="#importer-panel">Fermer</button>{% endif %}<button class="btn{{ ' ghost' if not panel }}">Voir ce qu'il contient</button></div>
+</form>
+{%- endmacro %}
+
+{% if cards %}
+<div class="page-head home-head">
   <div class="grow">
     <h1>Mes voyages</h1>
-    <p class="muted">Choisis un voyage, ou crée-en un nouveau.</p>
+    <p class="muted">{{ cards|length }} voyage{{ 's' if cards|length > 1 }}. Clique sur un voyage pour l'ouvrir.</p>
+  </div>
+  <div class="row home-actions">
+    <button type="button" class="btn" data-toggle-row="#nouveau" aria-expanded="false" aria-controls="nouveau">+ Nouveau voyage</button>
+    <button type="button" class="btn ghost" data-toggle-row="#importer-panel" aria-expanded="false" aria-controls="importer-panel">⤓ Importer un voyage</button>
   </div>
 </div>
-{% if cards %}
-<div class="grid k3">
+<div id="nouveau" class="home-panel" {{ '' if open_new else 'hidden' }}>{{ new_trip_form(false, true) }}</div>
+<div id="importer-panel" class="home-panel" {{ '' if open_import else 'hidden' }}>{{ import_form(false, true) }}</div>
+<script>
+// Accueil : un seul panneau ouvert à la fois (nouveau voyage / importer)
+document.querySelectorAll('.home-actions [data-toggle-row]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    document.querySelectorAll('.home-actions [data-toggle-row]').forEach(function (o) {
+      if (o !== b) { var t = document.querySelector(o.dataset.toggleRow); if (t) t.hidden = true; o.setAttribute('aria-expanded', 'false'); }
+    });
+    setTimeout(function () { var t = document.querySelector(b.dataset.toggleRow), f = t && !t.hidden && t.querySelector('input'); if (f) f.focus(); }, 0);
+  });
+});
+</script>
+<div class="trip-grid">
   {% for t, r in cards %}
   <a class="card trip-card" href="/v/{{ t.id }}">
     <h3>{{ t.name }}</h3>
     <div class="muted small">
       {% if t.start %}{{ t.start|date }}{% if t.end %} → {{ t.end|date }}{% endif %} · {% endif %}{{ t.participants|length }} participant{{ 's' if t.participants|length > 1 }}{% if t.place %} · {{ t.place }}{% endif %}
     </div>
-    <div style="margin-top:.7rem">
+    <div class="trip-pills">
       {% set owe = r.accounts|selectattr('balance', 'gt', 0)|list %}
       {% if not t.participants %}<span class="pill grey">À compléter</span>
       {% elif r.to_collect == 0 and r.to_refund == 0 %}<span class="pill ok">🟢 Tout est réglé</span>
@@ -28,25 +70,20 @@
   {% endfor %}
 </div>
 {% else %}
-<div class="card empty">
-  <p style="font-size:1.1rem">Pas encore de voyage.</p>
-  <p>Crée ton premier voyage juste en dessous 👇</p>
+<div class="home-first">
+  <div class="page-head"><div class="grow">
+    <h1>Bienvenue 👋</h1>
+    <p class="muted">Pas encore de voyage. Crée le premier : tu ajouteras ensuite les participants et les dépenses.</p>
+  </div></div>
+  {{ new_trip_form(true) }}
+  {{ import_form(true) }}
 </div>
 {% endif %}
-
-<h2>+ Nouveau voyage</h2>
-<form class="card" method="post" action="/voyages" style="max-width:640px">
-  <div class="field"><label for="name">Nom du voyage</label>
-    <input type="text" id="name" name="name" placeholder="ex. Plongée Port-Cros mai 2027" required></div>
-  <div class="grid k2" style="gap:.8rem">
-    <div class="field"><label for="start">Du</label><input type="date" id="start" name="start"></div>
-    <div class="field"><label for="end">Au</label><input type="date" id="end" name="end"></div>
-  </div>
-  <div class="grid k2" style="gap:.8rem">
-    <div class="field"><label for="place">Lieu <span class="hint">(facultatif)</span></label><input type="text" id="place" name="place"></div>
-    <div class="field"><label for="organizer">Organisateur <span class="hint">(facultatif)</span></label><input type="text" id="organizer" name="organizer"></div>
-  </div>
-  <button class="btn">Créer le voyage</button>
-</form>
-<p class="muted small break" style="margin-top:2.5rem">Tes données sont dans : {{ data_dir }}<br>Pour arrêter l'application : bouton « ⏻ Arrêter » en haut à droite.</p>
+<div class="data-foot small muted">
+  <span>Tes données sont dans : <b class="break">{{ data_dir }}</b></span>
+  <form method="post" action="/reglages/ouvrir-dossier" class="inline"><button class="btn link small">📂 Ouvrir le dossier</button></form>
+  <a class="btn link small" href="/reglages/donnees">Changer de dossier</a>
+  <span class="grow"></span>
+  <span>Pour arrêter : « ⏻ Arrêter » en haut à droite.</span>
+</div>
 {% endblock %}

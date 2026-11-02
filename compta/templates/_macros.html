@@ -27,3 +27,24 @@
   <a href="/v/{{ trip.id }}/participants/remises" class="{{ 'on' if cur == 'remises' }}" {{ 'aria-current=page' if cur == 'remises' }}>Remises / suppléments{% if nr %} <span class="n">{{ nr }}</span>{% endif %}</a>
 </nav>
 {%- endmacro %}
+
+
+{% macro share_menu(x, uid, label='Partager', primary=true) -%}
+{# Partager le compte d'une personne : WhatsApp, e-mail, partage du système (PDF joint), PDF, copier. #}
+<div class="share" data-share>
+  <button type="button" class="btn small{{ '' if primary else ' ghost' }} share-btn" aria-haspopup="menu" aria-expanded="false"
+          title="Envoyer son compte : WhatsApp, e-mail…"><svg class="share-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> {{ label }} <span aria-hidden="true">▾</span></button>
+  <div class="share-menu" role="menu" hidden>
+    <a role="menuitem" href="{{ x.wa }}" target="_blank" rel="noopener" data-send-pdf="{{ x.pdf }}">
+      <b>WhatsApp</b><span>{{ x.ref.phone or 'tu choisiras à qui envoyer' }}</span></a>
+    <a role="menuitem" href="{{ x.mail }}" data-send-pdf="{{ x.pdf }}">
+      <b>E-mail</b><span>{{ x.ref.email or 'tu choisiras à qui envoyer' }}</span></a>
+    <button type="button" role="menuitem" data-share-native data-pdf="{{ x.pdf }}" data-title="{{ x.subject }}" data-msg="#{{ uid }}" hidden>
+      <b>Autre…</b><span>Mail, Messages, AirDrop… avec le PDF joint</span></button>
+    <hr>
+    <a role="menuitem" href="{{ x.pdf }}"><b>Télécharger le PDF</b></a>
+    <button type="button" role="menuitem" data-copy="#{{ uid }}"><b>Copier le message</b></button>
+  </div>
+  <template id="{{ uid }}">{{ x.msg }}</template>
+</div>
+{%- endmacro %}

@@ -9,8 +9,7 @@
       <a class="btn small" href="/v/{{ trip.id }}/argent?k=versement&p={{ acc.referent }}#ajout">+ Versement{% if acc.is_family %} de la famille{% endif %}</a>
       <a class="btn small ghost" href="/v/{{ trip.id }}/participants/remises?remise={{ p.id }}">Remise ou supplément</a>
       {% if not wd %}<a class="btn small ghost" href="/v/{{ trip.id }}/desistement?p={{ p.id }}">Se désiste</a>{% endif %}
-      <a class="btn small ghost" href="{{ send.wa }}" target="_blank" rel="noopener" data-send-pdf="{{ send.pdf }}" title="Télécharge le PDF de son compte et ouvre WhatsApp avec un message prêt">📲 Envoyer</a>
-      <a class="btn small ghost" href="{{ send.pdf }}" title="PDF de son compte, détaillé par catégorie et sous-catégorie">⬇ PDF</a>
+      {{ share_menu(send, 'share-msg-p' ~ p.id, 'Envoyer son compte', false) }}
     </div>
   </div>
 <div class="card statement">

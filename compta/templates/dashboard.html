@@ -57,7 +57,7 @@
 <div class="grid k4 money-kpis">
   <div class="card kpi"><div class="label">Coût du voyage</div><div class="value">{{ r.total_cost|money }}</div>
     {% set adv = adv_total %}
-    <div class="sub">{{ trip.expenses|length }} dépense{{ 's' if trip.expenses|length > 1 }}{% if adv %}, dont <a href="/v/{{ trip.id }}/participants/avances">{{ adv|money }} avancés par des participants</a>{% endif %}{% if r.asso_total %} · {{ r.asso_total|money }} pris en charge par {{ asso_name }}{% endif %}</div></div>
+    <div class="sub">{{ trip.expenses|length }} dépense{{ 's' if trip.expenses|length > 1 }}{% if adv and msum.cost_split %}, dont <a href="/v/{{ trip.id }}/asso">{{ msum.paid_out|money }} payés par {{ asso_name }}</a> et <a href="/v/{{ trip.id }}/participants/avances">{{ adv|money }} avancés par des participants</a>{% elif adv %}, dont <a href="/v/{{ trip.id }}/participants/avances">{{ adv|money }} avancés par des participants</a>{% endif %}{% if r.asso_total %} · {{ r.asso_total|money }} pris en charge par {{ asso_name }}{% endif %}</div></div>
   <div class="card kpi green"><div class="label">Déjà versé à {{ asso_name }}</div><div class="value">{{ r.total_paid|money }}</div>
     <div class="sub">Versements des participants</div></div>
   <div class="card kpi orange"><div class="label">Reste à recevoir</div><div class="value">{{ r.to_collect|money }}</div>

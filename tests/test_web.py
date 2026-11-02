@@ -244,7 +244,7 @@ def test_stop_button_always_in_top_bar(tmp_path):
         page = c.get(url).text
         top = page.split("</header>")[0]
         assert 'action="/quitter"' in top and "⏻ Arrêter" in top, url
-        assert 'data-confirm="Arrêter Compta Voyages ?' in top
+        assert 'data-confirm="Arrêter Trip Compta ?' in top
         assert top.index("⏻ Arrêter") > top.index("data-theme-toggle")      # tout à droite, après le thème
 
 
@@ -252,4 +252,4 @@ def test_ping_identifies_the_app(tmp_path):
     from fastapi.testclient import TestClient
     from compta.web import create_app
     j = TestClient(create_app(tmp_path / "d")).get("/ping").json()
-    assert j["app"] == "compta-voyages" and len(j["boot"]) == 12
+    assert j["app"] == "tripcompta" and len(j["boot"]) == 12

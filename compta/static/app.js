@@ -1,4 +1,4 @@
-// Compta Voyages — petites interactions sans framework.
+// Trip Compta — petites interactions sans framework.
 (function () {
   // Thème clair / sombre (mémorisé dans le navigateur)
   const root = document.documentElement;
@@ -284,14 +284,51 @@
     else none.checked = !others.some((c) => c.checked);
   });
 
-  // Copier un texte : <button data-copy="#id">
+  // Copier un texte : <button data-copy="#id"> (élément ou <template>)
+  const textOf = (el) => (el.content ? el.content.textContent : el.textContent).trim();
   document.addEventListener("click", async (ev) => {
     const b = ev.target.closest("[data-copy]");
     if (!b) return;
     const el = document.querySelector(b.dataset.copy);
     if (!el) return;
-    try { await navigator.clipboard.writeText(el.textContent.trim()); b.textContent = "✓ Copié"; }
-    catch (e) { b.textContent = "Copie impossible"; }
+    const label = b.querySelector("b") || b;
+    try { await navigator.clipboard.writeText(textOf(el)); label.textContent = "✓ Copié"; }
+    catch (e) { label.textContent = "Copie impossible"; }
+  });
+
+  // Menu « Partager » : <div data-share> bouton + menu (WhatsApp, e-mail, partage du système, PDF, copier)
+  const closeShares = (except) => document.querySelectorAll("[data-share] .share-menu:not([hidden])").forEach((m) => {
+    if (m === except) return;
+    m.hidden = true; m.previousElementSibling.setAttribute("aria-expanded", "false");
+  });
+  document.addEventListener("click", (ev) => {
+    const btn = ev.target.closest(".share-btn");
+    if (btn) {
+      const menu = btn.nextElementSibling;
+      closeShares(menu);
+      menu.hidden = !menu.hidden;
+      btn.setAttribute("aria-expanded", String(!menu.hidden));
+      return;
+    }
+    const item = ev.target.closest(".share-menu [role=menuitem]");
+    if (item && !item.matches("[data-copy]")) { closeShares(); return; }
+    if (!ev.target.closest("[data-share]")) closeShares();
+  });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeShares(); });
+  // « Autre… » : partage du système avec le PDF joint, seulement si le navigateur sait partager un fichier
+  const canShareFiles = (() => { try { return !!(navigator.canShare && navigator.canShare({ files: [new File(["x"], "x.pdf", { type: "application/pdf" })] })); } catch (e) { return false; } })();
+  document.querySelectorAll("[data-share-native]").forEach((b) => { b.hidden = !canShareFiles; });
+  document.addEventListener("click", async (ev) => {
+    const b = ev.target.closest("[data-share-native]");
+    if (!b) return;
+    try {
+      const r = await fetch(b.dataset.pdf);
+      const name = decodeURIComponent(((r.headers.get("content-disposition") || "").match(/filename\*=UTF-8''([^;]+)/) || [])[1] || "compte.pdf");
+      const file = new File([await r.blob()], name, { type: "application/pdf" });
+      const el = document.querySelector(b.dataset.msg);
+      await navigator.share({ files: [file], title: b.dataset.title, text: el ? textOf(el) : "" });
+      const row = b.closest("[data-send-row]"); if (row) row.classList.add("sent");
+    } catch (e) { /* partage annulé */ }
   });
 
   // Sélecteur qui recharge la page : <select data-nav="/url?p=">

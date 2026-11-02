@@ -1194,3 +1194,161 @@ def participants_export(trip: M.Trip, result: E.Result, cols: list, with_withdra
             row.append(v)
         rows.append(row)
     return [known[c] for c in cols], rows
+
+
+def final_sentence(m: dict, caisse: str, fmt, formula: bool = False) -> str:
+    """« 1 060,36 € en caisse + 3 213,11 € à recevoir − 4 273,44 € à rembourser = 0,03 € : le voyage rapporte… »"""
+    final = m["final"]
+    txt = (f"le voyage rapporte {fmt(final)} à {caisse}" + (" (arrondis au centime)" if m["rounding_only"] else "")
+           if final > 0 else f"le voyage coûte {fmt(-final)} à {caisse}" if final < 0
+           else f"le voyage ne coûte rien à {caisse}")
+    if not (formula and m["adds_up"]):
+        return txt[:1].upper() + txt[1:] + "."
+    terms = [f"{fmt(m['cash'])} en caisse" if m["cash"] >= 0 else f"− {fmt(-m['cash'])} avancés par {caisse}"]
+    if m["to_collect"]:
+        terms.append(f"+ {fmt(m['to_collect'])} à recevoir")
+    if m["to_refund"]:
+        terms.append(f"− {fmt(m['to_refund'])} à rembourser")
+    return " ".join(terms) + f" = {fmt(final)} : {txt}."
+
+
+def money_summary(trip: M.Trip, result: E.Result) -> dict:
+    """Synthèse en trois blocs (le coût, la caisse, une fois tout réglé), commune au mail au trésorier et au bilan
+    PDF : mêmes chiffres, même ordre. Montants en centimes."""
+    r = result
+    A = asso_account(trip, r)
+    refunded = sum(p.refunded for p in r.people.values())          # déjà rendu aux participants
+    advanced = sum(p.advanced for p in r.people.values())          # payé directement par des participants
+    paid_out = A["cash_out"] - refunded                             # payé par la caisse aux prestataires
+    other_in = A["cash_in"] - r.total_paid                          # recettes (subvention, remboursements…)
+    final = A["final"]
+    return dict(cost=r.total_cost, paid_out=paid_out, advanced=advanced,
+                cost_split=bool(advanced) and paid_out + advanced == r.total_cost,
+                received=r.total_paid, other_in=other_in, refunded=refunded, cash=A["cash"],
+                asso_total=r.asso_total, to_collect=r.to_collect, to_refund=r.to_refund, final=final,
+                rounding_only=final == r.rounding_gain and final > 0,
+                adds_up=A["cash"] + r.to_collect - r.to_refund == final)
+
+
+def treasurer_mail(trip: M.Trip, result: E.Result) -> tuple:
+    """Mail au trésorier, prêt à coller : récapitulatif simple, ce qu'il reste à demander aux participants et
+    ce qu'il faut leur rembourser, points à vérifier. Renvoie (objet, texte)."""
+    r = result
+    caisse = caisse_label(trip)
+    Caisse = caisse[:1].upper() + caisse[1:]
+    fmt = lambda c: E.fmt(c).replace(" ", " ").replace("\xa0", " ")
+    names = {p.id: p.name for p in trip.participants}
+
+    def who(acc):
+        if acc.is_family and len(acc.members) > 1:
+            return f"{acc.name} (à {names.get(acc.referent, '?')})"
+        return acc.name + (" (désistement)" if acc.withdrawn else "")
+
+    def why(acc, owes: bool) -> str:
+        """Le calcul de la ligne : « part 709,29 € − versé 277,00 € » (ou dans l'autre sens pour un remboursement)."""
+        parts = "parts" if acc.is_family and len(acc.members) > 1 else "part"
+        plus, minus = [], []
+        if acc.share:
+            (plus if owes else minus).append(f"{parts} {fmt(acc.share)}")
+        if acc.paid:
+            (minus if owes else plus).append(f"versé {fmt(acc.paid)}")
+        if acc.advanced > 0:
+            (minus if owes else plus).append(f"avancé {fmt(acc.advanced)}")
+        elif acc.advanced < 0:
+            (plus if owes else minus).append(f"reçu à la place de {caisse} {fmt(-acc.advanced)}")
+        if acc.refunded:
+            (plus if owes else minus).append(f"déjà remboursé {fmt(acc.refunded)}")
+        return " ".join([plus[0]] + [f"+ {x}" for x in plus[1:]] + [f"− {x}" for x in minus]) if plus else ""
+    owe = sorted([(who(a), c, why(a, True)) for a, b, c in r.settlements() if a != E.ASSO],
+                 key=lambda x: (-x[1], x[0]))
+    due = sorted([(who(b), c, why(b, False)) for a, b, c in r.settlements() if a == E.ASSO],
+                 key=lambda x: (-x[1], x[0]))
+    dates = ""
+    if trip.start:
+        dates = f"du {trip.start.strftime('%d/%m/%Y')}" + (f" au {trip.end.strftime('%d/%m/%Y')}" if trip.end else "")
+    info = ", ".join(x for x in [trip.place, dates, f"{len(trip.participants)} participants"] if x)
+    subject = f"Voyage « {trip.name} » : bilan et règlements"
+    m = money_summary(trip, r)
+    # 1. ce qu'on attend du trésorier : les paiements à demander et les remboursements à faire
+    if owe or due:
+        L = ["Bonjour,", "", f"Pour clôturer le voyage « {trip.name} » ({info}), pouvez-vous procéder aux demandes "
+             f"de paiement et aux remboursements ci-dessous ?"]
+    else:
+        L = ["Bonjour,", "", f"Le voyage « {trip.name} » ({info}) est réglé : il n'y a ni paiement à demander ni "
+             f"remboursement à faire."]
+    if owe or due:
+        L += ["", f"À DEMANDER AUX PARTICIPANTS : {fmt(m['to_collect'])}" if owe else "À DEMANDER AUX PARTICIPANTS : rien"]
+        L += [f"- {n} : {fmt(c)}" + (f"  ({w})" if w else "") for n, c, w in owe]
+        L += ["", f"À LEUR REMBOURSER : {fmt(m['to_refund'])}" if due else "À LEUR REMBOURSER : rien"]
+        L += [f"- {n} : {fmt(c)}" + (f"  ({w})" if w else "") for n, c, w in due]
+    # 2. le résumé du voyage, qui justifie ces montants
+    L += ["", "Voici le résumé du voyage :", "", "LE COÛT DU VOYAGE", f"- Coût total : {fmt(m['cost'])}"]
+    if m["cost_split"]:
+        L.append(f"  dont payé par {caisse} : {fmt(m['paid_out'])}, et avancé directement par des participants : "
+                 f"{fmt(m['advanced'])}")
+    # le détail de ce qu'ont avancé les participants (dépenses payées eux-mêmes, moins ce qu'ils ont reçu à la place
+    # de la caisse) : le total retombe sur « avancé directement par des participants »
+    adv = {}
+    for x in advances(trip):
+        adv.setdefault(x["pid"], []).append(x)
+    people = [(pid, items, r.people[pid].advanced) for pid, items in adv.items() if pid in r.people]
+    people = [x for x in people if x[2] or any(not i["income"] for i in x[1])]
+    if people and any(not i["income"] for _, items, _ in people for i in items):
+        L += ["", f"AVANCÉ PAR DES PARTICIPANTS : {fmt(m['advanced'])}"]
+        for pid, items, net in sorted(people, key=lambda x: (-x[2], names.get(x[0], ""))):
+            L.append(f"- {names.get(pid, '?')} : {fmt(net)}")
+            for i in items:
+                if i["income"]:
+                    L.append(f"    · {i['label'].replace(' (remboursement)', '')} : − {fmt(i['amount'])} "
+                             f"(remboursement reçu à la place de {caisse})")
+                else:
+                    L.append(f"    · {i['label']} : {fmt(i['amount'])}")
+    # les désistements : ce que chacun paie quand même, qui reprend le reste, où en est son compte
+    if trip.withdrawals:
+        n = len(trip.withdrawals)
+        L += ["", f"DÉSISTEMENTS : {n} sur {len(trip.participants)}"]
+        for w in sorted(trip.withdrawals, key=lambda w: E.sort_key(w.participant.name)):
+            ps = r.people.get(w.participant_id)
+            if ps is None:
+                continue
+            kept = [(e.label, r.share(ps.id, e.id)) for e in trip.expenses if e.id in w.kept_ids and r.share(ps.id, e.id)]
+            L.append(f"- {ps.name}")
+            if kept:
+                L.append(f"    · paie quand même {fmt(ps.share)} : " + ", ".join(f"{lb} {fmt(c)}" for lb, c in kept))
+            else:
+                L.append("    · ne paie rien" if not ps.share else f"    · paie quand même {fmt(ps.share)}")
+            by = "le groupe" if w.absorber == E.GROUP else caisse
+            L.append(f"    · le reste de sa part est repris par {by}" if ps.share else f"    · sa part est reprise par {by}")
+            money = []
+            if ps.paid:
+                money.append(f"a versé {fmt(ps.paid)}")
+            if ps.refunded:
+                money.append(f"déjà remboursé {fmt(ps.refunded)}")
+            acc = r.account_of(ps.id)
+            if len(acc.members) > 1:
+                money.append(f"se règle avec la {acc.name[:1].lower() + acc.name[1:]}")
+            elif acc.balance < 0:
+                money.append(f"à lui rembourser {fmt(-acc.balance)}")
+            elif acc.balance > 0:
+                money.append(f"doit encore {fmt(acc.balance)}")
+            else:
+                money.append("à jour")
+            L.append("    · " + ", ".join(money))
+    L += ["", f"LA CAISSE DE {caisse.upper()}" if not caisse.startswith("la caisse") else caisse.upper(),
+          f"+ Reçu des participants : {fmt(m['received'])}"]
+    if m["other_in"]:
+        L.append(f"+ Autres recettes (subvention, remboursement d'un fournisseur…) : {fmt(m['other_in'])}")
+    L.append(f"− Payé aux prestataires (hébergement, club…) : {fmt(m['paid_out'])}")
+    if m["refunded"]:
+        L.append(f"− Déjà remboursé aux participants : {fmt(m['refunded'])}")
+    L.append(f"= Dans la caisse aujourd'hui : {fmt(m['cash'])}" if m["cash"] >= 0
+             else f"= {Caisse} a avancé {fmt(-m['cash'])} de sa trésorerie (plus de sorties que d'entrées pour l'instant)")
+    if m["asso_total"]:
+        L.append(f"(et {caisse} prend à sa charge {fmt(m['asso_total'])} sur ce voyage)")
+    L += ["", "UNE FOIS TOUT RÉGLÉ", final_sentence(m, caisse, fmt, formula=True)]
+    L += ["", "Le bilan détaillé (PDF) et les justificatifs (ZIP) sont en pièces jointes.",
+          "Je me tiens à votre disposition pour toute question.", "", "Bonne journée,"]
+    org = organizer_name(trip)
+    if org:
+        L.append(org)
+    return subject, "\n".join(L)

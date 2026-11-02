@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block page %}
+<div class="page-head"><div class="grow">
+  <h1>Dossier des données</h1>
+  <p class="muted">Là où Trip Compta range tes voyages, tes justificatifs et les sauvegardes automatiques.</p>
+</div><a class="btn ghost small" href="/">← Mes voyages</a></div>
+{% if error %}<div class="flash err" role="alert">{{ error }}</div>{% endif %}
+
+<div class="card data-card">
+  <span class="label-like">Dossier actuel</span>
+  <p class="data-path">{{ data_dir }}</p>
+  <p class="small muted" style="margin:.2rem 0 .7rem">
+    {% if source == 'defaut' %}C'est le dossier par défaut (dans tes Documents).
+    {% elif source == 'choisi' %}C'est le dossier que tu as choisi.
+    {% else %}Ce dossier est imposé au lancement de l'application.{% endif %}</p>
+  {% if synced %}<p class="warn-box small">⚠️ Ce dossier semble synchronisé dans le cloud (Dropbox, OneDrive, iCloud…). Ça marche, mais n'ouvre jamais Trip Compta sur deux ordinateurs en même temps : la base pourrait s'abîmer. Pour passer un voyage d'un ordinateur à l'autre, utilise plutôt <b>Exporter / importer un voyage</b>.</p>{% endif %}
+  <form method="post" action="/reglages/ouvrir-dossier" class="inline"><button class="btn small ghost">📂 Ouvrir le dossier</button></form>
+</div>
+
+{% if source in ('defaut', 'choisi') %}
+<form class="card data-card" method="post" action="/reglages/donnees">
+  <h3 style="margin-top:0">Changer de dossier</h3>
+  <div class="field"><label for="dossier">Nouveau dossier <span class="hint">(chemin complet)</span></label>
+    <input type="text" id="dossier" name="dossier" value="{{ value or '' }}" placeholder="{{ default_dir.parent / 'Asso' / 'TripCompta' }}" autocomplete="off" spellcheck="false"></div>
+  <p class="hint" style="margin-top:-.4rem">Astuce : dans le Finder ou l'Explorateur, tu peux copier le chemin d'un dossier (Mac : clic droit + touche ⌥ → « Copier … comme nom de chemin » ; Windows : clic droit → « Copier en tant que chemin d'accès ») et le coller ici.</p>
+  <div class="choice" style="margin:.4rem 0 .8rem">
+    <label><input type="radio" name="mode" value="deplacer" {{ 'checked' if mode != 'utiliser' }}> Y copier mes données</label>
+    <label><input type="radio" name="mode" value="utiliser" {{ 'checked' if mode == 'utiliser' }}> Utiliser les données déjà là-bas</label>
+  </div>
+  <p class="hint" style="margin-top:0"><b>Y copier mes données</b> : tout est copié et vérifié ; l'ancien dossier n'est pas touché. <b>Utiliser les données déjà là-bas</b> : par exemple un dossier Trip Compta sur une clé USB. Trip Compta redémarre tout seul ensuite.</p>
+  <div class="row" style="gap:.5rem;justify-content:flex-end">
+    {% if source == 'choisi' %}<button class="btn ghost" name="action" value="defaut" formnovalidate>Revenir au dossier par défaut</button>{% endif %}
+    <button class="btn">Changer de dossier</button>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

@@ -3,20 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}{% if trip %}{{ trip.name }} · {% endif %}Compta Voyages{% endblock %}</title>
-<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<title>{% block title %}{% if trip %}{{ trip.name }} · {% endif %}Trip Compta{% endblock %}</title>
+<link rel="icon" href="/static/favicon.svg?v={{ STATIC_V }}" type="image/svg+xml">
 <link rel="stylesheet" href="/static/app.css?v={{ STATIC_V }}">
 <script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
 <header class="topbar">
   <a class="brand" href="/">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 16c2 0 2-1.5 4-1.5S8 16 10 16s2-1.5 4-1.5 2 1.5 4 1.5 2-1.5 4-1.5"/><path d="M2 20c2 0 2-1.5 4-1.5S8 20 10 20s2-1.5 4-1.5 2 1.5 4 1.5 2-1.5 4-1.5"/><path d="M12 3v9M9 6h4.5a2 2 0 0 1 0 4H9"/></svg>
-    Compta Voyages
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 17c2 0 2-1.5 4-1.5S8 17 10 17s2-1.5 4-1.5 2 1.5 4 1.5 2-1.5 4-1.5"/><path d="M2 21c2 0 2-1.5 4-1.5S8 21 10 21s2-1.5 4-1.5 2 1.5 4 1.5 2-1.5 4-1.5"/><path d="M16.2 3.6A4.6 4.6 0 1 0 16.2 11.4M7 6.7h6M7 8.9h6"/></svg>
+    Trip Compta
   </a>
   <span class="spacer"></span>
   <button class="iconbtn" data-theme-toggle title="Thème clair / sombre">◐</button>
-  <form method="post" action="/quitter" class="inline quit" data-confirm="Arrêter Compta Voyages ? Tes données sont enregistrées : tu pourras relancer l'application plus tard.">
+  <form method="post" action="/quitter" class="inline quit" data-confirm="Arrêter Trip Compta ? Tes données sont enregistrées : tu pourras relancer l'application plus tard.">
     <button class="iconbtn quit-btn" title="Arrêter l'application">⏻ Arrêter</button>
   </form>
 </header>
@@ -42,7 +42,8 @@
       <a href="/v/{{ trip.id }}/ia" class="{{ 'on' if '/ia' in cur }}">🤖 IA</a>
       <div class="sep"></div>
       <a href="/v/{{ trip.id }}/export" class="{{ 'on' if '/export' in cur }}">📄 Exporter le bilan</a>
-      <a href="/v/{{ trip.id }}/envoyer" class="{{ 'on' if '/envoyer' in cur }}">📲 Envoyer les comptes</a>
+      <a href="/v/{{ trip.id }}/transfert" class="{{ 'on' if '/transfert' in cur }}">📦 Exporter le voyage</a>
+      <a href="/v/{{ trip.id }}/envoyer" class="{{ 'on' if '/envoyer' in cur }}">📤 Envoyer les comptes</a>
       <a href="/">← Tous les voyages</a>
     </nav>
   </aside>

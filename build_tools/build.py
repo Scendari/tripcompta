@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sep = ";" if os.name == "nt" else ":"
 args = [
     str(ROOT / "run.py"),
-    "--name", "Compta Voyages",
+    "--name", "Trip Compta",
     "--noconfirm",
     "--clean",
     "--add-data", f"{ROOT / 'compta' / 'templates'}{sep}compta/templates",

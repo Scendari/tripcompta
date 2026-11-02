@@ -1,4 +1,4 @@
-# Spécification — Compta Voyages
+# Spécification — Trip Compta
 
 > Version 1 — à valider. Principe directeur : **simple pour un organisateur et pour un trésorier qui ne sont pas comptables.** Aucun jargon (« débit », « crédit », « écriture », « solde ») dans l'application ni dans les exports : on parle d'**argent reçu**, d'**argent dépensé**, de **qui doit encore** et de **à qui on doit**.
 
@@ -178,7 +178,7 @@ Une fiche par personne (le relevé du §2.4).
 
 - **Python**, même base que BioGuesser : **FastAPI + Jinja2 + SQLAlchemy + SQLite**. Pages générées côté serveur, petites touches d'interactivité avec **htmx** (aperçus en direct sans recharger la page). Pas de framework JavaScript lourd.
 - **PDF** : bibliothèque Python pure (fpdf2), pour éviter les dépendances système compliquées sous Windows.
-- **Données** : un seul dossier `Compta Voyages` dans les Documents de l'utilisateur, contenant la base (`compta.db`) et les justificatifs. **Sauvegarder = copier ce dossier.** Sauvegarde automatique quotidienne (on garde les 10 dernières).
+- **Données** : un seul dossier `Trip Compta` dans les Documents de l'utilisateur, contenant la base (`compta.db`) et les justificatifs. **Sauvegarder = copier ce dossier.** Sauvegarde automatique quotidienne (on garde les 10 dernières).
 - **Annuler** : bouton « Annuler la dernière action » (historique des modifications).
 - **Lancement** : un exécutable par système (PyInstaller) — double-clic → le navigateur s'ouvre sur l'application. Pas besoin d'installer Python. Pour développer : `uv run`.
 - **Couleurs** : palette BioGuesser (bleu océan, turquoise, sable, corail), thème clair et sombre.

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div class="grow">
+  <h1>Exporter le voyage</h1>
+  <p class="muted">Pour reprendre ce voyage sur un autre ordinateur (ou le confier à un autre organisateur) : un seul fichier, avec tout dedans.</p>
+</div></div>
+
+<div class="card transfer-card">
+  <h3 style="margin-top:0">📦 « {{ trip.name }} »</h3>
+  <p class="small" style="margin:.2rem 0 .6rem">Le fichier contient :</p>
+  <ul class="small transfer-list">
+    <li><b>Tout le voyage</b> : {{ trip.participants|length }} participant{{ 's' if trip.participants|length > 1 }}, rôles, familles, groupes, catégories, {{ trip.expenses|length }} dépense{{ 's' if trip.expenses|length > 1 }} (montants fixés compris), {{ trip.movements|length }} versement{{ 's' if trip.movements|length > 1 }} ou remboursement{{ 's' if trip.movements|length > 1 }}, remises, désistements, comptes « entre nous ».</li>
+    <li><b>Les justificatifs</b> : {{ trip.receipts|length }} photo{{ 's' if trip.receipts|length > 1 }} ou PDF.</li>
+    <li><b>Les réglages utiles</b> : le nom de {{ asso_name }}, tes catégories et sous-catégories.</li>
+  </ul>
+  <a class="btn" href="/v/{{ trip.id }}/voyage.zip">⬇ Télécharger le fichier du voyage</a>
+</div>
+
+<div class="card transfer-card">
+  <h3 style="margin-top:0">Et sur l'autre ordinateur ?</h3>
+  <ol class="small transfer-list">
+    <li>Installe et ouvre Trip Compta.</li>
+    <li>Page <b>Mes voyages</b> → <b>Importer un voyage</b>, et choisis ce fichier.</li>
+    <li>Un aperçu te montre ce qui arrive ; tu confirmes. Le voyage est <b>ajouté</b> : rien de ce qui existe déjà n'est remplacé.</li>
+  </ol>
+</div>
+
+{% if n_trips > 1 %}
+<div class="card transfer-card">
+  <h3 style="margin-top:0">Changer d'ordinateur ?</h3>
+  <p class="small" style="margin:.2rem 0 .6rem">Un seul fichier avec tes {{ n_trips }} voyages.</p>
+  <a class="btn ghost" href="/tous-les-voyages.zip">⬇ Exporter tous les voyages</a>
+</div>
+{% endif %}
+<p class="hint">À ne pas confondre avec les sauvegardes automatiques (une par jour, dans le dossier de tes données) : elles servent à revenir en arrière sur cet ordinateur.</p>
+{% endblock %}

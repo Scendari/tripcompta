@@ -18,6 +18,19 @@
     <a class="btn" href="/v/{{ trip.id }}/export.zip">Télécharger le ZIP</a>
   </div>
 </div>
+<div class="card mail-card">
+  <div class="row" style="justify-content:space-between;align-items:baseline;gap:.5rem;flex-wrap:wrap">
+    <h3 style="margin:0">✉️ Mail au trésorier</h3>
+    <div class="row" style="gap:.4rem">
+      <button type="button" class="btn small" data-copy="#mail-body">📋 Copier le texte</button>
+      <a class="btn small ghost" href="{{ mail_link }}">Ouvrir dans ma messagerie</a>
+    </div>
+  </div>
+  <p class="small" style="margin:.4rem 0 .6rem">Un récapitulatif simple, avec <b>ce qu'il reste à demander</b> à chaque participant et <b>ce qu'il faut leur rembourser</b>. Copie-le et colle-le dans ton mail, puis joins le PDF et le ZIP ci-dessus.</p>
+  <p class="small" style="margin:0 0 .4rem"><span class="muted">Objet proposé :</span> <b id="mail-subject">{{ mail_subject }}</b>
+    <button type="button" class="btn link small" data-copy="#mail-subject">Copier l'objet</button></p>
+  <details class="mail-preview"><summary class="small">Voir le texte</summary><pre id="mail-body" class="msg">{{ mail_body }}</pre></details>
+</div>
 {% set blocking = alerts|selectattr('level', 'in', ['warn', 'error'])|list %}
 {% if blocking %}
 <h2>Avant d'envoyer, à vérifier</h2>

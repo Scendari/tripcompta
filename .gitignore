@@ -10,7 +10,7 @@ build/
 dist/
 *.spec
 
-# Données : jamais dans le dépôt (elles vivent dans ~/Documents/Compta Voyages)
+# Données : jamais dans le dépôt (elles vivent dans ~/Documents/TripCompta)
 *.db
 *.db-journal
 *.sqlite*
