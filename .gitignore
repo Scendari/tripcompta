@@ -1,0 +1,19 @@
+# Environnement et caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+
+# Application construite (PyInstaller)
+build/
+dist/
+*.spec
+
+# Données : jamais dans le dépôt (elles vivent dans ~/Documents/Compta Voyages)
+*.db
+*.db-journal
+*.sqlite*
+brouillons_ia/
+justificatifs/
+sauvegardes/

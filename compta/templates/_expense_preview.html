@@ -1,0 +1,9 @@
+{% set n = weights|length %}{% set inc = r.total_cost < 0 %}
+{% set vals = r.people.values()|rejectattr('share', 'eq', 0)|list %}
+{% if vals and vals|map(attribute='share')|unique|list|length == 1 %}
+<p style="margin:0">➜ <b>{{ (vals[0].share|abs)|money }}</b> {{ 'de moins pour chacun' if inc else 'chacun' }} <span class="muted">({{ amount|money }}{{ ' reçus' if inc }} ÷ {{ n }} personne{{ 's' if n > 1 }})</span>{% if r.rounding_gain %} <span class="muted small">— arrondi au centime : {{ r.rounding_gain|money }} pour {{ asso_name }}</span>{% endif %}</p>
+{% elif vals %}
+<p style="margin:0">➜ {{ amount|money }}{{ ' reçus' if inc }} ÷ {{ n }} personne{{ 's' if n > 1 }} :
+  {% for g in vals|groupby('share') %}<b>{{ (g.grouper|abs)|money }}</b> pour {{ g.list|length }}{{ ', ' if not loop.last }}{% endfor %}
+  <span class="muted small">(arrondi au centime)</span></p>
+{% endif %}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div class="grow">
+  <h1>Justificatifs</h1>
+  <p class="muted">Factures, tickets, reçus (photo ou PDF). Chacun reçoit un numéro (J01, J02…) repris dans le bilan.</p>
+</div></div>
+<div class="grid k2" style="align-items:start">
+<form class="card" method="post" action="/v/{{ trip.id }}/justificatifs" enctype="multipart/form-data">
+  <h3>Ajouter des justificatifs</h3>
+  <div class="field"><input type="file" name="files" multiple accept="image/*,application/pdf" required aria-label="Fichiers" data-file-preview></div>
+  {% if trip.expenses %}
+  <div class="field"><label>Pour quelle(s) dépense(s) ? <span class="hint">(facultatif)</span></label>
+    <div class="check-col">{% for e in trip.expenses %}<label><input type="checkbox" name="expenses" value="{{ e.id }}"> {{ e.label }}</label>{% endfor %}</div></div>
+  {% endif %}
+  <button class="btn">Enregistrer</button>
+</form>
+<div class="card">
+  <h3>Dépenses payées sans justificatif</h3>
+  {% for e in missing %}<div>• <a href="/v/{{ trip.id }}/depenses/{{ e.id }}/modifier">{{ e.label }}</a> <span class="muted small">{{ e.actual|money }}</span></div>
+  {% else %}<p class="pill ok">🟢 Tout est justifié</p>{% endfor %}
+</div>
+</div>
+
+<h2>{{ trip.receipts|length }} justificatif{{ 's' if trip.receipts|length > 1 }}</h2>
+{% for rec in trip.receipts %}
+<div class="card" style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap">
+  <a href="/v/{{ trip.id }}/justificatifs/{{ rec.id }}/fichier" target="_blank">
+    <span class="rthumb big" data-kind="{{ 'PDF' if not rec.content_type.startswith('image/') else '' }}"><img src="/v/{{ trip.id }}/justificatifs/{{ rec.id }}/vignette" alt="{{ rec.original_name }}" loading="lazy" onerror="this.remove()"></span></a>
+  <div style="flex:1;min-width:220px">
+    <b>{{ rec.code }}</b> · <a href="/v/{{ trip.id }}/justificatifs/{{ rec.id }}/fichier" target="_blank">{{ rec.original_name }}</a>
+    <div class="small muted">Lié à : {{ rec.links|map(attribute='expense.label')|join(', ') or 'aucune dépense' }}</div>
+    <details class="edit"><summary>Changer les dépenses liées</summary>
+      <form method="post" action="/v/{{ trip.id }}/justificatifs/{{ rec.id }}" style="margin-top:.4rem">
+        {% set linked = rec.links|map(attribute='expense_id')|list %}
+        <div class="check-col">{% for e in trip.expenses %}<label><input type="checkbox" name="expenses" value="{{ e.id }}" {{ 'checked' if e.id in linked }}> {{ e.label }}</label>{% endfor %}</div>
+        <button class="btn small" style="margin-top:.4rem">Enregistrer</button>
+      </form>
+    </details>
+  </div>
+  <form method="post" action="/v/{{ trip.id }}/justificatifs/{{ rec.id }}/supprimer" data-confirm="Supprimer {{ rec.code }} ?"><button class="btn link danger small">Supprimer</button></form>
+</div>
+{% endfor %}
+{% endblock %}

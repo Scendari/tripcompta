@@ -1,0 +1,108 @@
+=== DÉMARRER LE VOYAGE ===
+Remplis ce que tu sais, écris comme tu parles. Laisse vide ce que tu ne sais pas : l'IA te posera la question.
+Les lignes qui commencent par « Exemple : » sont là pour t'aider : remplace-les ou efface-les.
+Les dates : toujours avec l'année (25/10/2026).
+
+
+━━━━━━━━━━ 1. LE VOYAGE ━━━━━━━━━━
+
+INFOS UTILES (club, lieu de départ, hébergement…)
+-
+
+QUI TIENT LA CAISSE ?
+Le plus souvent l'asso (donne son nom si tu veux). Pas d'asso ? Le participant qui reçoit et paie l'argent.
+Exemple : l'asso, Club Subaqua
+Exemple : pas d'asso, c'est Paul qui tient la caisse
+-
+
+
+━━━━━━━━━━ 2. LES PERSONNES ━━━━━━━━━━
+
+PARTICIPANTS
+Un par ligne, avec le PRÉNOM et le NOM. Précise plongeur ou ACCOMPAGNANT (vient au voyage mais ne plonge pas).
+Téléphone, e-mail ou remarque si tu veux.
+Exemple : Luc Martin (plongeur) — 06 12 34 56 78
+Exemple : Marie Durand (plongeuse) — marie@example.org — niveau 2
+-
+-
+
+FAMILLES
+Les membres d'une famille règlent leurs comptes ENSEMBLE avec la caisse. Dis qui paie pour la famille.
+Exemple : Famille Lebrun, c'est Paul qui paie : Paul et Julie plongeurs, Léa (12 ans) et Tom (9 ans) accompagnants
+-
+
+RÔLES DANS LE GROUPE
+Organisateur :
+Co-organisateur(s) :
+DP (directeur de plongée) :
+Autres rôles utiles pour ce voyage (conducteur, photographe…) :
+Exemple : Conducteurs : Luc et Marie
+-
+
+GROUPES
+Des personnes qui partagent souvent les mêmes frais : une voiture, une chambre, une palanquée…
+Ils serviront ensuite à dire « pour qui » en un mot.
+Exemple : Voiture de Luc : Luc, Marie, Sophie, Julien
+Exemple : Chambre 2 : Hugo, Antoine
+-
+
+
+━━━━━━━━━━ 3. LES DÉPENSES ━━━━━━━━━━
+
+DÉPENSES
+Une par ligne : quoi — montant prévu et/ou réel — qui a payé (la caisse, celui qui a avancé l'argent, ou plusieurs
+avec leur montant) — pour qui (tout le monde, tout le monde sauf…, les plongeurs, un groupe, une famille, certains).
+Montant pas encore connu ? Écris « ?? » : l'IA notera la dépense pour plus tard.
+Quelqu'un paie un montant précis ? Dis-le : son montant est fixé et le reste est partagé entre les autres.
+Exemple : Gîte 3 nuits — prévu 1 800 € / réel 1 740 € — payé par l'asso — pour tous
+Exemple : Gîte — 1 740 € — pour tous, Tom paie 60 € (enfant), le reste partagé entre les autres
+Exemple : Plongées — 1 200 € — payé 900 € par Luc et 300 € d'arrhes par l'asso — Luc et Marie 6 plongées, les autres plongeurs 3
+Exemple : Bateau — 300 € — payé par l'asso — pour les plongeurs seulement
+Exemple : Essence voiture de Luc — deux pleins : 80,12 € le 25/10/2026 et 69,10 € le 31/10/2026 — avancé par Luc — pour la voiture de Luc
+Exemple : Péage voiture de Luc — ?? — payé par Luc
+Exemple : Appartement annulé — 120 € payé par Luc — l'hébergeur lui a rendu 90 € (il les a reversés à la caisse ? oui / non) — pour tous
+-
+-
+
+
+━━━━━━━━━━ 4. L'ARGENT QUI A DÉJÀ CIRCULÉ ━━━━━━━━━━
+
+ARGENT DÉJÀ VERSÉ À LA CAISSE
+Qui (ou quelle famille) — combien — quand.
+Exemple : Marie — 150 € d'acompte le 10/03/2026
+Exemple : Famille Lebrun — 600 € le 15/03/2026
+-
+
+ARGENT DÉJÀ RENDU PAR LA CAISSE
+À qui — combien — quand — pourquoi (trop versé, remboursement de ce qu'il a avancé…).
+Exemple : Luc — 92,40 € le 05/11/2026 — remboursement de l'essence qu'il a avancée
+-
+
+ARGENT REÇU D'AILLEURS (subvention, don, avoir d'un fournisseur sans dépense d'origine…)
+Combien — de qui — qui l'a reçu (la caisse, ou un participant qui doit le reverser) — pour qui ça diminue le coût.
+Exemple : Subvention du comité — 200 € — reçue par l'asso — pour tous
+-
+
+
+━━━━━━━━━━ 5. LES CAS PARTICULIERS ━━━━━━━━━━
+
+REMISES OU SUPPLÉMENTS SUR TOUT LE VOYAGE
+Qui — combien de moins (remise) ou de plus (supplément) — pourquoi — qui compense : l'asso ou les autres.
+(Un montant précis sur UNE dépense : écris-le plutôt dans la dépense, voir plus haut.)
+Exemple : Hugo — 50 € de remise, offerte par l'asso — encadrant
+Exemple : Sophie — 80 € de supplément, chambre seule — payé en moins par les autres
+-
+
+DÉSISTEMENTS
+Qui — quand — ce qu'il paie quand même — le reste est repris par le groupe ou par l'asso — ce qu'on lui a DÉJÀ rendu (et quand).
+Exemple : Antoine — le 02/05/2026 — paie quand même le gîte (non remboursable) — le reste repris par le groupe — on lui a rendu 126 € le 10/05/2026
+-
+
+PETITS COMPTES « ENTRE NOUS »
+Dépenses entre participants qui ne passent pas par la caisse.
+Exemple : Resto du vendredi — Luc a payé 180 € pour Luc, Marie, Sophie
+-
+
+AUTRE CHOSE ?
+Tout ce qui sort de l'ordinaire : quelqu'un arrive plus tard ou part plus tôt, demi-pension, matériel loué par certains…
+-

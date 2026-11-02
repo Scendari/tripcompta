@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block page %}
+<div class="page-head">
+  <div class="grow">
+    <h1>Mes voyages</h1>
+    <p class="muted">Choisis un voyage, ou crée-en un nouveau.</p>
+  </div>
+</div>
+{% if cards %}
+<div class="grid k3">
+  {% for t, r in cards %}
+  <a class="card trip-card" href="/v/{{ t.id }}">
+    <h3>{{ t.name }}</h3>
+    <div class="muted small">
+      {% if t.start %}{{ t.start|date }}{% if t.end %} → {{ t.end|date }}{% endif %} · {% endif %}{{ t.participants|length }} participant{{ 's' if t.participants|length > 1 }}{% if t.place %} · {{ t.place }}{% endif %}
+    </div>
+    <div style="margin-top:.7rem">
+      {% set owe = r.accounts|selectattr('balance', 'gt', 0)|list %}
+      {% if not t.participants %}<span class="pill grey">À compléter</span>
+      {% elif r.to_collect == 0 and r.to_refund == 0 %}<span class="pill ok">🟢 Tout est réglé</span>
+      {% else %}
+        {% if r.to_collect %}<span class="pill doit">🟠 Reste à recevoir : {{ r.to_collect|money }} ({{ owe|map(attribute='name')|join(', ') if owe|length <= 3 else owe|length ~ ' personnes ou familles' }})</span>{% endif %}
+        {% if r.to_refund %}<span class="pill du">🔵 {{ asso_name|capfirst }} doit rembourser {{ r.to_refund|money }}</span>{% endif %}
+      {% endif %}
+    </div>
+    <div class="muted small" style="margin-top:.5rem">Coût : {{ r.total_cost|money }}</div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card empty">
+  <p style="font-size:1.1rem">Pas encore de voyage.</p>
+  <p>Crée ton premier voyage juste en dessous 👇</p>
+</div>
+{% endif %}
+
+<h2>+ Nouveau voyage</h2>
+<form class="card" method="post" action="/voyages" style="max-width:640px">
+  <div class="field"><label for="name">Nom du voyage</label>
+    <input type="text" id="name" name="name" placeholder="ex. Plongée Port-Cros mai 2027" required></div>
+  <div class="grid k2" style="gap:.8rem">
+    <div class="field"><label for="start">Du</label><input type="date" id="start" name="start"></div>
+    <div class="field"><label for="end">Au</label><input type="date" id="end" name="end"></div>
+  </div>
+  <div class="grid k2" style="gap:.8rem">
+    <div class="field"><label for="place">Lieu <span class="hint">(facultatif)</span></label><input type="text" id="place" name="place"></div>
+    <div class="field"><label for="organizer">Organisateur <span class="hint">(facultatif)</span></label><input type="text" id="organizer" name="organizer"></div>
+  </div>
+  <button class="btn">Créer le voyage</button>
+</form>
+<p class="muted small break" style="margin-top:2.5rem">Tes données sont dans : {{ data_dir }}<br>Pour arrêter l'application : bouton « ⏻ Arrêter » en haut à droite.</p>
+{% endblock %}

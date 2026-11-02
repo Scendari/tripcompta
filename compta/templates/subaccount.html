@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <div class="grow"><h1>{{ sub.name }}</h1>
+    <p class="muted">Compte entre participants — hors asso. {{ sub.members|length }} personnes · total {{ v.total|money }}.</p></div>
+  <a class="btn ghost" href="/v/{{ trip.id }}/entre-nous/{{ sub.id }}/export.pdf">📄 PDF à partager</a>
+</div>
+<div class="grid k2" style="align-items:start">
+<div class="card">
+  <h3>Qui doit quoi à qui ?</h3>
+  {% for a, b, c in v.settlements %}
+  <div class="row" style="justify-content:space-between;border-bottom:1px dashed var(--border);padding:.45rem 0">
+    <span><b>{{ names[a] }}</b> doit <b>{{ c|money }}</b> à <b>{{ names[b] }}</b></span>
+    <form method="post" action="/v/{{ trip.id }}/entre-nous/{{ sub.id }}/regler" class="inline">
+      <input type="hidden" name="sender" value="{{ a }}"><input type="hidden" name="receiver" value="{{ b }}"><input type="hidden" name="amount" value="{{ c|amount_input }}">
+      <button class="btn small ghost">✓ C'est réglé</button></form>
+  </div>
+  {% else %}<p class="pill ok">🟢 Tout le monde est quitte</p>{% endfor %}
+  <h3 style="margin-top:1.2rem">Où en est chacun</h3>
+  <table>
+    <thead><tr><th>Nom</th><th class="num">A payé</th><th class="num">Sa part</th><th class="num">Situation</th></tr></thead>
+    <tbody>{% for m in sub.members %}{% set b = v.balances.get(m, 0) %}
+      <tr><td>{{ names[m] }}</td><td class="num">{{ v.paid.get(m, 0)|money }}</td><td class="num">{{ v.shares.get(m, 0)|money }}</td>
+        <td class="num">{% if b > 0 %}<span class="pill du">on lui doit {{ b|money }}</span>{% elif b < 0 %}<span class="pill doit">doit {{ (-b)|money }}</span>{% else %}<span class="pill ok">quitte</span>{% endif %}</td></tr>{% endfor %}</tbody>
+  </table>
+</div>
+<form class="card" method="post" action="/v/{{ trip.id }}/entre-nous/{{ sub.id }}/depense" id="subexp">
+  <h3>+ Une dépense</h3>
+  <div class="field"><label for="label">Quoi ?</label><input type="text" id="label" name="label" required placeholder="ex. Pizzas"></div>
+  <div class="grid k2" style="gap:.8rem">
+    <div class="field"><label for="amount">Montant (€)</label><input class="amount" type="text" inputmode="decimal" id="amount" name="amount" required placeholder="0,00"></div>
+    <div class="field"><label for="date">Date</label><input type="date" id="date" name="date" value=""></div>
+  </div>
+  <div class="field"><label for="payer">Qui a payé ?</label>
+    <select id="payer" name="payer">{% for m in sub.members %}<option value="{{ m }}">{{ names[m] }}</option>{% endfor %}</select></div>
+  <div class="field"><label>Pour qui ?</label>
+    <div class="check-col">{% for m in sub.members %}<label><input type="checkbox" data-who name="for" value="{{ m }}" checked> {{ names[m] }}</label>{% endfor %}</div></div>
+  <button class="btn">Ajouter</button>
+</form>
+</div>
+<h2>Historique</h2>
+<div class="card table-wrap"><table>
+  <thead><tr><th>Date</th><th>Quoi</th><th>Payé par</th><th>Pour</th><th class="num">Montant</th><th></th></tr></thead>
+  <tbody>
+  {% for e in sub.expenses %}<tr><td>{{ e.date|date }}</td><td>{{ e.label }}</td><td>{{ names[e.payer_id] }}</td>
+    <td class="small">{% if e.weight_map|length == sub.members|length %}tout le monde{% else %}{% for pid in e.weight_map %}{{ names[pid] }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}</td>
+    <td class="num">{{ e.amount|money }}</td>
+    <td><form method="post" action="/v/{{ trip.id }}/entre-nous/{{ sub.id }}/supprimer-ligne" class="inline" data-confirm="Supprimer ?"><input type="hidden" name="expense" value="{{ e.id }}"><button class="btn link danger small">Supprimer</button></form></td></tr>{% endfor %}
+  {% for t in sub.transfers %}<tr><td>{{ t.date|date }}</td><td><i>Remboursement</i></td><td>{{ names[t.sender_id] }}</td><td>{{ names[t.receiver_id] }}</td><td class="num">{{ t.amount|money }}</td>
+    <td><form method="post" action="/v/{{ trip.id }}/entre-nous/{{ sub.id }}/supprimer-ligne" class="inline" data-confirm="Supprimer ?"><input type="hidden" name="transfer" value="{{ t.id }}"><button class="btn link danger small">Supprimer</button></form></td></tr>{% endfor %}
+  {% if not sub.expenses and not sub.transfers %}<tr><td colspan="6" class="muted">Rien pour l'instant.</td></tr>{% endif %}
+  </tbody>
+</table></div>
+<form method="post" action="/v/{{ trip.id }}/entre-nous/{{ sub.id }}/supprimer" data-confirm="Supprimer le compte « {{ sub.name }} » ?" style="margin-top:1rem"><button class="btn small danger">Supprimer ce compte</button></form>
+{% endblock %}

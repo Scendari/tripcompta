@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status, mode_note, role_pills, people_tabs with context %}
+{% block content %}
+<div class="page-head"><div class="grow"><h1>Participants</h1>
+<p class="muted">Le compte de chacun : sa part par catégorie, ce qu'il a versé ou payé, et ce qu'il doit encore ou ce qu'on lui doit.</p>{{ mode_note(mode) }}</div></div>
+{{ people_tabs(trip, 'comptes') }}
+
+<div class="card people-filter-card">
+  <div class="row" style="justify-content:space-between;align-items:baseline;gap:.5rem;margin-bottom:.4rem">
+    <b class="small">Afficher</b>
+    <span class="row small" style="gap:.8rem">
+      <button type="button" class="btn link small" data-people="all">Tout le monde</button>
+      <button type="button" class="btn link small" data-people="none">Personne</button>
+      <button type="button" class="btn link small" data-toggle-all="open">Tout déplier</button>
+      <button type="button" class="btn link small" data-toggle-all="close">Tout replier</button>
+    </span>
+  </div>
+  <div class="people-filter" role="group" aria-label="Participants à afficher">
+    {% for b in blocks %}<label><input type="checkbox" value="{{ b.p.id }}" {{ 'checked' if b.p.id in selected }}><span>{{ b.p.name }}</span></label>{% endfor %}
+  </div>
+  <p class="hint" id="people-count" style="margin:.2rem 0 0" aria-live="polite"></p>
+</div>
+
+<div class="people-blocks">
+{% for b in blocks %}
+  {% set p, acc, me, account, adjs, wd, subs, sub_bal, send, planned_share, actual_share = b.p, b.acc, b.me, b.account, b.adjs, b.wd, b.subs, b.sub_bal, b.send, b.planned_share, b.actual_share %}
+  {% include "_person_block.html" %}
+{% endfor %}
+</div>
+<p class="muted" id="people-empty" hidden>Choisis au moins une personne ci-dessus.</p>
+
+<script>
+(function () {
+  var KEY = 'compta-comptes-{{ trip.id }}';
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('.people-filter input'));
+  var fromUrl = {{ 'true' if from_url else 'false' }};
+  if (!fromUrl) {      // pas de choix dans l'adresse : reprendre le dernier choix
+    try { var saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (saved && saved.length) boxes.forEach(function (b) { b.checked = saved.indexOf(b.value) >= 0; }); } catch (e) {}
+  }
+  function apply(save) {
+    var on = boxes.filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
+    document.querySelectorAll('.person-block').forEach(function (el) { el.hidden = on.indexOf(el.dataset.person) < 0; });
+    document.getElementById('people-empty').hidden = on.length > 0;
+    document.getElementById('people-count').textContent = on.length === boxes.length ? 'Tout le monde (' + on.length + ')' : on.length + ' sur ' + boxes.length;
+    if (save) {
+      try { localStorage.setItem(KEY, JSON.stringify(on)); } catch (e) {}
+      var u = new URL(location.href); u.searchParams.delete('p');
+      if (on.length && on.length < boxes.length) on.forEach(function (v) { u.searchParams.append('p', v); });
+      history.replaceState(null, '', u);
+    }
+  }
+  boxes.forEach(function (b) { b.addEventListener('change', function () { apply(true); }); });
+  document.querySelectorAll('[data-people]').forEach(function (btn) { btn.addEventListener('click', function () {
+    boxes.forEach(function (b) { b.checked = btn.dataset.people === 'all'; }); apply(true); }); });
+  apply(false);
+})();
+</script>
+{% endblock %}

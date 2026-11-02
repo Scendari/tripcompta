@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% from "_macros.html" import mode_note, tip, people_tabs with context %}
+{% block mainclass %}full{% endblock %}
+{% block content %}
+<div class="page-head"><div class="grow">
+  <h1>Participants</h1>
+  <p class="muted"><b class="deb">Débit</b> = ce qu'une personne doit (sa part, l'argent qu'elle a reçu pour {{ asso_name }} ou que {{ asso_name }} lui a rendu). <b class="cre">Crédit</b> = ce qu'elle a donné (versements, dépenses qu'elle a payées). Solde = débit − crédit.</p>
+  {{ mode_note(mode) }}
+</div></div>
+{{ people_tabs(trip, 'soldes') }}
+<p class="hint">Passe la souris sur un montant (ou touche-le) pour voir d'où il vient.</p>
+
+{% set maxbal = (L.accounts|map(attribute='balance')|map('abs')|max) if L.accounts else 0 %}
+<div class="card table-wrap">
+<table class="ledger">
+  <thead>
+    <tr><th rowspan="2">Personne ou famille</th>
+      <th colspan="3" class="grp deb">Débit — ce qu'il doit</th>
+      <th colspan="2" class="grp cre">Crédit — ce qu'il a donné</th>
+      <th rowspan="2" class="num">Solde</th><th rowspan="2" class="bar-col"><span class="sr-only">Visuel</span></th></tr>
+    <tr><th class="num deb">Sa part</th><th class="num deb" title="Argent reçu à la place de {{ asso_name }}">Reçu pour {{ asso_name }}</th><th class="num deb">Rendu par {{ asso_name }}</th>
+      <th class="num cre">Versé</th><th class="num cre">Avancé</th></tr>
+  </thead>
+  <tbody>
+  {% for a in L.accounts %}
+    {% if a.family %}
+      <tr class="family-row"><td><b>{{ a.name }}</b></td>
+        {{ cells(a, a.name) }}
+        <td class="num">{% if a.holds_cash %}<span class="pill grey" title="Son compte se règle avec la caisse qu'il tient">tient la caisse ({{ a.balance|money_sign }})</span>{% else %}{{ tip(pill(a.balance), a.tips.balance, 'Solde de ' ~ a.name) }}{% endif %}</td>
+        <td class="bar-col">{{ bar(a.balance, maxbal) }}</td></tr>
+      {% for m in a.members %}
+      <tr class="member"><td style="padding-left:1.6rem"><a href="/v/{{ trip.id }}/participants/comptes?p={{ m.id }}#p{{ m.id }}" title="Voir le détail du compte de {{ m.name }}">{{ m.name }}</a>{{ rtag(m.id) }}</td>
+        {{ cells(m, m.name) }}
+        <td class="num muted small">en famille</td><td></td></tr>
+      {% endfor %}
+    {% else %}{% set m = a.members[0] %}
+      <tr class="{{ 'withdrawn' if m.withdrawn }}"><td><a href="/v/{{ trip.id }}/participants/comptes?p={{ m.id }}#p{{ m.id }}" title="Voir le détail du compte de {{ m.name }}">{{ m.name }}</a>{{ rtag(m.id) }}{% if m.withdrawn %} <span class="pill withdrawn-pill">Désisté</span>{% endif %}</td>
+        {{ cells(m, m.name) }}
+        <td class="num">{% if a.holds_cash %}<span class="pill grey" title="Son compte se règle avec la caisse qu'il tient">tient la caisse ({{ a.balance|money_sign }})</span>{% else %}{{ tip(pill(a.balance), m.tips.balance, 'Solde de ' ~ m.name) }}{% endif %}</td>
+        <td class="bar-col">{{ bar(a.balance, maxbal) }}</td></tr>
+    {% endif %}
+  {% endfor %}
+  </tbody>
+  <tfoot><tr><td>Total</td>
+    <td class="num">{{ L.accounts|sum(attribute='share')|money }}</td><td class="num">{{ L.accounts|sum(attribute='received')|money }}</td><td class="num">{{ L.accounts|sum(attribute='refunded')|money }}</td>
+    <td class="num">{{ L.accounts|sum(attribute='paid')|money }}</td><td class="num">{{ L.accounts|sum(attribute='advanced')|money }}</td>
+    <td class="num" colspan="2">{{ (L.total_debit - L.total_credit)|money_sign }}</td></tr></tfoot>
+</table>
+</div>
+<p class="small muted">Total des débits {{ L.total_debit|money }} − total des crédits {{ L.total_credit|money }} = {{ (L.total_debit - L.total_credit)|money_sign }} : c'est ce que les participants doivent encore ({{ r.to_collect|money }}) moins ce que {{ asso_name }} doit rendre ({{ r.to_refund|money }}).</p>
+
+
+{% endblock %}
+
+{% macro pill(b) -%}
+{% if b > 0 %}<span class="pill doit">doit {{ b|money }}</span>{% elif b < 0 %}<span class="pill du">on lui doit {{ (-b)|money }}</span>{% else %}<span class="pill ok">à jour</span>{% endif %}
+{%- endmacro %}
+
+{% macro cells(x, who) -%}
+<td class="num deb">{{ tip(x.share|money, x.tips.share, 'Part de ' ~ who) }}</td>
+<td class="num deb">{{ tip(x.received|money, x.tips.received, 'Reçu pour ' ~ asso_name ~ ' par ' ~ who) if x.received }}</td>
+<td class="num deb">{{ tip(x.refunded|money, x.tips.refunded, 'Rendu par ' ~ asso_name ~ ' à ' ~ who) if x.refunded }}</td>
+<td class="num cre">{{ tip(x.paid|money, x.tips.paid, 'Versé par ' ~ who) if x.paid }}</td>
+<td class="num cre">{{ tip(x.advanced|money, x.tips.advanced, 'Avancé par ' ~ who) if x.advanced }}</td>
+{%- endmacro %}
+
+{% macro bar(v, maxv) -%}
+{% set w = ((v|abs) / maxv * 100)|round(1) if maxv else 0 %}
+<div class="bal-bar {{ 'doit' if v > 0 else 'du' if v < 0 else 'ok' }}" aria-hidden="true"><span style="width: {{ w }}%"></span></div>
+{%- endmacro %}
+
+{% macro rtag(pid) -%}
+{% set v = remise_tags.get(pid) %}{% if v %} <a class="pill grey rtag" href="/v/{{ trip.id }}/participants/remises" title="{{ 'Remise' if v < 0 else 'Supplément' }} : voir l'onglet Remises / suppléments">{{ '−' if v < 0 else '+' }}{{ v|abs|money }}</a>{% endif %}
+{%- endmacro %}

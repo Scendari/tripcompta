@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% from "_macros.html" import mode_note with context %}
+{% block mainclass %}full{% endblock %}
+{% block content %}
+<div class="page-head"><div class="grow">
+  <h1>Qui paie quoi</h1>
+  <p class="muted">La part de chacun pour chaque dépense. Clique sur une case pour ouvrir la dépense. 🔒 = montant fixé dans la dépense.</p>
+  {{ mode_note(mode) }}
+</div></div>
+{% if not trip.expenses or not trip.participants %}
+<div class="card empty">Ajoute des participants et des dépenses pour voir le tableau.</div>
+{% else %}
+<div class="row" style="margin-bottom:.6rem;gap:.5rem">
+  <div class="toggle" role="group" aria-label="Affichage">
+    <a href="?" class="{{ 'on' if not all_open and not any_open }}">Sous-totaux</a>
+    <a href="?vue=detail" class="{{ 'on' if all_open }}">Tout déplier</a>
+  </div>
+  <span class="hint">{% if all_open %}Fais défiler vers la droite s'il y a beaucoup de colonnes ; la colonne des noms reste visible.{% else %}Clique sur <b>▸</b> une catégorie pour voir le détail de ses dépenses.{% endif %}</span>
+</div>
+<div class="card table-wrap matrix-wrap">
+{% set has_round = r.people.values()|selectattr('rounding')|list|length > 0 %}
+<table class="matrix">
+  <thead>
+    <tr><th class="sticky"></th>
+      {% for h in head1 %}<th class="cat cat-start {{ 'band' if h.band }}" colspan="{{ h.span }}">{% if h.toggle is not none %}<a class="cat-toggle" href="{{ h.toggle }}" title="{{ 'Replier' if h.open else 'Voir le détail des dépenses de' }} {{ h.cat }}">{{ '▾' if h.open else '▸' }} {{ h.cat }}</a>{% else %}{{ h.cat }}{% endif %}</th>{% endfor %}
+      {% if has_global %}<th class="cat cat-start">Remise</th>{% endif %}{% if has_round %}<th></th>{% endif %}<th></th></tr>
+    {% if has_subs %}
+    <tr><th class="sticky"></th>
+      {% for h in head2 %}<th class="subcat-h {{ 'cat-start' if h.start }}{{ ' sub-start' if h.sub_start }}" colspan="{{ h.span }}">{{ h.label }}</th>{% endfor %}
+      {% if has_global %}<th></th>{% endif %}{% if has_round %}<th></th>{% endif %}<th></th></tr>
+    {% endif %}
+    <tr><th class="sticky">Participant</th>
+      {% for col in cols %}{% set est = col.kind == 'exp' and col.e.actual is none and col.e.planned is not none %}<th class="num {{ 'tot-' ~ col.kind if col.kind != 'exp' }} {{ 'cat-start' if col.start }}{{ ' sub-start' if col.sub_start }}" title="{{ col.label }}{{ ' — montant prévu (réel pas encore saisi)' if est }}">{% if est %}<span class="est">≈</span> {% endif %}{{ col.label }}<div class="muted" style="text-transform:none">{{ col.total|money }}</div></th>{% endfor %}
+      {% if has_global %}<th class="num">ou supplément</th>{% endif %}
+      {% if has_round %}<th class="num" title="Chaque case est au centime le plus proche ; le total de chacun est arrondi une seule fois, au centime supérieur.">Arrondi</th>{% endif %}
+      <th class="num">Total</th></tr>
+  </thead>
+  <tbody>
+  {% for ps in r.people.values()|sort(attribute='sort_name') %}
+    <tr>
+      <td class="sticky"><a href="/v/{{ trip.id }}/p/{{ ps.id }}">{{ ps.name }}</a></td>
+      {% for col in cols %}
+        {% if col.kind == 'exp' %}{% set e = col.e %}{% set l = r.lines.get((ps.id, e.id)) %}
+        <td class="num cell {{ 'adj' if l and (l.adjusted or l.locked) }} {{ 'zero' if not l or l.cents == 0 }} {{ 'cat-start' if col.start }}{{ ' sub-start' if col.sub_start }}">
+          <a href="/v/{{ trip.id }}/depenses/{{ e.id }}/modifier#who" title="{{ e.label }} : modifier la répartition (tape un montant pour fixer la part de {{ ps.name }})">{% if l %}{{ l.cents|money }}{% if l.locked %} 🔒{% endif %}{% else %}—{% endif %}</a></td>
+        {% else %}{% set st = r.subtotal(ps.id, col.eids) %}
+        <td class="num tot-{{ col.kind }} {{ 'zero' if st == 0 }} {{ 'cat-start' if col.start }}{{ ' sub-start' if col.sub_start }}">{{ st|money if st else '—' }}</td>
+        {% endif %}
+      {% endfor %}
+      {% if has_global %}{% set g = r.lines.get((ps.id, 'global')) %}<td class="num cell {{ 'adj' if g }}"><a href="/v/{{ trip.id }}/participants/remises?remise={{ ps.id }}" title="Remises et suppléments : Participants › Remises / suppléments">{{ g.cents|money_sign if g else '—' }}</a></td>{% endif %}
+      {% if has_round %}<td class="num muted small">{{ ps.rounding|money_sign if ps.rounding else '' }}</td>{% endif %}
+      <td class="num"><b>{{ ps.share|money }}</b></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr><td class="sticky">Total participants</td>
+      {% for col in cols %}<td class="num {{ 'tot-' ~ col.kind if col.kind != 'exp' }} {{ 'cat-start' if col.start }}{{ ' sub-start' if col.sub_start }}">{{ r.subtotal(None, col.eids)|money }}</td>{% endfor %}
+      {% if has_global %}{% set ns = namespace(t=0) %}{% for ps in r.people.values() %}{% set ns.t = ns.t + r.share(ps.id, 'global') %}{% endfor %}<td class="num">{{ ns.t|money_sign }}</td>{% endif %}
+      {% if has_round %}<td class="num">{{ r.people.values()|sum(attribute='rounding')|money_sign }}</td>{% endif %}
+      <td class="num">{{ r.total_shares|money }}</td></tr>
+    {% if r.asso_charges %}
+    <tr class="asso-row"><td class="sticky">🏛️ Pris en charge par {{ asso_name }}</td>
+      {% for col in cols %}{% set ns = namespace(t=0) %}{% for c in r.asso_charges %}{% if c.expense in col.eids %}{% set ns.t = ns.t + c.cents %}{% endif %}{% endfor %}<td class="num {{ 'tot-' ~ col.kind if col.kind != 'exp' }} {{ 'cat-start' if col.start }}{{ ' sub-start' if col.sub_start }}">{{ ns.t|money if ns.t else '—' }}</td>{% endfor %}
+      {% if has_global %}{% set ns = namespace(t=0) %}{% for c in r.asso_charges %}{% if c.expense is none %}{% set ns.t = ns.t + c.cents %}{% endif %}{% endfor %}<td class="num">{{ ns.t|money if ns.t else '—' }}</td>{% endif %}
+      {% if has_round %}<td></td>{% endif %}
+      <td class="num">{{ r.asso_total|money }}</td></tr>
+    {% endif %}
+  </tfoot>
+</table>
+</div>
+<div class="grid k3" style="margin-top:1rem">
+  <div class="card kpi"><div class="label">Parts des participants</div><div class="value">{{ r.total_shares|money }}</div></div>
+  <div class="card kpi"><div class="label">+ Pris en charge par {{ asso_name }}</div><div class="value">{{ r.asso_total|money }}</div></div>
+  <div class="card kpi"><div class="label">− Arrondis (gagnés par {{ asso_name }})</div><div class="value">{{ r.rounding_gain|money }}</div>
+    <div class="sub">= {{ r.total_cost|money }}, le coût du voyage {{ '✓' if r.is_balanced() else '✗' }}</div></div>
+</div>
+{% endif %}
+{% endblock %}

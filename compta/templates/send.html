@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% from "_macros.html" import mode_note with context %}
+{% block content %}
+<div class="page-head"><div class="grow">
+  <h1>Envoyer les comptes</h1>
+  <p class="muted">Pour chaque personne (ou famille) : un PDF de son compte, avec le détail par catégorie et sous-catégorie, et un message prêt à envoyer.</p>
+  {{ mode_note(mode) }}
+</div>
+  <a class="btn ghost small" href="/v/{{ trip.id }}/comptes-personnels.zip">⬇ Tous les PDF (ZIP)</a>
+</div>
+
+<div class="card how">
+  <b>Comment faire :</b>
+  <ol class="small" style="margin:.4rem 0 0 1.1rem;padding:0">
+    <li>Clique sur <b>📲 WhatsApp</b> : le PDF se télécharge et WhatsApp s'ouvre sur la conversation, avec le message déjà écrit.</li>
+    <li>Glisse le PDF (dans <i>Téléchargements</i>) dans la conversation, puis envoie.</li>
+  </ol>
+  <p class="hint" style="margin:.4rem 0 0">Sans numéro de téléphone, WhatsApp te demande à qui envoyer. Ajoute les numéros dans la fiche de chaque participant.</p>
+</div>
+
+<div class="send-list">
+{% for x in rows %}{% set a = x.acc %}
+  <div class="card send-row" data-send-row id="a{{ a.key }}">
+    <div class="row" style="justify-content:space-between;align-items:flex-start;gap:.6rem">
+      <div class="grow">
+        <h3 style="margin:0">{% if a.is_family %}👪 {% endif %}<a href="/v/{{ trip.id }}/p/{{ x.ref.id }}">{{ a.name }}</a>
+          {% if a.holds_cash %}<span class="pill grey">tient la caisse</span>
+          {% elif a.balance > 0 %}<span class="pill doit">doit {{ a.balance|money }}</span>
+          {% elif a.balance < 0 %}<span class="pill du">on lui doit {{ (-a.balance)|money }}</span>
+          {% else %}<span class="pill ok">à jour</span>{% endif %}</h3>
+        <div class="muted small">{% if a.is_family %}à {{ x.ref.name }} · {% endif %}{{ x.ref.phone or "pas de numéro" }}</div>
+      </div>
+      <div class="row send-actions" style="gap:.4rem">
+        <a class="btn small" href="{{ x.wa }}" target="_blank" rel="noopener" data-send-pdf="{{ x.pdf }}">📲 WhatsApp</a>
+        <a class="btn small ghost" href="{{ x.pdf }}">⬇ PDF</a>
+        <button type="button" class="btn small ghost" data-copy="#msg-{{ a.key }}">Copier le message</button>
+      </div>
+    </div>
+    <details style="margin-top:.4rem"><summary class="small muted">Voir le message</summary>
+      <pre class="msg" id="msg-{{ a.key }}">{{ x.msg }}</pre></details>
+    <span class="sent-mark small">✓ préparé</span>
+  </div>
+{% endfor %}
+</div>
+{% endblock %}

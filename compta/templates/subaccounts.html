@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div class="grow">
+  <h1>Entre nous</h1>
+  <p class="muted">Des petits comptes entre participants, <b>sans passer par {{ asso_name }}</b> : un resto partagé, les courses d'une voiture… Ils n'apparaissent pas dans le bilan de {{ asso_name }}.</p>
+</div></div>
+<div class="grid k2" style="align-items:start">
+<div>
+  {% for sub in trip.subaccounts %}{% set v = views[sub.id] %}
+  {% set ne = sub.expenses|length %}{% set ns = v.settlements|length %}
+  <div class="sub-tile">
+  <a class="card trip-card" href="/v/{{ trip.id }}/entre-nous/{{ sub.id }}" aria-describedby="sub-pop-{{ sub.id }}">
+    <h3>{{ sub.name }}</h3>
+    <div class="muted small">{{ sub.members|length }} personnes · {{ ne }} dépense{{ 's' if ne > 1 }} · {{ v.total|money }}</div>
+    <div style="margin-top:.4rem">{% if ns %}<span class="pill doit">{{ ns }} remboursement{{ 's' if ns > 1 }} à faire</span>{% else %}<span class="pill ok">Tout le monde est quitte</span>{% endif %}</div>
+  </a>
+  <div class="sub-pop" id="sub-pop-{{ sub.id }}" role="tooltip">
+    <div><b>Qui participe</b><span>{% for m in sub.members %}{{ names.get(m, '?') }}{{ ', ' if not loop.last }}{% endfor %}</span></div>
+    {% if ne %}<div><b>Dépenses</b>{% for e in sub.expenses %}<span>{{ e.label }} : {{ e.amount|money }} <span class="muted">payé par {{ names[e.payer_id] }}</span></span>{% endfor %}</div>{% endif %}
+    <div><b>Qui doit combien à qui</b>{% for a, b, c in v.settlements %}<span>{{ names[a] }} doit <b>{{ c|money }}</b> à {{ names[b] }}</span>{% else %}<span>Personne : tout le monde est quitte ✓</span>{% endfor %}</div>
+  </div>
+  </div>
+  {% else %}<div class="card empty">Aucun compte pour l'instant.</div>{% endfor %}
+</div>
+<form class="card" method="post" action="/v/{{ trip.id }}/entre-nous" id="newsub">
+  <h3>+ Nouveau compte</h3>
+  <div class="field"><label for="name">Nom</label><input type="text" id="name" name="name" placeholder="ex. Resto du jeudi" required></div>
+  <div class="field"><label>Qui participe ?</label>
+    <div class="row" style="margin-bottom:.4rem"><a href="#" class="btn small ghost" data-check="all" data-scope="#newsub">Tout le monde</a><a href="#" class="btn small ghost" data-check="none" data-scope="#newsub">Personne</a></div>
+    <div class="check-col">{% for p in trip.participants %}<label><input type="checkbox" data-who name="members" value="{{ p.id }}"> {{ p.name }}</label>{% endfor %}</div></div>
+  <button class="btn">Créer</button>
+</form>
+</div>
+{% endblock %}

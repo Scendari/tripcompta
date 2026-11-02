@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "_macros.html" import mode_note, tip with context %}
+{% block content %}
+<div class="page-head">
+  <div class="grow"><h1>Dépenses</h1>{{ mode_note(mode) }}</div>
+  <div class="row"><a class="btn ghost" href="/v/{{ trip.id }}/categories">🏷️ Gérer les catégories</a>
+  <a class="btn" href="/v/{{ trip.id }}/depenses/nouvelle">+ Une dépense</a></div>
+</div>
+{% if not trip.expenses %}
+<div class="card empty"><p>Aucune dépense pour l'instant.</p><a class="btn" href="/v/{{ trip.id }}/depenses/nouvelle">Ajouter la première</a></div>
+{% endif %}
+{% for c, es in groups if es %}
+<details class="card" open>
+  <summary style="cursor:pointer;display:flex;justify-content:space-between;gap:1rem">
+    <h3 style="margin:0">{{ c.name if c else 'Sans catégorie' }}</h3>
+    {% set ns = namespace(t=0) %}{% for e in es %}{% set ns.t = ns.t + r.expense_totals.get(e.id, 0) %}{% endfor %}
+    <span class="num"><b>{{ ns.t|money }}</b></span>
+  </summary>
+  <div class="table-wrap" style="margin-top:.6rem">
+  <table>
+    <thead><tr><th>Dépense</th><th class="date-col"><span class="sr-only">Date</span></th><th class="num">Prévu</th><th class="num">Réel</th><th>Payé par</th><th>Pour qui</th><th>Justif.</th><th></th></tr></thead>
+    <tbody>
+    {% set sub = namespace(cur=None) %}
+    {% for e in es %}
+      {% set grouped = e.category_id in with_subs %}
+      {% if grouped and (e.subcategory or '') != sub.cur %}{% set sub.cur = e.subcategory or '' %}
+      <tr class="subcat-row"><td colspan="7"><span class="chev" aria-hidden="true">↳</span> {{ e.subcategory or "Autres (sans sous-catégorie)" }}</td>
+        <td class="num"><b>{{ subtotals[(e.category_id, e.subcategory or '')]|money }}</b></td></tr>
+      {% endif %}
+      <tr id="e{{ e.id }}" class="{{ 'in-subcat' if grouped }}">
+        <td><a href="/v/{{ trip.id }}/depenses/{{ e.id }}/modifier"><b>{{ e.label }}</b></a>{% if e.is_income %} <span class="pill ok">recette</span>{% endif %}{% if e.pending %} <span class="pill doit">montant à venir</span>{% endif %}{% if e.id in bad %} <span class="pill doit" title="La somme des parts ne fait pas le montant de la dépense : vérifie qui la paie et les ajustements">⚠ à vérifier</span>{% endif %}</td>
+        <td class="date-col small">{{ e.date|date if e.date else '' }}</td>
+        <td class="num">{% if e.planned is not none %}{{ '− ' if e.is_income }}{{ e.planned|money }}{% else %}—{% endif %}</td>
+        <td class="num">{% if e.actual is not none %}{% set tl = e.ticket_list %}{% if tl %}{% set lines = [] %}{% for tk in tl %}{% set _ = lines.append('Ticket ' ~ loop.index ~ ' : ' ~ tk.cents|money ~ ((' · ' ~ tk.date|date) if tk.date else '')) %}{% endfor %}<span class="ticket-count" title="{{ tl|length }} tickets">{{ tl|length }} tickets</span> {{ tip(('− ' if e.is_income else '') ~ e.actual|money, lines, tl|length ~ ' tickets') }}{% else %}{{ '− ' if e.is_income }}{{ e.actual|money }}{% endif %}{% if e.refund %}<div class="small muted">− {{ e.refund|money }} remboursés{% if e.refund_to %} (à {{ e.refund_to.name }}){% endif %}</div>{% endif %}{% if e.planned is not none and e.actual != e.planned %}<div class="small {{ 'up' if e.actual > e.planned else 'down' }}">{{ (e.actual - e.planned)|money_sign }}</div>{% endif %}{% elif e.planned is not none %}<span class="est" title="Montant prévu : c'est lui qui est compté tant que le réel n'est pas saisi">≈ {{ '− ' if e.is_income }}{{ e.planned|money }}</span>{% else %}<span class="muted">à venir</span>{% endif %}</td>
+        <td class="small">{% set sp = e.splits() %}{% if e.is_income %}reçu par {{ payer_label(e, names, asso_name) }}{% elif sp|length > 1 %}{% for pid, c in sp %}{{ names.get(pid, asso_name) if pid else asso_name }} {{ c|money }}{{ ' + ' if not loop.last }}{% endfor %}{% elif e.payer %}{{ e.payer.name }}{% else %}{{ asso_name }}{% endif %}</td>
+        <td class="small">{{ tip(who_label(trip, e), who_detail(trip, e, r), 'Pour qui') }}</td>
+        <td>{% if e.receipt_links %}<span class="rcodes"><svg class="clip" viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>{% for l in e.receipt_links|sort(attribute='receipt.number') %}<a href="/v/{{ trip.id }}/justificatifs/{{ l.receipt_id }}/fichier" target="_blank" title="Justificatif {{ l.receipt.code }} : {{ l.receipt.original_name }}">{{ l.receipt.code }}</a>{{ ', ' if not loop.last }}{% endfor %}</span>{% else %}{% if e.actual is not none %}<span class="pill doit">manquant</span>{% else %}—{% endif %}{% endif %}</td>
+        <td><a class="small" href="/v/{{ trip.id }}/depenses/{{ e.id }}/modifier">Modifier</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</details>
+{% endfor %}
+{% if trip.expenses %}
+<div class="card" style="margin-top:1rem;display:flex;justify-content:space-between"><b>Total du voyage</b><b class="num">{{ r.total_cost|money }}</b></div>
+{% endif %}
+{% endblock %}

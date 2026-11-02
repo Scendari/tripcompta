@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "_macros.html" import people_tabs %}
+{% block content %}
+<div class="page-head"><div class="grow"><h1>Participants</h1>
+<p class="muted">Ce que des participants ont payé eux-mêmes pour le groupe, ou reçu à la place de {{ asso_name }}, sans passer par sa caisse.</p></div></div>
+{{ people_tabs(trip, 'avances') }}
+{% if not advances %}<div class="card empty"><p>Personne n'a avancé d'argent pour le groupe : toutes les dépenses ont été payées par {{ asso_name }}.</p></div>{% endif %}
+{% set paid_rows = advances|rejectattr('income')|sort(attribute='name')|list %}
+{% set recv_rows = advances|selectattr('income')|sort(attribute='name')|list %}
+{% for title, explain, rows, cls in [('Payé par des participants (avances)', "déduit de ce que doit la personne", paid_rows, 'du'), ('Reçu par des participants pour ' ~ asso_name, "ajouté à ce que doit la personne (à reverser à " ~ asso_name ~ ")", recv_rows, 'doit')] if rows %}
+<div class="card table-wrap adv-block {{ cls }}">
+  <div class="settle-head"><b>{{ title }}</b> <span class="muted small">{{ explain }}</span><span class="grow"></span><b class="num">{{ rows|sum(attribute='amount')|money }}</b></div>
+  <table class="adv-table">
+    <thead><tr><th>Qui</th><th>Date</th><th>Dépense</th><th class="num">Montant</th><th><span class="sr-only">Actions</span></th></tr></thead>
+    <tbody>
+    {% for name, items in rows|groupby('name') %}
+      {% for a in items|sort(attribute='label') %}
+      <tr>
+        <td>{% if loop.first %}<b>{{ name }}</b>{% endif %}</td>
+        <td class="date-col small">{{ a.date|date if a.date else '' }}</td>
+        <td>{{ a.label }}{% if a.partial %} <span class="muted small">(sa part du paiement)</span>{% endif %}</td>
+        <td class="num">{{ a.amount|money }}</td>
+        <td class="row-actions"><a class="btn link small" href="/v/{{ trip.id }}/depenses/{{ a.eid }}/modifier" title="Cette ligne vient de la dépense : on la change (ou on la supprime) depuis la dépense elle-même.">Modifier la dépense</a></td>
+      </tr>
+      {% endfor %}
+      {% if items|length > 1 %}<tr class="adv-sub"><td></td><td></td><td class="muted small">Total {{ name }}</td><td class="num"><b>{{ items|sum(attribute='amount')|money }}</b></td><td></td></tr>{% endif %}
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endfor %}
+{% endblock %}

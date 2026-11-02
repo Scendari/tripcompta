@@ -1,0 +1,161 @@
+{% macro solde(v) -%}
+{% if v > 0 %}<span class="solde doit">doit {{ v|money }}</span>{% elif v < 0 %}<span class="solde du">on lui doit {{ (-v)|money }}</span>{% else %}<span class="solde ok">0</span>{% endif %}
+{%- endmacro %}
+{# Bloc « compte d'une personne » (onglet Comptes). Variables : p, acc, me, account, adjs, wd, subs, sub_bal, send, planned_share, actual_share #}
+<section class="person-block" id="p{{ p.id }}" data-person="{{ p.id }}" data-toggle-scope>
+  <div class="ph">
+    <h2>{{ p.name }}{{ role_pills(p.role_list) }} {% if acc.is_family %}<span class="pill grey">👪 {{ acc.name }}</span> {% endif %}{% if wd %}<span class="pill grey">désisté{% if wd.date %} le {{ wd.date|date }}{% endif %}</span>{% endif %}</h2>
+    <div class="row" style="gap:.4rem">
+      <a class="btn small" href="/v/{{ trip.id }}/argent?k=versement&p={{ acc.referent }}#ajout">+ Versement{% if acc.is_family %} de la famille{% endif %}</a>
+      <a class="btn small ghost" href="/v/{{ trip.id }}/participants/remises?remise={{ p.id }}">Remise ou supplément</a>
+      {% if not wd %}<a class="btn small ghost" href="/v/{{ trip.id }}/desistement?p={{ p.id }}">Se désiste</a>{% endif %}
+      <a class="btn small ghost" href="{{ send.wa }}" target="_blank" rel="noopener" data-send-pdf="{{ send.pdf }}" title="Télécharge le PDF de son compte et ouvre WhatsApp avec un message prêt">📲 Envoyer</a>
+      <a class="btn small ghost" href="{{ send.pdf }}" title="PDF de son compte, détaillé par catégorie et sous-catégorie">⬇ PDF</a>
+    </div>
+  </div>
+<div class="card statement">
+  <h3>Son compte</h3>
+  <p class="hint" style="margin-top:0"><b class="deb">Débit</b> = ce qu'il doit (sa part, l'argent reçu pour {{ asso_name }} ou rendu par {{ asso_name }}). <b class="cre">Crédit</b> = ce qu'il a donné (versements, dépenses qu'il a payées). Clique sur une catégorie pour voir le détail, puis sur une dépense pour voir le calcul.</p>
+  {% if not account.groups %}<p class="muted">Rien pour l'instant.</p>{% else %}
+  <div class="table-wrap">
+  <table class="ledger person-account">
+    <thead><tr><th>Catégorie</th><th class="num deb">Débit</th><th class="num cre">Crédit</th><th class="num" title="Débit − crédit : ce qu'il doit encore, ou ce qu'on lui doit, pour cette catégorie">Solde</th><th class="pct-col"><span class="sr-only">Part du total</span></th></tr></thead>
+    {% for g in account.groups %}
+    {% if g.kind == 'arrondi' %}
+    <tbody class="acc-group collapsed" id="g{{ p.id }}-{{ loop.index }}">
+      <tr class="group-row">
+        <td><button type="button" class="group-toggle" data-toggle-group aria-expanded="false" aria-controls="g{{ p.id }}-{{ loop.index }}">
+          <span class="chev" aria-hidden="true">▸</span> Arrondi au centime</button></td>
+        <td class="num deb">{{ g.debit|money_sign }}</td><td></td><td></td><td></td>
+      </tr>
+      <tr class="item"><td colspan="5" class="muted small">{{ g.explain }}</td></tr>
+    </tbody>
+    {% else %}
+    <tbody class="acc-group collapsed" id="g{{ p.id }}-{{ loop.index }}">
+      <tr class="group-row">
+        <td><button type="button" class="group-toggle" data-toggle-group aria-expanded="false" aria-controls="g{{ p.id }}-{{ loop.index }}">
+          <span class="chev" aria-hidden="true">▸</span> {{ g.name }} <span class="muted small">({{ g['items']|length }})</span></button></td>
+        <td class="num deb">{{ g.debit|money if g.debit }}</td>
+        <td class="num cre">{{ g.credit|money if g.credit }}</td>
+        <td class="num">{% if g.kind in ('cat', 'global') %}{{ solde(g.debit - g.credit) }}{% endif %}</td>
+        <td class="pct-col">{% if g.pct is not none %}<div class="pct-bar" title="{{ g.pct }} % de sa part"><span style="width:{{ [g.pct, 100]|min }}%"></span></div><span class="muted small">{{ g.pct }} %</span>{% endif %}</td>
+      </tr>
+      {% set cursub = namespace(v=None) %}
+      {% for it in g['items'] %}
+      {% if it.sub and it.sub != cursub.v %}{% set cursub.v = it.sub %}{% set st = g.subs[it.sub] %}
+      <tr class="item sub-row"><td><span class="muted" aria-hidden="true">↳</span> {{ it.sub }} <span class="muted small">({{ st.n }})</span></td>
+        <td class="num deb">{{ st.debit|money if st.debit }}</td><td class="num cre">{{ st.credit|money if st.credit }}</td><td class="num">{{ solde(st.debit - st.credit) }}</td><td></td></tr>
+      {% endif %}
+      <tr class="item{{ ' in-sub' if it.sub }}">
+        <td>{% if it.line and it.line.components %}<details style="display:inline"><summary style="display:inline">{{ it.label }}{% if it.est %} <span class="est small" title="Montant prévu : le réel n'est pas encore saisi">≈ prévu</span>{% endif %}{% if it.line.locked %} 🔒{% endif %}{% if it.note %} <span class="muted small">· {{ it.note }}</span>{% endif %}</summary>
+            <div class="explain">
+              {% for c in it.line.components %}<div><span>{{ c.text }}</span><span class="num">{{ c.amount|money_sign if c.amount < 0 or loop.index > 1 else c.amount|money }}</span></div>{% endfor %}
+              {% if it.line.exact != it.line.cents %}<div class="muted"><span>Arrondi au centime le plus proche</span><span class="num">{{ it.line.cents|money }}</span></div>{% endif %}
+            </div></details>
+          {% else %}{{ it.label }}{% if it.est %} <span class="est small">≈ prévu</span>{% endif %}{% if it.note %} <span class="muted small">· {{ it.note }}</span>{% endif %}{% endif %}</td>
+        <td class="num deb">{{ it.debit|money if it.debit }}</td>
+        <td class="num cre">{{ it.credit|money if it.credit }}</td><td></td><td></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    {% endif %}
+    {% endfor %}
+    <tfoot>
+      <tr><td>Total</td><td class="num">{{ account.debit|money }}</td><td class="num">{{ account.credit|money }}</td><td class="num">{{ solde(account.debit - account.credit) }}</td><td></td></tr>
+    </tfoot>
+  </table>
+  </div>
+  <p class="row small" style="gap:.8rem;margin:.4rem 0 0"><button type="button" class="btn link small" data-toggle-all="open">Tout déplier</button><button type="button" class="btn link small" data-toggle-all="close">Tout replier</button></p>
+  {% endif %}
+
+  {% if acc.is_family %}
+  <h3 style="margin-top:1.2rem">Les comptes se font en famille : {{ acc.name }}</h3>
+  <table>
+    <thead><tr><th>Membre</th><th class="num">Sa part</th><th class="num">Versé + avancé</th></tr></thead>
+    <tbody>{% for m in acc.members %}<tr><td>{% if m.id == p.id %}<b>{{ m.name }}</b>{% else %}<a href="/v/{{ trip.id }}/participants/comptes?p={{ m.id }}">{{ m.name }}</a>{% endif %}{% if m.companion %} <span class="muted small">(accompagnant)</span>{% endif %}{% if m.id == acc.referent %} <span class="muted small">· paie pour la famille</span>{% endif %}</td>
+      <td class="num">{{ m.share|money }}</td><td class="num">{{ (m.paid + m.advanced - m.refunded)|money }}</td></tr>{% endfor %}</tbody>
+    <tfoot><tr><td>Famille</td><td class="num">{{ acc.share|money }}</td><td class="num">{{ (acc.paid + acc.advanced - acc.refunded)|money }}</td></tr></tfoot>
+  </table>
+  {% set who = acc.name %}{% set bal = acc.balance %}{% set st = acc.status %}{% set payer = acc.referent %}
+  {% else %}
+  {% set who = p.name %}{% set bal = me.balance %}{% set st = me.status %}{% set payer = p.id %}
+  {% endif %}
+  {% if acc.holds_cash %}
+  <div class="bottom-line ok">➜ {{ who }} tient la caisse : son compte se règle avec elle, rien à verser ni à rembourser
+    {% if bal > 0 %}<div class="small" style="font-weight:400">Sa part dépasse ce qu'il a payé de {{ bal|money }} : cette somme est prise dans la caisse.</div>
+    {% elif bal < 0 %}<div class="small" style="font-weight:400">Il a payé {{ (-bal)|money }} de plus que sa part : il les garde dans la caisse.</div>{% endif %}</div>
+  {% else %}
+  <div class="bottom-line {{ st }}">
+    {% if bal > 0 %}➜ {{ who }} doit encore {{ bal|money }}
+    {% elif bal < 0 %}➜ {{ asso_name|capfirst }} doit rembourser {{ (-bal)|money }} à {{ who }}
+    {% else %}➜ {{ who }} est à jour ✓{% endif %}
+  </div>
+  {% if bal > 0 %}
+    <p class="small" style="margin-top:.6rem"><a href="/v/{{ trip.id }}/argent?k=versement&p={{ payer }}&a={{ bal|amount_input }}#ajout">Enregistrer {{ 'le versement de la famille' if acc.is_family else 'son versement' }} de {{ bal|money }}</a></p>
+  {% elif bal < 0 %}
+    <p class="small" style="margin-top:.6rem"><a href="/v/{{ trip.id }}/argent?k=remboursement&p={{ payer }}&a={{ (-bal)|amount_input }}#ajout">Enregistrer le remboursement de {{ (-bal)|money }}</a></p>
+  {% endif %}
+  {% endif %}
+</div>
+
+  {% set has_gap = actual_share != planned_share %}
+  {% if adjs or wd or subs or has_gap %}
+  <div class="person-extra">
+  {% if has_gap %}
+  <div class="card">
+    <h3>Par rapport au prévu</h3>
+    <table>
+      <tr><td>Sa part selon le prévu</td><td class="num">{{ planned_share|money }}</td></tr>
+      <tr><td>Sa part selon le réel</td><td class="num">{{ actual_share|money }}</td></tr>
+      <tfoot><tr><td>Écart</td><td class="num">{{ (actual_share - planned_share)|money_sign }}</td></tr></tfoot>
+    </table>
+    <p class="small muted" style="margin-top:.5rem">
+      {% if actual_share < planned_share %}Le voyage lui coûte {{ (planned_share - actual_share)|money }} de moins que prévu.
+      {% elif actual_share > planned_share %}Le voyage lui coûte {{ (actual_share - planned_share)|money }} de plus que prévu.
+      {% else %}Pas d'écart.{% endif %}</p>
+  </div>
+
+  {% endif %}
+  {% if adjs %}
+  <div class="card">
+    <h3>Ses ajustements</h3>
+    {% for a in adjs %}
+    <div class="row" style="justify-content:space-between;border-bottom:1px dashed var(--border);padding:.35rem 0">
+      <span class="small">{% if a.fixed %}🔒 Fixé à {{ a.value|money }}{% else %}{{ 'Réduction' if a.value < 0 else 'Supplément' }} de {{ a.value|abs|money }}{% endif %}
+        sur {{ a.expense.label if a.expense else 'le total' }} —
+        {% if a.compensation == 'asso' %}pris en charge par {{ asso_name }}{% elif a.compensation == 'person' %}compensé par {{ a.compensator.name }}{% else %}compensé par les autres{% endif %}
+        {% if a.reason %}<span class="muted">({{ a.reason }})</span>{% endif %}</span>
+      <form method="post" action="/v/{{ trip.id }}/ajuster/{{ a.id }}/supprimer" class="inline" data-confirm="Supprimer cet ajustement ?"><button class="btn link danger small">Supprimer</button></form>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if wd %}
+  <div class="card">
+    <h3>Désistement</h3>
+    <p class="small">Le {{ wd.date|date or '—' }}. Parts conservées (non remboursables) :
+      {% set kept = trip.expenses|selectattr('id', 'in', wd.kept_ids)|map(attribute='label')|list %}
+      {{ kept|join(', ') if kept else 'aucune' }}.<br>
+      Le reste est payé par {{ 'le groupe' if wd.absorber == 'group' else asso_name }}.</p>
+    <div class="row" style="gap:.5rem">
+      <a class="btn small" href="/v/{{ trip.id }}/desistement?p={{ p.id }}">Modifier le désistement</a>
+      <form method="post" action="/v/{{ trip.id }}/desistement/{{ p.id }}/annuler" class="inline" data-confirm="{{ p.name }} revient dans le voyage ?">
+        <button class="btn small warn">Annuler le désistement</button></form></div>
+  </div>
+  {% endif %}
+
+  {% if subs %}
+  <div class="card">
+    <h3>Comptes « Entre nous »</h3>
+    {% for sub in subs %}
+      <div class="row" style="justify-content:space-between"><a href="/v/{{ trip.id }}/entre-nous/{{ sub.id }}">{{ sub.name }}</a>
+      <span class="small">{% set b = sub_bal[sub.id] %}{% if b > 0 %}on lui doit {{ b|money }}{% elif b < 0 %}doit {{ (-b)|money }}{% else %}quitte{% endif %}</span></div>
+    {% endfor %}
+    <p class="muted small">Hors asso : ces montants n'entrent pas dans le solde ci-contre.</p>
+  </div>
+  {% endif %}
+
+  </div>
+  {% endif %}
+</section>

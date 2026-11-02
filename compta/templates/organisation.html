@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% from "_macros.html" import people_tabs %}
+{% block content %}
+<div class="page-head"><div class="grow"><h1>Participants</h1>
+<p class="muted">Qui fait quoi, qui paie ensemble, et qui voyage ensemble.</p></div></div>
+{{ people_tabs(trip, 'orga') }}
+
+<div class="orga-grid">
+<section class="card" id="roles" aria-labelledby="h-roles">
+  <h3 id="h-roles">Rôles</h3>
+  <p class="hint" style="margin-top:0">Ils apparaissent à côté des noms et servent de raccourcis dans « Pour qui ? » d'une dépense. Clique sur un rôle pour voir et changer ses membres. Plongeur et accompagnant ne se suppriment pas.</p>
+  {% for rk, v in trip_roles.items() %}{% set members = role_members[rk] %}
+  <div class="group-item">
+    <div class="row" style="align-items:baseline;gap:.5rem;flex-wrap:nowrap">
+      <button type="button" class="item-toggle" data-accordion data-toggle-row="#role-{{ loop.index }}" aria-expanded="false" aria-controls="role-{{ loop.index }}" title="{{ ROLE_TITLES.get(rk, '') }}"><span class="chev" aria-hidden="true">▸</span> <b>{{ v }}</b> <span class="muted small">{{ members|length }} pers.</span></button>
+      {% if rk not in ('plongeur', 'accompagnant') %}<span class="grow"></span><form method="post" action="/v/{{ trip.id }}/roles-du-voyage/supprimer" class="inline" data-confirm="Supprimer le rôle « {{ v }} » de ce voyage ? Il sera retiré des {{ members|length }} personne(s) qui l'ont."><input type="hidden" name="role" value="{{ rk }}"><button class="btn link danger small">Supprimer</button></form>{% endif %}
+    </div>
+    <form method="post" action="/v/{{ trip.id }}/roles/{{ rk|urlencode }}" id="role-{{ loop.index }}" class="group-form" hidden>
+      <div class="check-col people-checks">
+        {% for p in trip.participants %}<label><input type="{{ 'radio' if rk == 'organisateur' else 'checkbox' }}" name="members" value="{{ p.id }}" {{ 'checked' if p in members }}> {{ p.name }}</label>{% endfor %}
+        {% if rk == 'organisateur' %}<label><input type="radio" name="members" value="" {{ 'checked' if not members }}> <i>personne</i></label>{% endif %}
+      </div>
+      {% if rk in ('plongeur', 'accompagnant') %}<p class="hint">Cocher quelqu'un ici le retire des {{ 'accompagnants' if rk == 'plongeur' else 'plongeurs' }}.</p>{% endif %}
+      <div class="row"><button class="btn small">Enregistrer</button><button type="button" class="btn small ghost" data-toggle-row="#role-{{ loop.index }}">Fermer</button></div>
+    </form>
+  </div>
+  {% endfor %}
+  <details class="group-new">
+    <summary class="btn small ghost">+ Nouveau rôle</summary>
+    <form method="post" action="/v/{{ trip.id }}/roles-du-voyage" class="row group-form" style="gap:.5rem;flex-wrap:nowrap">
+      <label for="role-new" class="sr-only">Nom du rôle</label>
+      <input type="text" id="role-new" name="name" placeholder="ex. Moniteur, Photographe, Chauffeur" required style="flex:1;min-width:0">
+      <button class="btn small">Ajouter</button>
+    </form>
+  </details>
+</section>
+
+<section class="card" id="familles" aria-labelledby="h-familles">
+  <h3 id="h-familles">Familles</h3>
+  <p class="hint" style="margin-top:0">Une famille <b>paie ensemble</b> : chacun a sa part, mais un seul « reste à payer » pour toute la famille, versé par une personne.</p>
+  {% for f in trip.families %}{% set members = f.members %}
+  <div class="group-item">
+    <div class="row" style="align-items:baseline;gap:.5rem;flex-wrap:nowrap">
+      <button type="button" class="item-toggle" data-accordion data-toggle-row="#fam{{ f.id }}" aria-expanded="false" aria-controls="fam{{ f.id }}"><span class="chev" aria-hidden="true">▸</span> <b>{{ f.name }}</b> <span class="muted small">{{ members|length }} pers. · paie : {{ (members|selectattr('id', 'equalto', f.referent_id)|first).name if f.referent_id in members|map(attribute='id')|list else members[0].name }}</span></button>
+      <span class="grow"></span><form method="post" action="/v/{{ trip.id }}/familles/{{ f.id }}/supprimer" class="inline" data-confirm="Supprimer la famille {{ f.name }} ? Chacun aura son propre compte (les dépenses ne changent pas)."><button class="btn link danger small">Supprimer</button></form>
+    </div>
+    <form method="post" action="/v/{{ trip.id }}/familles/{{ f.id }}" id="fam{{ f.id }}" class="group-form" hidden>
+      {{ family_fields(f.name, members|map(attribute='id')|list, f.referent_id, 'f' ~ f.id) }}
+      <div class="row"><button class="btn small">Enregistrer</button><button type="button" class="btn small ghost" data-toggle-row="#fam{{ f.id }}">Fermer</button></div>
+    </form>
+  </div>
+  {% else %}<p class="muted small">Aucune famille.</p>{% endfor %}
+  <details class="group-new">
+    <summary class="btn small ghost">+ Nouvelle famille</summary>
+    <form method="post" action="/v/{{ trip.id }}/familles" class="group-form">
+      {{ family_fields('', [], None, 'fn') }}
+      <button class="btn small">Créer la famille</button>
+    </form>
+  </details>
+</section>
+
+<section class="card" id="groupes" aria-labelledby="h-groupes">
+  <h3 id="h-groupes">Groupes</h3>
+  <p class="hint" style="margin-top:0">Un groupe (covoiturage, voiture, chambre…) sert à <b>cocher vite</b> : il devient un bouton dans « Pour qui ? » d'une dépense. Une personne peut être dans plusieurs groupes.</p>
+  {% for g in groups %}
+  <div class="group-item">
+    <div class="row" style="align-items:baseline;gap:.5rem;flex-wrap:nowrap">
+      <button type="button" class="item-toggle" data-accordion data-toggle-row="#g-edit-{{ loop.index }}" aria-expanded="false" aria-controls="g-edit-{{ loop.index }}"><span class="chev" aria-hidden="true">▸</span> <b>{{ g.name }}</b> <span class="muted small">{{ g.members|length }} pers.</span></button>
+      <span class="grow"></span><form method="post" action="/v/{{ trip.id }}/groupes/supprimer" class="inline" data-confirm="Supprimer le groupe « {{ g.name }} » ? Les dépenses déjà saisies ne changent pas.">
+        <input type="hidden" name="name" value="{{ g.name }}"><button class="btn link danger small">Supprimer</button></form>
+    </div>
+    <form method="post" action="/v/{{ trip.id }}/groupes" id="g-edit-{{ loop.index }}" class="group-form" hidden>
+      <input type="hidden" name="old_name" value="{{ g.name }}">
+      {{ group_fields(g.name, g.ids, 'e' ~ loop.index) }}
+      <div class="row"><button class="btn small">Enregistrer</button><button type="button" class="btn small ghost" data-toggle-row="#g-edit-{{ loop.index }}">Fermer</button></div>
+    </form>
+  </div>
+  {% else %}<p class="muted small">Aucun groupe.</p>{% endfor %}
+  <details class="group-new">
+    <summary class="btn small ghost">+ Nouveau groupe</summary>
+    <form method="post" action="/v/{{ trip.id }}/groupes" class="group-form">
+      {{ group_fields('', [], 'n') }}
+      <button class="btn small">Créer le groupe</button>
+    </form>
+  </details>
+</section>
+</div>
+{% endblock %}
+
+{% macro group_fields(name, ids, k) -%}
+<div class="field"><label for="gname-{{ k }}">Nom du groupe</label>
+  <input type="text" id="gname-{{ k }}" name="name" value="{{ name }}" placeholder="ex. Minibus, Voiture de Thierry" required></div>
+<div class="field"><span class="label-like">Membres</span>
+  <div class="check-col people-checks">{% for p in trip.participants %}<label><input type="checkbox" name="members" value="{{ p.id }}" {{ 'checked' if p.id in ids }}> {{ p.name }}</label>{% endfor %}</div></div>
+{%- endmacro %}
+
+{% macro family_fields(name, ids, ref, k) -%}
+<div class="field"><label for="fname-{{ k }}">Nom de famille</label>
+  <input type="text" id="fname-{{ k }}" name="name" value="{{ name }}" placeholder="ex. Lebrun" required></div>
+<div class="field"><span class="label-like">Membres</span>
+  <div class="check-col people-checks">{% for p in trip.participants %}<label><input type="checkbox" name="members" value="{{ p.id }}" {{ 'checked' if p.id in ids }}> {{ p.name }}{% if p.family and p.id not in ids %} <span class="hint">(famille {{ p.family.name }})</span>{% endif %}</label>{% endfor %}</div></div>
+<div class="field"><label for="fref-{{ k }}">Qui verse et reçoit l'argent pour la famille ?</label>
+  <select id="fref-{{ k }}" name="referent"><option value="">— le premier membre —</option>{% for p in trip.participants %}<option value="{{ p.id }}" {{ 'selected' if p.id == ref }}>{{ p.name }}</option>{% endfor %}</select></div>
+{%- endmacro %}

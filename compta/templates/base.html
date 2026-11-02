@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{% if trip %}{{ trip.name }} · {% endif %}Compta Voyages{% endblock %}</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/app.css?v={{ STATIC_V }}">
+<script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 16c2 0 2-1.5 4-1.5S8 16 10 16s2-1.5 4-1.5 2 1.5 4 1.5 2-1.5 4-1.5"/><path d="M2 20c2 0 2-1.5 4-1.5S8 20 10 20s2-1.5 4-1.5 2 1.5 4 1.5 2-1.5 4-1.5"/><path d="M12 3v9M9 6h4.5a2 2 0 0 1 0 4H9"/></svg>
+    Compta Voyages
+  </a>
+  <span class="spacer"></span>
+  <button class="iconbtn" data-theme-toggle title="Thème clair / sombre">◐</button>
+  <form method="post" action="/quitter" class="inline quit" data-confirm="Arrêter Compta Voyages ? Tes données sont enregistrées : tu pourras relancer l'application plus tard.">
+    <button class="iconbtn quit-btn" title="Arrêter l'application">⏻ Arrêter</button>
+  </form>
+</header>
+{% if trip %}
+<div class="layout">
+  <aside class="side">
+    <div class="trip-name">{{ trip.name }}</div>
+    <div class="trip-meta">{% if trip.start %}{{ trip.start|date }}{% if trip.end %} → {{ trip.end|date }}{% endif %}{% endif %}{% if trip.place %} · {{ trip.place }}{% endif %}</div>
+    {% set cur = request.url.path %}
+    <nav>
+      <a href="/v/{{ trip.id }}" class="{{ 'on' if cur == '/v/%d'|format(trip.id) }}">🏠 Où j'en suis</a>
+      <a href="/v/{{ trip.id }}/participants" class="{{ 'on' if '/participants' in cur or '/p/' in cur }}">👥 Participants</a>
+      <a href="/v/{{ trip.id }}/depenses" class="{{ 'on' if '/depenses' in cur }}">🧾 Dépenses</a>
+      <a href="/v/{{ trip.id }}/categories" class="{{ 'on' if '/categories' in cur }}">🏷️ Catégories</a>
+      <a href="/v/{{ trip.id }}/argent" class="{{ 'on' if '/argent' in cur }}">💶 Argent reçu et rendu</a>
+      <a href="/v/{{ trip.id }}/repartition" class="{{ 'on' if '/repartition' in cur }}">▦ Qui paie quoi</a>
+      <a href="/v/{{ trip.id }}/en-images" class="{{ 'on' if '/en-images' in cur }}">📊 En images</a>
+      <a href="/v/{{ trip.id }}/asso" class="{{ 'on' if cur.endswith('/asso') }}" title="Le compte de {{ asso_name }} pour ce voyage">🏛️ {{ asso_name|capfirst|truncate(28, True, '…') }}</a>
+      <div class="sep"></div>
+      <a href="/v/{{ trip.id }}/desistement" class="{{ 'on' if '/desistement' in cur }}">🚪 Désistement</a>
+      <a href="/v/{{ trip.id }}/justificatifs" class="{{ 'on' if '/justificatifs' in cur }}">📎 Justificatifs</a>
+      <a href="/v/{{ trip.id }}/entre-nous" class="{{ 'on' if '/entre-nous' in cur }}">🤝 Entre nous</a>
+      <a href="/v/{{ trip.id }}/ia" class="{{ 'on' if '/ia' in cur }}">🤖 IA</a>
+      <div class="sep"></div>
+      <a href="/v/{{ trip.id }}/export" class="{{ 'on' if '/export' in cur }}">📄 Exporter le bilan</a>
+      <a href="/v/{{ trip.id }}/envoyer" class="{{ 'on' if '/envoyer' in cur }}">📲 Envoyer les comptes</a>
+      <a href="/">← Tous les voyages</a>
+    </nav>
+  </aside>
+  <main class="main {% block mainclass %}{% endblock %}">
+    {% if msg %}<div class="flash" role="status"><span>{{ msg }}</span>
+      {% if undo_token %}<form method="post" action="/annuler" class="inline"><input type="hidden" name="d" value="{{ undo_token }}"><button class="btn small ghost" title="Défaire : {{ undo_label }}">↶ Défaire</button></form>{% endif %}
+      {% if redo_token %}<form method="post" action="/retablir" class="inline"><input type="hidden" name="r" value="{{ redo_token }}"><button class="btn small ghost">↷ Rétablir</button></form>{% endif %}
+    </div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% else %}
+<main class="main" style="margin:0 auto">
+  {% if msg %}<div class="flash" role="status"><span>{{ msg }}</span>
+      {% if undo_token %}<form method="post" action="/annuler" class="inline"><input type="hidden" name="d" value="{{ undo_token }}"><button class="btn small ghost" title="Défaire : {{ undo_label }}">↶ Défaire</button></form>{% endif %}
+      {% if redo_token %}<form method="post" action="/retablir" class="inline"><input type="hidden" name="r" value="{{ redo_token }}"><button class="btn small ghost">↷ Rétablir</button></form>{% endif %}
+    </div>{% endif %}
+  {% block page %}{% endblock %}
+</main>
+{% endif %}
+<script src="/static/app.js?v={{ STATIC_V }}"></script>
+</body>
+</html>
