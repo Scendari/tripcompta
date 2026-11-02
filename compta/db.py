@@ -18,13 +18,8 @@ BACKUP_KEEP = 10
 
 
 def default_data_dir() -> Path:
-    env = os.environ.get("COMPTA_DATA_DIR")
-    if env:
-        return Path(env).expanduser()
-    docs = Path.home() / "Documents"
-    if not docs.exists():
-        docs = Path.home()
-    return docs / "Compta Voyages"
+    from .paths import default_data_dir as _d
+    return _d()
 
 
 class Database:

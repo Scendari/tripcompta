@@ -197,7 +197,7 @@ def test_every_screen_and_main_flows(server, page):
     page.goto(f"{base}/v/{tid}")
     page.click("nav >> text=🤖 IA")
     pw.expect(page.locator(".tabs a.on")).to_have_text("Mettre à jour le voyage")
-    pw.expect(page.locator("#conf")).to_contain_text("compta-voyages")
+    pw.expect(page.locator("#conf")).to_contain_text("tripcompta")
     pw.expect(page.locator("#cli")).to_contain_text("claude mcp add")
     shot(page, "17_ia")
     page.goto(base + "/api/docs")

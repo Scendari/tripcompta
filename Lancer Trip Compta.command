@@ -1,5 +1,5 @@
 #!/bin/bash
-# Mac : double-clic pour lancer Compta Voyages (installe ce qu'il faut au premier lancement).
+# Mac : double-clic pour lancer Trip Compta (installe ce qu'il faut au premier lancement).
 cd "$(dirname "$0")"
 if ! command -v python3 >/dev/null 2>&1; then
   osascript -e 'display alert "Python 3 est nécessaire" message "Installe Python depuis https://www.python.org/downloads/ puis relance."'

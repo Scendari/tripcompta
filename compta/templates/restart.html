@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block page %}
+<div class="card" style="max-width:640px;margin:2rem auto;text-align:center">
+  <h1 style="margin-top:0">{{ '🔄 Redémarrage…' if can_restart else '✓ C\'est noté' }}</h1>
+  <p>{{ message }}</p>
+  {% if can_restart %}<p class="muted small">La page se recharge toute seule dans quelques secondes.</p>
+  <script>
+  (function () {
+    var first = null;
+    function tick() {
+      fetch('/ping', {cache: 'no-store'}).then(function (r) { return r.json(); }).then(function (j) {
+        if (first === null) first = j.boot; else if (j.boot !== first) { location.href = '/'; return; }
+        setTimeout(tick, 700);
+      }).catch(function () { setTimeout(tick, 700); });
+    }
+    setTimeout(tick, 300);
+  })();
+  </script>
+  {% else %}<p class="muted small">Ferme puis relance Trip Compta pour que le changement soit pris en compte.</p>{% endif %}
+</div>
+{% endblock %}

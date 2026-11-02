@@ -173,34 +173,30 @@ def trip_pdf(trip: M.Trip, mode: str = E.ACTUAL) -> bytes:
     pdf.para(f"Calculé sur les {mode_txt}.", 8.5, color=MUTED)
     pdf.ln(4)
 
-    pdf.h2("Le voyage en un coup d'œil")
-    total_adv = sum(p.advanced for p in r.people.values())
-    total_refund = sum(p.refunded for p in r.people.values())
-    lines = [
-        f"Le voyage a coûté **{_m(r.total_cost)}**.",
-        f"La part des participants s'élève à **{_m(r.total_shares)}**.",
-    ]
-    if r.asso_total:
-        lines.append(f"L'asso a pris en charge **{_m(r.asso_total)}** (détail plus loin).")
-    if r.rounding_gain:
-        lines.append(f"Les arrondis au centime rapportent **{_m(r.rounding_gain)}** à l'asso.")
-    lines += [
-        f"Les participants ont versé **{_m(r.total_paid)}** à l'asso.",
-        f"Ils ont aussi payé eux-mêmes des dépenses pour le groupe (avances) pour **{_m(total_adv)}**.",
-    ]
-    if total_refund:
-        lines.append(f"L'asso leur a déjà remboursé **{_m(total_refund)}**.")
-    lines.append(f"Reste à encaisser : **{_m(r.to_collect)}**  —  Reste à rembourser : **{_m(r.to_refund)}**.")
-    for l in lines:
-        pdf.para("•  " + l, 10.5)
-        pdf.ln(1)
-
-    pdf.ln(3)
+    # Synthèse en trois blocs, la même que le mail au trésorier (mêmes chiffres, même ordre)
+    m = S.money_summary(trip, r)
     cash_in, cash_out = S.asso_cash(trip)
-    pdf.h2("Caisse de l'asso pour ce voyage", "Argent réellement entré et sorti du compte de l'asso.")
-    pdf.table_(["", "Montant"], [["Entrées (versements des participants, recettes)", _m(cash_in)],
-                                  ["Sorties (dépenses payées + remboursements)", _m(cash_out)]],
-               [130, 50], ["LEFT", "RIGHT"], total=["Différence", _m(cash_in - cash_out)])
+    asso = pdf.asso
+    pdf.h2("Le coût du voyage")
+    rows = []
+    if m["cost_split"]:
+        rows = [[f"Payé par {asso}", _m(m["paid_out"])], ["Avancé directement par des participants", _m(m["advanced"])]]
+    pdf.table_(["", "Montant"], rows, [130, 50], ["LEFT", "RIGHT"], total=["Coût total du voyage", _m(m["cost"])],
+               size=9.5)
+    caisse_title = f"La caisse de {asso}" if not asso.startswith("la caisse") else asso[:1].upper() + asso[1:]
+    pdf.h2(caisse_title, "L'argent réellement entré et sorti pour ce voyage.")
+    rows = [["+ Reçu des participants", _m(m["received"])]]
+    if m["other_in"]:
+        rows.append(["+ Autres recettes (subvention, remboursement d'un fournisseur…)", _m(m["other_in"])])
+    rows.append(["− Payé aux prestataires (hébergement, club…)", _m(m["paid_out"])])
+    if m["refunded"]:
+        rows.append(["− Déjà remboursé aux participants", _m(m["refunded"])])
+    total = (["= Dans la caisse aujourd'hui", _m(m["cash"])] if m["cash"] >= 0
+             else [f"= {asso[:1].upper() + asso[1:]} a avancé de sa trésorerie", _m(-m["cash"])])
+    pdf.table_(["", "Montant"], rows, [130, 50], ["LEFT", "RIGHT"], total=total, size=9.5)
+    if m["asso_total"]:
+        pdf.para(f"Et {asso} prend à sa charge {_m(m['asso_total'])} sur ce voyage (détail plus loin).", 9, color=MUTED)
+
     if r.to_collect or r.to_refund:
         # comme l'écran « Argent reçu et rendu › Reste à régler » : deux tableaux, du plus gros au plus petit
         def who(acc):
@@ -209,7 +205,7 @@ def trip_pdf(trip: M.Trip, mode: str = E.ACTUAL) -> bytes:
             return acc.name
         owe = sorted([(who(a), c) for a, b, c in r.settlements() if a != E.ASSO], key=lambda x: (-x[1], x[0]))
         due = sorted([(who(b), c) for a, b, c in r.settlements() if a == E.ASSO], key=lambda x: (-x[1], x[0]))
-        need = (len(owe) + len(due) + 5) * 6.2 + 25          # mm : ne pas couper la section entre deux pages
+        need = (len(owe) + len(due) + 5) * 6.2 + 25 + 40   # + « Une fois tout réglé »          # mm : ne pas couper la section entre deux pages
         if pdf.get_y() + need > pdf.h - 20:
             pdf.add_page()
         pdf.h2("Ce qu'il reste à régler", "Pour que tout soit réglé : ce que l'asso doit encore recevoir des "
@@ -225,6 +221,18 @@ def trip_pdf(trip: M.Trip, mode: str = E.ACTUAL) -> bytes:
         if due:
             pdf.ln(2)
             block("À rendre", due, r.to_refund, OCEAN)
+
+    pdf.h2("Une fois tout réglé")
+    rows = [["Dans la caisse aujourd'hui" if m["cash"] >= 0 else f"Avancé par {asso}",
+             _m(m["cash"]) if m["cash"] >= 0 else "− " + _m(-m["cash"])]]
+    if m["to_collect"]:
+        rows.append(["+ À recevoir des participants", _m(m["to_collect"])])
+    if m["to_refund"]:
+        rows.append(["− À rembourser aux participants", _m(m["to_refund"])])
+    res = m["final"]
+    label = ("Le voyage rapporte à " if res > 0 else "Le voyage coûte à " if res < 0 else "Le voyage ne coûte rien à ") + asso
+    pdf.table_(["", "Montant"], rows, [130, 50], ["LEFT", "RIGHT"],
+               total=[label + (" (arrondis au centime)" if m["rounding_only"] else ""), _m(abs(res))], size=9.5)
 
     # ---------------------------------------------------------------- page 2 participants
     pdf.add_page()

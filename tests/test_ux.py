@@ -226,7 +226,12 @@ def test_first_time_user_only_clicks(server, browser):
     page = new_page(browser)
     page.on("dialog", lambda d: d.accept())
     page.goto(base + "/")
-    # 1. Créer le voyage depuis l'accueil
+    # 1. Créer le voyage depuis l'accueil : « + Nouveau voyage » déplie le formulaire (et replie l'import)
+    assert not page.locator("#name").is_visible()
+    page.click("button:has-text('⤓ Importer un voyage')")
+    assert page.locator("#fichier").is_visible()
+    page.click("button:has-text('+ Nouveau voyage')")
+    assert not page.locator("#fichier").is_visible()
     page.fill("#name", "Ma première sortie")
     page.click("button:has-text('Créer le voyage')")
     pw.expect(page.locator(".flash")).to_contain_text("Ajoute maintenant les participants")

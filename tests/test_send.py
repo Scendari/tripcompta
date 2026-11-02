@@ -139,3 +139,140 @@ def test_solde_column_on_categories_and_total(trip):
         k = r.account_of(bob).key
     t = pdf_text(c.get(f"/v/{tid}/compte/{k}.pdf").content)
     assert "Solde" in t and "doit 45,00 €" in t and "on lui doit 20,00 €" in t and "doit 145,00 €" in t
+
+
+def test_share_menu_whatsapp_and_email(trip):
+    """« Partager » : WhatsApp, e-mail (à l'adresse de la fiche, avec objet et message), PDF, copier."""
+    app, ops, tid = trip
+    ops.import_trip({"voyage_id": tid, "participants_a_modifier": [{"participant": "Anne Martin",
+                                                                    "email": "anne@example.org"}]},
+                    voyage=tid, verifier_id=tid)
+    raw = TestClient(app).get(f"/v/{tid}/envoyer").text
+    assert raw.count('class="share" data-share') == 3 and "📲 WhatsApp" not in raw
+    m = re.search(r'href="(mailto:anne@example\.org\?subject=[^"]+)"', raw)
+    mail = unquote(html.unescape(m.group(1)))
+    assert "subject=Ton compte — voyage « Week-end Port-Cros »" in mail and "body=Bonjour Anne, voici ton compte" in mail
+    assert "Il te reste 35,00 € à verser" in mail.replace("\xa0", " ")
+    m = re.search(r'href="(mailto:\?subject=[^"]+)"', raw)                      # Bob : pas d'e-mail
+    assert "Compte" in unquote(html.unescape(m.group(1))) or "Ton compte" in unquote(html.unescape(m.group(1)))
+    assert "subject=Compte de la famille Lebrun" in unquote(html.unescape(raw))
+    page = clean(raw)
+    assert "anne@example.org" in page and "pas d'e-mail" in page and "Télécharger le PDF" in page
+    # même menu dans le détail des comptes
+    assert 'class="share" data-share' in TestClient(app).get(f"/v/{tid}/participants/comptes").text
+
+
+def test_browser_share_menu(trip):
+    import socket, threading, time
+    import uvicorn
+    from playwright.sync_api import sync_playwright
+    app, ops, tid = trip
+    with socket.socket() as so:
+        so.bind(("127.0.0.1", 0))
+        port = so.getsockname()[1]
+    srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
+    th = threading.Thread(target=srv.run, daemon=True)
+    th.start()
+    while not srv.started:
+        time.sleep(0.05)
+    try:
+        with sync_playwright() as p:
+            b = p.chromium.launch()
+            ctx = b.new_context(permissions=["clipboard-read", "clipboard-write"])
+            pg = ctx.new_page()
+            errors = []
+            pg.on("pageerror", lambda e: errors.append(str(e)))
+            pg.goto(f"http://127.0.0.1:{port}/v/{tid}/envoyer")
+            row = pg.locator("[data-send-row]").first
+            assert not row.locator(".share-menu").is_visible()
+            row.locator(".share-btn").click()
+            assert row.locator(".share-menu").is_visible()
+            assert row.locator(".share-btn").get_attribute("aria-expanded") == "true"
+            row.locator("[data-copy]").click()
+            assert pg.evaluate("navigator.clipboard.readText()").startswith("Bonjour Anne")
+            assert "✓ Copié" in row.locator("[data-copy]").inner_text()
+            pg.keyboard.press("Escape")
+            assert not row.locator(".share-menu").is_visible()
+            row.locator(".share-btn").click()
+            pg.locator("h1").click()                                          # clic ailleurs : se referme
+            assert not row.locator(".share-menu").is_visible()
+            # e-mail : le PDF se télécharge et la ligne est marquée « préparé »
+            row.locator(".share-btn").click()
+            with pg.expect_download() as d:
+                row.locator("a[href^='mailto:']").evaluate("a => { a.removeAttribute('href'); a.click(); }")
+            assert d.value.suggested_filename.endswith(".pdf")
+            assert "sent" in row.get_attribute("class")
+            assert errors == []
+            b.close()
+    finally:
+        srv.should_exit = True
+        th.join(5)
+
+
+def test_treasurer_mail(trip):
+    """Mail au trésorier (page « Exporter le bilan »). Vérifié à la main : 740 € pour 4 → 185 € chacun.
+    Anne doit 185 − 150 = 35 ; Bob 185 − 40 avancés = 145 ; famille Lebrun 370 − 300 = 70 → 250 à demander.
+    Caisse : 450 versés − 700 payés par l'asso = l'asso a avancé 250."""
+    app, ops, tid = trip
+    raw = TestClient(app).get(f"/v/{tid}/export").text
+    body = clean(re.search(r'<pre id="mail-body" class="msg">(.*?)</pre>', raw, re.S).group(1))
+    assert "Objet proposé" in raw and "Voyage « Week-end Port-Cros » : bilan et règlements" in clean(raw)
+    assert body.index("À DEMANDER AUX PARTICIPANTS") < body.index("Voici le résumé du voyage") < body.index("LE COÛT")
+    for line in ("Pour clôturer le voyage « Week-end Port-Cros » (4 participants), pouvez-vous procéder aux demandes "
+                 "de paiement et aux remboursements ci-dessous ?",
+                 "Je me tiens à votre disposition pour toute question.",
+                 "- Coût total : 740,00 €",
+                 "dont payé par l'asso : 700,00 €, et avancé directement par des participants : 40,00 €",
+                 "+ Reçu des participants : 450,00 €", "− Payé aux prestataires (hébergement, club…) : 700,00 €",
+                 "= L'asso a avancé 250,00 € de sa trésorerie",
+                 "UNE FOIS TOUT RÉGLÉ − 250,00 € avancés par l'asso + 250,00 € à recevoir = 0,00 € : "
+                 "le voyage ne coûte rien à l'asso.",
+                 "À DEMANDER AUX PARTICIPANTS : 250,00 €",
+                 "- Bob : 145,00 € (part 185,00 € − avancé 40,00 €) "
+                 "- Famille Lebrun (à Paul Lebrun) : 70,00 € (parts 370,00 € − versé 300,00 €) "
+                 "- Anne Martin : 35,00 € (part 185,00 € − versé 150,00 €)",
+                 "À LEUR REMBOURSER : rien", "AVANCÉ PAR DES PARTICIPANTS : 40,00 € - Bob : 40,00 € · Péage aller : 40,00 €",
+                 "Le bilan détaillé (PDF) et les justificatifs (ZIP) sont en pièces jointes."):
+        assert line in body, line
+    assert "ENCORE À VÉRIFIER" not in body and "justificatif" not in body.replace("justificatifs (ZIP)", "")
+    m = re.search(r'href="(mailto:\?subject=[^"]+)"', raw)
+    assert "body=Bonjour" in unquote(html.unescape(m.group(1)))
+    assert 'data-copy="#mail-body"' in raw and 'data-copy="#mail-subject"' in raw
+
+
+def test_pdf_summary_matches_mail_and_dashboard(trip):
+    """Bilan PDF, page 1 : les trois blocs du mail, mêmes chiffres (vérifiés à la main, voir test_treasurer_mail)."""
+    app, ops, tid = trip
+    c = TestClient(app)
+    txt = pdf_text(c.get(f"/v/{tid}/export.pdf").content)
+    for part in ("Le coût du voyage", "Payé par l'asso 700,00 €", "Avancé directement par des participants 40,00 €",
+                 "Coût total du voyage 740,00 €", "La caisse de l'asso", "+ Reçu des participants 450,00 €",
+                 "− Payé aux prestataires (hébergement, club…) 700,00 €",
+                 "= L'asso a avancé de sa trésorerie 250,00 €", "Une fois tout réglé",
+                 "+ À recevoir des participants 250,00 €", "Le voyage ne coûte rien à l'asso 0,00 €"):
+        assert part in txt, part
+    assert "Le voyage en un coup d'œil" not in txt and "dépenses payées + remboursements" not in txt
+    dash = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", clean(c.get(f"/v/{tid}").text)))
+    assert "dont 700,00 € payés par l'asso et 40,00 € avancés par des participants" in dash
+
+
+def test_treasurer_mail_withdrawals(tmp_path):
+    """Désistement dans le mail. À la main : Gîte 300 € pour A, B, C → 100 chacun ; Bateau 90 € → C se désiste
+    (garde le gîte), le groupe reprend le reste : A et B 45 chacun. C a versé 150 → à lui rembourser 50."""
+    app = create_app(tmp_path / "d")
+    ops = Ops(app.state.db)
+    tid = ops.create_trip("Sortie")["voyage_id"]
+    ops.add_participants(tid, ["Anne", "Bob", "Chloé"])
+    ops.add_expense(tid, "Gîte", montant_reel="300")
+    ops.add_expense(tid, "Bateau", montant_reel="90")
+    ops.add_movement(tid, "Chloé", "150")
+    ops.withdraw(tid, "Chloé", parts_conservees=["Gîte"], date="2026-05-02")
+    raw = TestClient(app).get(f"/v/{tid}/export").text
+    body = clean(re.search(r'<pre id="mail-body" class="msg">(.*?)</pre>', raw, re.S).group(1))
+    for part in ("À LEUR REMBOURSER : 50,00 € - Chloé (désistement) : 50,00 € (versé 150,00 € − part 100,00 €)",
+                 "DÉSISTEMENTS : 1 sur 3 - Chloé ·",
+                 "· paie quand même 100,00 € : Gîte 100,00 €",
+                 "· le reste de sa part est repris par le groupe", "· a versé 150,00 €, à lui rembourser 50,00 €",
+                 "- Anne : 145,00 € (part 145,00 €)"):
+        assert part in body, part
+    assert body.index("DÉSISTEMENTS") < body.index("LA CAISSE") and "02/05/2026" not in body

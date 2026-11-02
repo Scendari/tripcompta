@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block page %}
+<div class="page-head"><div class="grow">
+  <h1>Importer {{ 'un voyage' if voyages|length == 1 else voyages|length ~ ' voyages' }}</h1>
+  <p class="muted">Fichier « {{ fichier }} ». Vérifie ce qui va arriver, puis confirme. Rien n'est encore enregistré.</p>
+</div></div>
+<div class="card" style="max-width:760px">
+  {% for v in voyages %}
+  <div class="import-trip">
+    <h3 style="margin:0">{{ v.nom }}{% if v.nom in existing %} <span class="pill grey">s'appellera « {{ v.nom }} (importé) »</span>{% endif %}</h3>
+    <div class="muted small">{% if v.debut %}{{ v.debut }}{% if v.fin %} → {{ v.fin }}{% endif %} · {% endif %}{{ v.lieu }}</div>
+    <div class="small" style="margin-top:.3rem">{{ v.participants }} participant{{ 's' if v.participants > 1 }} · {{ v.depenses }} dépense{{ 's' if v.depenses > 1 }} · {{ v.mouvements }} versement{{ 's' if v.mouvements > 1 }} ou remboursement{{ 's' if v.mouvements > 1 }} · {{ v.justificatifs }} justificatif{{ 's' if v.justificatifs > 1 }}</div>
+  </div>
+  {% endfor %}
+  <p class="small muted">Le voyage est <b>ajouté</b> à tes voyages : rien de ce qui existe déjà n'est remplacé.
+    {% if reglages %}Les réglages (nom de l'asso, catégories) ne complètent que ce qui manque ici.{% endif %}</p>
+  <form method="post" action="/importer/{{ token }}" class="row" style="gap:.5rem;justify-content:flex-end">
+    <a class="btn ghost" href="/">Annuler</a>
+    <button class="btn">Importer</button>
+  </form>
+</div>
+{% endblock %}

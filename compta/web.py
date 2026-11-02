@@ -98,13 +98,24 @@ def _label(name: str) -> Markup:
 templates.env.filters["capfirst"] = _capfirst
 
 
-def create_app(data_dir=None) -> FastAPI:
+def create_app(data_dir=None, restart=None) -> FastAPI:
+    """restart : fonction qui relance l'application (fournie par run.py) ; sans elle, on demande de relancer."""
+    from . import paths as PATHS
+    if data_dir:
+        data_source = "lancement"
+    elif os.environ.get("TRIPCOMPTA_DATA_DIR") or os.environ.get("COMPTA_DATA_DIR"):
+        data_source = "env"
+    elif PATHS.read_config().get("data_dir"):
+        data_source = "choisi"
+    else:
+        data_source = "defaut"
     db = Database(data_dir)
     db.daily_backup()
-    app = FastAPI(title="Compta Voyages", docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json",
-                  description="API JSON de Compta Voyages : une IA peut lire et remplir les voyages. "
+    app = FastAPI(title="Trip Compta", docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json",
+                  description="API JSON de Trip Compta : une IA peut lire et remplir les voyages. "
                               "Toutes les écritures acceptent \"simulation\": true.")
     app.state.db = db
+    app.state.restart = restart
 
     # « Défaire » est proposé dans le message qui suit une action, et ne vaut que pour CETTE action :
     # on note l'action défaisable au début de chaque requête pour savoir si la requête en a créé une.
@@ -251,18 +262,108 @@ def create_app(data_dir=None) -> FastAPI:
 
     @app.get("/ping")
     def ping():
-        """Sert à reconnaître Compta Voyages (script de redémarrage) et à recharger l'onglet après un redémarrage."""
-        return {"app": "compta-voyages", "boot": boot_id}
+        """Sert à reconnaître Trip Compta (script de redémarrage) et à recharger l'onglet après un redémarrage."""
+        return {"app": "tripcompta", "boot": boot_id}
 
     @app.post("/quitter", response_class=HTMLResponse)
     def quit_app():
         import os
         import threading
         threading.Timer(0.5, lambda: os._exit(0)).start()
-        return HTMLResponse("<!doctype html><meta charset=utf-8><title>Compta Voyages</title>"
+        return HTMLResponse("<!doctype html><meta charset=utf-8><title>Trip Compta</title>"
                             "<body style='font-family:system-ui;text-align:center;padding:4rem'>"
-                            "<h1>Compta Voyages est arrêté.</h1><p>Tu peux fermer cet onglet. "
+                            "<h1>Trip Compta est arrêté.</h1><p>Tu peux fermer cet onglet. "
                             "Tes données sont enregistrées dans « " + str(db.dir) + " ».</p></body>")
+
+    # ------------------------------------------------------------------ dossier des données
+    def _data_page(request, **ctx):
+        cur = db.dir
+        return render(request, "data_dir.html", data_dir=cur, source=data_source,
+                      default_dir=PATHS.documents_dir() / PATHS.FOLDER, synced=PATHS.looks_synced(cur),
+                      can_restart=app.state.restart is not None, **ctx)
+
+    @app.get("/reglages/donnees", response_class=HTMLResponse)
+    def data_dir_page(request: Request):
+        return _data_page(request)
+
+    @app.post("/reglages/ouvrir-dossier")
+    def data_dir_open(request: Request):
+        import subprocess
+        import sys as _sys
+        target = str(db.dir)
+        try:
+            if _sys.platform == "darwin":
+                subprocess.Popen(["open", target])
+            elif _sys.platform == "win32":
+                os.startfile(target)                     # Explorateur Windows
+            else:
+                subprocess.Popen(["xdg-open", target])
+        except Exception:
+            return back(urlparse(request.headers.get("referer") or "/").path, f"Impossible d'ouvrir le dossier : {target}")
+        return back(urlparse(request.headers.get("referer") or "/").path, "Dossier ouvert")
+
+    def _restart_page(request, message):
+        if app.state.restart is not None:
+            import threading
+            threading.Timer(0.6, app.state.restart).start()
+        return render(request, "restart.html", message=message, can_restart=app.state.restart is not None)
+
+    @app.post("/reglages/donnees", response_class=HTMLResponse)
+    async def data_dir_change(request: Request):
+        import shutil
+        import sqlite3
+        f = await request.form()
+        if data_source in ("lancement", "env"):
+            return _data_page(request, error="Le dossier est imposé au lancement de l'application : il ne se change "
+                                              "pas ici.")
+        if f.get("action") == "defaut":
+            PATHS.write_config(data_dir=None)
+            return _restart_page(request, "Retour au dossier par défaut.")
+        raw = (f.get("dossier") or "").strip().strip('"').strip("'")
+        if not raw:
+            return _data_page(request, error="Indique le dossier.", value=raw)
+        target = Path(raw).expanduser()
+        if not target.is_absolute():
+            return _data_page(request, error="Indique le chemin complet du dossier (par exemple "
+                                              f"{PATHS.documents_dir() / 'Asso' / PATHS.FOLDER}).", value=raw)
+        try:
+            same = target.resolve() == db.dir.resolve()
+        except OSError:
+            same = False
+        if same:
+            return _data_page(request, error="C'est déjà le dossier utilisé.", value=raw)
+        has_data = (target / "compta.db").exists()
+        if f.get("mode") == "utiliser":
+            if not has_data:
+                return _data_page(request, error="Il n'y a pas de données Trip Compta dans ce dossier (fichier "
+                                                  "« compta.db » introuvable).", value=raw, mode="utiliser")
+            PATHS.write_config(data_dir=str(target))
+            return _restart_page(request, f"Trip Compta va utiliser les données de « {target} ».")
+        # déplacer : copie complète, vérifiée, puis on bascule ; l'ancien dossier reste intact
+        if has_data:
+            return _data_page(request, error="Ce dossier contient déjà des données Trip Compta. Choisis « Utiliser "
+                                              "les données déjà là-bas », ou un autre dossier.", value=raw)
+        try:
+            target.mkdir(parents=True, exist_ok=True)
+            db.engine.dispose()
+            src = sqlite3.connect(db.path)
+            dst = sqlite3.connect(target / "compta.db")
+            with dst:
+                src.backup(dst)                          # copie cohérente même si la base est ouverte
+            src.close()
+            ok = dst.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+            dst.close()
+            if not ok:
+                raise OSError("la copie de la base est incomplète")
+            for name in ("justificatifs", "sauvegardes", "brouillons_ia"):
+                if (db.dir / name).is_dir():
+                    shutil.copytree(db.dir / name, target / name, dirs_exist_ok=True)
+        except OSError as e:
+            return _data_page(request, error=f"Impossible de copier les données vers ce dossier : {e}", value=raw)
+        PATHS.write_config(data_dir=str(target))
+        return _restart_page(request, f"Tes données ont été copiées dans « {target} ». L'ancien dossier "
+                                      f"« {db.dir} » n'a pas été touché : tu pourras le supprimer quand tu "
+                                      f"auras vérifié que tout est là.")
 
     # ------------------------------------------------------------------ IA
     def mcp_conf(request: Request) -> dict:
@@ -274,11 +375,11 @@ def create_app(data_dir=None) -> FastAPI:
             cmd, args = sys.executable, ["--mcp", "--data-dir", str(db.dir)]
         else:
             cmd, args = sys.executable, ["-m", "compta.mcp_server", "--data-dir", str(db.dir)]
-        conf = {"mcpServers": {"compta-voyages": {"command": cmd, "args": args,
+        conf = {"mcpServers": {"tripcompta": {"command": cmd, "args": args,
                                                   **({} if frozen else {"cwd": root})}}}
         if not frozen:
-            conf["mcpServers"]["compta-voyages"]["env"] = {"PYTHONPATH": root}
-        cli = "claude mcp add compta-voyages -- " + " ".join(
+            conf["mcpServers"]["tripcompta"]["env"] = {"PYTHONPATH": root}
+        cli = "claude mcp add tripcompta -- " + " ".join(
             [f'"{cmd}"'] + [f'"{a}"' if " " in a else a for a in args])
         return dict(conf=json.dumps(conf, indent=2, ensure_ascii=False), cli=cli,
                     api=str(request.base_url) + "api/docs")
@@ -359,7 +460,7 @@ def create_app(data_dir=None) -> FastAPI:
     def ai_guide():
         from . import importer
         return Response(importer.guide(), media_type="text/markdown; charset=utf-8",
-                        headers={"Content-Disposition": 'attachment; filename="guide_ia_compta_voyages.md"'})
+                        headers={"Content-Disposition": 'attachment; filename="guide_ia_tripcompta.md"'})
 
     @app.get("/ia/modele-{mode}.txt")
     def ai_template(mode: str):
@@ -460,7 +561,9 @@ def create_app(data_dir=None) -> FastAPI:
         for t in trips:
             r = S.compute_trip(t, mode_of(request))
             cards.append((t, r))
-        return render(request, "index.html", cards=cards, data_dir=db.dir)
+        q = request.query_params
+        return render(request, "index.html", cards=cards, data_dir=db.dir,
+                      open_new=q.get("nouveau") == "1", open_import=q.get("importer") == "1")
 
     @app.post("/voyages")
     async def create_trip(request: Request, s: Session = Depends(get_s)):
@@ -525,7 +628,7 @@ def create_app(data_dir=None) -> FastAPI:
         for e in t.expenses:
             cn = e.category.name if e.category else "Divers"
             cat_totals[cn] = cat_totals.get(cn, 0) + r.expense_totals.get(e.id, 0)
-        return render(request, "dashboard.html", trip=t, r=r, alerts=S.alerts(t, r),
+        return render(request, "dashboard.html", trip=t, r=r, alerts=S.alerts(t, r), msum=S.money_summary(t, r),
                       asso_paid=asso_paid, cat_totals=cat_totals,
                       adv_total=sum(a["amount"] for a in S.advances(t) if not a["income"]),
                       withdrawn={w.participant_id for w in t.withdrawals})
@@ -1863,7 +1966,76 @@ def create_app(data_dir=None) -> FastAPI:
     def export_page(tid: int, request: Request, s: Session = Depends(get_s)):
         t = trip_or_404(s, tid)
         r = S.compute_trip(t, mode_of(request))
-        return render(request, "export.html", trip=t, r=r, alerts=S.alerts(t, r))
+        subject, body = S.treasurer_mail(t, r)
+        return render(request, "export.html", trip=t, r=r, alerts=S.alerts(t, r), mail_subject=subject, mail_body=body,
+                      mail_link=f"mailto:?subject={quote(subject)}&body={quote(body)}")
+
+    # ------------------------------------------------------------------ exporter / importer des voyages
+    from . import transfer as TR
+    imports_dir = db.dir / "imports_en_attente"
+
+    def _zip_name(label):
+        return re.sub(r"[^\w-]+", "_", label).strip("_") or "export"
+
+    @app.get("/v/{tid}/transfert", response_class=HTMLResponse)
+    def transfer_page(tid: int, request: Request, s: Session = Depends(get_s)):
+        t = trip_or_404(s, tid)
+        return render(request, "transfer.html", trip=t, n_trips=s.query(M.Trip).count())
+
+    @app.get("/v/{tid}/voyage.zip")
+    def transfer_export(tid: int, s: Session = Depends(get_s)):
+        t = trip_or_404(s, tid)
+        data = TR.export_zip(s, [t], db.receipts_dir)
+        name = _zip_name(f"voyage {t.name}") + ".zip"
+        return Response(data, media_type="application/zip",
+                        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"})
+
+    @app.get("/tous-les-voyages.zip")
+    def transfer_export_all(s: Session = Depends(get_s)):
+        trips = s.query(M.Trip).order_by(M.Trip.id).all()
+        data = TR.export_zip(s, trips, db.receipts_dir)
+        name = f"tripcompta_{dt.date.today().isoformat()}.zip"
+        return Response(data, media_type="application/zip",
+                        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"})
+
+    @app.post("/importer", response_class=HTMLResponse)
+    async def transfer_preview(request: Request, s: Session = Depends(get_s)):
+        """1re étape : on lit le fichier et on montre ce qui va arriver ; rien n'est encore enregistré."""
+        f = await request.form()
+        up = f.get("fichier")
+        content = await up.read() if up is not None and hasattr(up, "read") else b""
+        if not content:
+            return back("/?importer=1", "Choisis le fichier .zip exporté depuis l'autre ordinateur")
+        try:
+            data, _ = TR.read_zip(content)
+        except TR.TransferError as e:
+            return back("/?importer=1", str(e))
+        imports_dir.mkdir(exist_ok=True)
+        for old in imports_dir.glob("*.zip"):            # ménage : les aperçus abandonnés depuis plus d'un jour
+            if old.stat().st_mtime < dt.datetime.now().timestamp() - 86400:
+                old.unlink(missing_ok=True)
+        token = uuid.uuid4().hex
+        (imports_dir / f"{token}.zip").write_bytes(content)
+        existing = {t.name for t in s.query(M.Trip).all()}
+        return render(request, "import_preview.html", token=token, voyages=TR.summary(data), existing=existing,
+                      fichier=getattr(up, "filename", "") or "", reglages=sorted((data.get("reglages") or {}).keys()))
+
+    @app.post("/importer/{token}")
+    def transfer_confirm(token: str, s: Session = Depends(get_s)):
+        if not re.fullmatch(r"[0-9a-f]{32}", token) or not (imports_dir / f"{token}.zip").exists():
+            return back("/?importer=1", "Cet aperçu a expiré : choisis à nouveau le fichier")
+        path = imports_dir / f"{token}.zip"
+        db.snapshot("import de voyage(s)")
+        try:
+            trips, _ = TR.import_zip(s, path.read_bytes(), db.receipts_dir)
+        except (TR.TransferError, ValueError, KeyError, TypeError) as e:
+            s.rollback()
+            return back("/?importer=1", f"Import impossible : {e}")
+        s.commit()
+        path.unlink(missing_ok=True)
+        if len(trips) == 1:
+            return back(f"/v/{trips[0].id}", f"Voyage « {trips[0].name} » importé")
+        return back("/", f"{len(trips)} voyages importés")
 
     # ------------------------------------------------------------------ envoyer à chacun son compte
     def _send_rows(t, r):
@@ -1872,8 +2044,11 @@ def create_app(data_dir=None) -> FastAPI:
             ref = next(p for p in t.participants if p.id == a.referent)
             msg = S.account_message(t, r, a)
             num = S.whatsapp_number(ref.phone)
-            rows.append(dict(acc=a, ref=ref, msg=msg, num=num,
+            subject = (f"Compte de la {a.name[:1].lower() + a.name[1:]}" if a.is_family else "Ton compte") + \
+                f" — voyage « {t.name} »"
+            rows.append(dict(acc=a, ref=ref, msg=msg, num=num, subject=subject, key=a.key,
                              wa=f"https://wa.me/{num}?text={quote(msg)}" if num else f"https://wa.me/?text={quote(msg)}",
+                             mail=f"mailto:{quote(ref.email or '', safe='@.+-_')}?subject={quote(subject)}&body={quote(msg)}",
                              pdf=f"/v/{t.id}/compte/{a.key}.pdf"))
         return rows
 

@@ -1,4 +1,4 @@
-"""Lance Compta Voyages et ouvre le navigateur.
+"""Lance Trip Compta et ouvre le navigateur.
 
     python run.py                 # usage normal
     python run.py --demo          # ajoute aussi le voyage de démonstration
@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import socket
 import sys
 import threading
@@ -30,10 +31,10 @@ def free_port(preferred: int) -> int:
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Compta Voyages")
+    ap = argparse.ArgumentParser(description="Trip Compta")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-browser", action="store_true")
-    ap.add_argument("--data-dir", help="Dossier des données (défaut : Documents/Compta Voyages)")
+    ap.add_argument("--data-dir", help="Dossier des données (défaut : Documents/TripCompta)")
     ap.add_argument("--demo", action="store_true", help="Ajoute le voyage de démonstration")
     ap.add_argument("--mcp", action="store_true", help="Démarre le serveur MCP (stdio) pour une IA")
     a = ap.parse_args()
@@ -46,7 +47,15 @@ def main():
     import uvicorn
     from compta.web import create_app
 
-    app = create_app(a.data_dir)
+    def restart():
+        """Relance le même programme (même port, sans rouvrir d'onglet : la page ouverte se recharge seule)."""
+        os.environ["TRIPCOMPTA_RESTARTED"] = "1"
+        sys.stdout.flush()
+        if getattr(sys, "frozen", False):            # application construite (Mac / Windows)
+            os.execv(sys.executable, [sys.executable] + sys.argv[1:])
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    app = create_app(a.data_dir, restart=restart)
     if a.demo:
         from compta.demo import seed_demo, seed_family_demo
         seed_family_demo(app.state.db, replace=False)
@@ -55,12 +64,12 @@ def main():
     port = free_port(a.port)
     url = f"http://127.0.0.1:{port}/"
     print("=" * 60)
-    print(" Compta Voyages")
+    print(" Trip Compta")
     print(f" Ouvre ton navigateur sur : {url}")
     print(f" Données : {app.state.db.dir}")
     print(" Pour arrêter : ferme cette fenêtre (ou Ctrl+C)")
     print("=" * 60)
-    if not a.no_browser:
+    if not a.no_browser and not os.environ.get("TRIPCOMPTA_RESTARTED"):
         threading.Thread(target=lambda: (time.sleep(1.2), webbrowser.open(url)), daemon=True).start()
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 

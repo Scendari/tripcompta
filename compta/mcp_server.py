@@ -1,9 +1,9 @@
-"""Serveur MCP : permet à une IA (Claude Desktop, Claude Code…) de remplir Compta Voyages.
+"""Serveur MCP : permet à une IA (Claude Desktop, Claude Code…) de remplir Trip Compta.
 
 Lancement (transport stdio) :
     python -m compta.mcp_server [--data-dir DOSSIER]
 
-L'IA travaille directement sur la même base que l'application web (Documents/Compta Voyages) :
+L'IA travaille directement sur la même base que l'application web (Documents/TripCompta) :
 il suffit de rafraîchir la page du navigateur pour voir ce qu'elle a saisi.
 Chaque écriture de l'IA peut être annulée avec le bouton « Annuler » de l'application.
 """
@@ -68,7 +68,7 @@ def _safe(fn):
 def build_server(data_dir: Optional[str] = None):
     db = Database(data_dir)
     ops = Ops(db)
-    mcp = _Server(name="compta-voyages", instructions=INSTRUCTIONS)
+    mcp = _Server(name="tripcompta", instructions=INSTRUCTIONS)
 
 
     @mcp.tool()
@@ -225,7 +225,7 @@ def build_server(data_dir: Optional[str] = None):
         """Importer les informations d'un fichier dans un voyage, en posant des questions si besoin."""
         cible = f"le voyage « {voyage} »" if voyage else "le bon voyage (demande-moi lequel, ou crée-le)"
         return (f"Je vais te donner un fichier avec les informations de mon voyage. Remplis {cible} dans "
-                "Compta Voyages. Pose-moi des questions pour tout ce qui n'est pas clair (qui a payé, pour qui, "
+                "Trip Compta. Pose-moi des questions pour tout ce qui n'est pas clair (qui a payé, pour qui, "
                 "prévu ou réel, noms inconnus). Fais une simulation et montre-moi un récapitulatif avant "
                 "d'enregistrer.")
 
@@ -233,7 +233,7 @@ def build_server(data_dir: Optional[str] = None):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Serveur MCP de Compta Voyages (stdio)")
+    ap = argparse.ArgumentParser(description="Serveur MCP de Trip Compta (stdio)")
     ap.add_argument("--data-dir", default=os.environ.get("COMPTA_DATA_DIR"))
     a = ap.parse_args()
     build_server(a.data_dir).run("stdio")

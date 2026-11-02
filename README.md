@@ -1,4 +1,4 @@
-# Compta Voyages
+# Trip Compta
 
 Application locale pour l'organisateur d'un voyage associatif : participants, dépenses, qui a payé quoi,
 avances, montants fixés et remises, désistements, justificatifs, comptes « entre nous », et un bilan PDF lisible
@@ -13,7 +13,7 @@ Tout fonctionne **sur ton ordinateur**, dans ton navigateur. Rien n'est envoyé 
 ### Mac
 
 1. Installe Python 3 (une seule fois) : <https://www.python.org/downloads/>
-2. Double-clique sur **`Lancer Compta Voyages.command`**.
+2. Double-clique sur **`Lancer Trip Compta.command`**.
    - Le premier lancement installe ce qu'il faut (1 à 2 minutes).
    - Si macOS bloque le fichier : clic droit → **Ouvrir** → **Ouvrir**.
 3. Le navigateur s'ouvre tout seul sur l'application. Pour l'arrêter : bouton **⏻ Arrêter** en haut à droite
@@ -22,7 +22,7 @@ Tout fonctionne **sur ton ordinateur**, dans ton navigateur. Rien n'est envoyé 
 ### Windows
 
 1. Installe Python 3 (une seule fois) : <https://www.python.org/downloads/> — coche **« Add python.exe to PATH »**.
-2. Double-clique sur **`Lancer Compta Voyages.bat`**.
+2. Double-clique sur **`Lancer Trip Compta.bat`**.
    - Le premier lancement installe ce qu'il faut (1 à 2 minutes).
 3. Le navigateur s'ouvre tout seul. Pour arrêter : ferme la fenêtre noire (ou le bouton **⏻ Arrêter**).
 
@@ -51,8 +51,8 @@ pip install -r requirements-dev.txt
 python build_tools/build.py
 ```
 
-- Sur **Mac**, cela produit `dist/Compta Voyages.app` (testé).
-- Sur **Windows**, lancer la même commande **sur un PC Windows** produit `dist\Compta Voyages\Compta Voyages.exe`
+- Sur **Mac**, cela produit `dist/Trip Compta.app` (testé).
+- Sur **Windows**, lancer la même commande **sur un PC Windows** produit `dist\Trip Compta\Trip Compta.exe`
   (PyInstaller ne sait pas fabriquer un .exe depuis un Mac).
 
 L'application n'étant pas signée, macOS demande la première fois : clic droit → **Ouvrir**.
@@ -61,7 +61,7 @@ L'application n'étant pas signée, macOS demande la première fois : clic droit
 
 ## Où sont mes données ?
 
-Dans le dossier **`Documents/Compta Voyages`** :
+Dans le dossier **`Documents/TripCompta`** :
 
 - `compta.db` : la base (tous les voyages) ;
 - `justificatifs/` : les photos et PDF importés ;
@@ -152,7 +152,7 @@ voyage (nom, dates), puis on ouvre **🤖 IA** dans le menu du voyage. Deux ongl
   corrections, suppressions, désistements).
 
 1. **Remplis le modèle** en texte simple, directement sur la page. Écris comme tu parles. Chaque frappe est
-   enregistrée à la volée (navigateur, puis `Documents/Compta Voyages/brouillons_ia/`), un brouillon par voyage et
+   enregistrée à la volée (navigateur, puis `Documents/TripCompta/brouillons_ia/`), un brouillon par voyage et
    par onglet ; « Remettre le modèle au propre » garde l'ancien brouillon, récupérable d'un clic.
 2. **Copie le message pour l'IA** (un bouton) : il contient le numéro du voyage, le mode d'emploi pour l'IA
    ([`compta/static/ia/guide_ia.md`](compta/static/ia/guide_ia.md)), **l'état actuel du voyage** et ton texte.
@@ -173,8 +173,8 @@ Avec Claude Desktop ou Claude Code (terminal, ou son extension VS Code), un conn
 Claude de travailler directement sur tes voyages, sans copier-coller : dis-lui « travaille sur le voyage n°2 ».
 La configuration exacte est dans la partie repliée en bas de la page **🤖 IA** du voyage.
 
-- **Claude Desktop** : Réglages → Développeur → Modifier la config → coller le bloc `compta-voyages` → redémarrer Claude.
-- **Claude Code** : copier la commande `claude mcp add compta-voyages -- …` affichée sur la page.
+- **Claude Desktop** : Réglages → Développeur → Modifier la config → coller le bloc `tripcompta` → redémarrer Claude.
+- **Claude Code** : copier la commande `claude mcp add tripcompta -- …` affichée sur la page.
 
 ### Outils proposés à l'IA (serveur MCP)
 

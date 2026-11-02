@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import mode_note with context %}
+{% from "_macros.html" import mode_note, share_menu with context %}
 {% block content %}
 <div class="page-head"><div class="grow">
   <h1>Envoyer les comptes</h1>
@@ -12,10 +12,10 @@
 <div class="card how">
   <b>Comment faire :</b>
   <ol class="small" style="margin:.4rem 0 0 1.1rem;padding:0">
-    <li>Clique sur <b>📲 WhatsApp</b> : le PDF se télécharge et WhatsApp s'ouvre sur la conversation, avec le message déjà écrit.</li>
-    <li>Glisse le PDF (dans <i>Téléchargements</i>) dans la conversation, puis envoie.</li>
+    <li>Clique sur <b>Partager</b>, puis choisis <b>WhatsApp</b> ou <b>E-mail</b> : le PDF se télécharge et la conversation (ou le mail) s'ouvre avec le message déjà écrit.</li>
+    <li>Glisse le PDF (dans <i>Téléchargements</i>) dans la conversation ou le mail, puis envoie.</li>
   </ol>
-  <p class="hint" style="margin:.4rem 0 0">Sans numéro de téléphone, WhatsApp te demande à qui envoyer. Ajoute les numéros dans la fiche de chaque participant.</p>
+  <p class="hint" style="margin:.4rem 0 0"><b>Autre…</b> (quand ton navigateur le permet) ouvre le partage de l'ordinateur avec le PDF déjà joint. Sans numéro ou sans e-mail, tu choisis à qui envoyer : ajoute-les dans la fiche de chaque participant.</p>
 </div>
 
 <div class="send-list">
@@ -23,17 +23,15 @@
   <div class="card send-row" data-send-row id="a{{ a.key }}">
     <div class="row" style="justify-content:space-between;align-items:flex-start;gap:.6rem">
       <div class="grow">
-        <h3 style="margin:0">{% if a.is_family %}👪 {% endif %}<a href="/v/{{ trip.id }}/p/{{ x.ref.id }}">{{ a.name }}</a>
+        <h3 style="margin:0"><a href="/v/{{ trip.id }}/p/{{ x.ref.id }}">{{ a.name }}</a>
           {% if a.holds_cash %}<span class="pill grey">tient la caisse</span>
           {% elif a.balance > 0 %}<span class="pill doit">doit {{ a.balance|money }}</span>
           {% elif a.balance < 0 %}<span class="pill du">on lui doit {{ (-a.balance)|money }}</span>
           {% else %}<span class="pill ok">à jour</span>{% endif %}</h3>
-        <div class="muted small">{% if a.is_family %}à {{ x.ref.name }} · {% endif %}{{ x.ref.phone or "pas de numéro" }}</div>
+        <div class="muted small">{% if a.is_family %}à {{ x.ref.name }} · {% endif %}{{ x.ref.phone or "pas de numéro" }} · {{ x.ref.email or "pas d'e-mail" }}</div>
       </div>
       <div class="row send-actions" style="gap:.4rem">
-        <a class="btn small" href="{{ x.wa }}" target="_blank" rel="noopener" data-send-pdf="{{ x.pdf }}">📲 WhatsApp</a>
-        <a class="btn small ghost" href="{{ x.pdf }}">⬇ PDF</a>
-        <button type="button" class="btn small ghost" data-copy="#msg-{{ a.key }}">Copier le message</button>
+        {{ share_menu(x, 'share-msg-' ~ a.key) }}
       </div>
     </div>
     <details style="margin-top:.4rem"><summary class="small muted">Voir le message</summary>

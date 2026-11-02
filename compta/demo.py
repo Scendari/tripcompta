@@ -248,7 +248,7 @@ def seed_family_demo(db: Database, replace: bool = True) -> int:
 
 def main():
     ap = argparse.ArgumentParser(description="Ajoute le voyage de démonstration.")
-    ap.add_argument("--dir", help="Dossier de données (par défaut : Documents/Compta Voyages)")
+    ap.add_argument("--dir", help="Dossier de données (par défaut : Documents/TripCompta)")
     a = ap.parse_args()
     db = Database(a.dir)
     tid = seed_demo(db)

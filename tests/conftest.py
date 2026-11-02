@@ -6,6 +6,22 @@ import time
 import pytest
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _isolated_data(tmp_path_factory):
+    """Jamais les vraies données pendant les tests : dossier et réglages de l'ordinateur isolés."""
+    import os
+    root = tmp_path_factory.mktemp("isolation")
+    old = {k: os.environ.get(k) for k in ("TRIPCOMPTA_DATA_DIR", "COMPTA_DATA_DIR", "TRIPCOMPTA_CONFIG")}
+    os.environ["TRIPCOMPTA_DATA_DIR"] = str(root / "donnees")
+    os.environ["TRIPCOMPTA_CONFIG"] = str(root / "reglages.json")
+    yield
+    for k, v in old.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+
+
 def _free_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
