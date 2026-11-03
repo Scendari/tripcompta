@@ -370,6 +370,8 @@ class CloudSync:
         sig = self._sig()
         if sig is None or sig == self._seen_sig:
             return False
+        if cloud_only(self.shared_db):               # le lire forcerait un téléchargement (page bloquée) : on attend
+            return False
         h = file_hash(self.shared_db)
         self._seen_sig = sig
         return h is not None and h != self._state().get("shared")

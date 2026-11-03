@@ -565,3 +565,21 @@ def test_ai_server_gets_shared_folder(cloud_env):
     d = Database(tmp / "copie PC-A", home=shared)
     assert d.receipts_dir == shared / C.RECEIPTS and d.backups_dir == tmp / "copie PC-A" / "sauvegardes"
     a.state.sync.stop()
+
+
+def test_cloud_only_file_is_never_read(cloud_env, monkeypatch):
+    """Fichier « en ligne seulement » (vrai cas iCloud vérifié sur Mac : drapeau SF_DATALESS) : l'app ne le lit pas
+    (le lire forcerait un téléchargement qui bloquerait la page) ; elle reprend dès qu'il est téléchargé."""
+    tmp, shared = cloud_env
+    a = make(tmp, shared, "PC-A", 101)
+    TestClient(a).post("/voyages", data={"name": "Publié"})
+    stop(a)
+    b = make(tmp, shared, "Mac-B", 202)
+    read = []
+    real_hash = C.file_hash
+    monkeypatch.setattr(C, "file_hash", lambda p: read.append(Path(p).name) or real_hash(p))
+    monkeypatch.setattr(C, "cloud_only", lambda p: Path(p) == shared / C.DB)
+    os.utime(shared / C.DB, None)                                # « changé » dans le dossier
+    b.state.sync._seen_sig = None
+    assert b.state.sync.shared_changed() is False and C.DB not in read
+    stop(b)
