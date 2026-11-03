@@ -12,7 +12,7 @@
 {%- endmacro %}
 
 {% macro tip(content, lines, title) -%}
-{% if lines %}<span class="tip" tabindex="0" role="button" aria-label="{{ title }} : détail">{{ content }}<span class="tip-box" role="tooltip"><b>{{ title }}</b>{% for l in lines %}<span>{{ l }}</span>{% endfor %}</span></span>{% else %}{{ content }}{% endif %}
+{% if lines %}<span class="tip" tabindex="0" role="button" aria-label="{{ title }} : détail">{{ content }}<span class="tip-box" role="tooltip"><b>{{ title }}</b>{% for l in lines %}{% if l == '---' %}<span class="tip-sep" role="separator"></span>{% else %}<span>{{ l }}</span>{% endif %}{% endfor %}</span></span>{% else %}{{ content }}{% endif %}
 {%- endmacro %}
 
 {% macro people_tabs(trip, cur) -%}

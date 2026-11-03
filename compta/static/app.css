@@ -312,6 +312,7 @@ input.who-amount { width: 96px; text-align: right; padding: .3rem .45rem; }
   box-shadow: 0 6px 22px rgba(0,0,0,.18); font-size: .84rem; line-height: 1.45; pointer-events: none; }
 #tipbox b { display: block; margin-bottom: .25rem; }
 #tipbox span { display: block; }
+#tipbox .tip-sep { border-top: 1px solid var(--border); margin: .45rem 0 .35rem; }
 /* Compte d'une personne, par catégorie */
 .person-account tbody.collapsed tr.item { display: none; }
 .person-account tr.group-row td { background: var(--bg-2); font-weight: 600; }
