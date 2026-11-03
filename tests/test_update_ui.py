@@ -155,6 +155,7 @@ def test_install_page_shows_progress_and_error(env, browser, monkeypatch):
     pg.goto(url + "/reglages/a-propos")
     pg.get_by_role("button", name="Mettre à jour maintenant").click()
     assert pg.get_by_role("heading", name="🔄 Mise à jour vers la version 1.1.0").is_visible()
+    assert pg.url.endswith("/maj/en-cours")                 # adresse rechargeable (pas celle du formulaire)
     pg.wait_for_selector(".update-steps li.now[data-step='telechargement']")
     pg.wait_for_selector("#maj-err:not(.hidden)", timeout=10000)
     assert "empreinte ne correspond pas" in pg.locator("#maj-err").inner_text()
@@ -182,5 +183,19 @@ def test_looks(env, browser, dark, mobile):
     pg.goto(url + "/reglages/a-propos")
     assert no_horizontal_scroll(pg)
     shot(pg, f"a-propos-{tag}")
+    assert pg.errors == []
+    pg.context.close()
+
+
+def test_reloaded_install_page_never_errors(env, browser):
+    """Au redémarrage après la mise à jour, l'onglet se recharge : ni l'ancienne adresse du formulaire
+    (/maj/installer, ce que faisait la 1.0.0-beta2) ni la page d'attente ne doivent afficher d'erreur."""
+    url, upd, gh = env
+    upd.job = None
+    pg = new_page(browser)
+    for path in ("/maj/installer", "/maj/en-cours"):
+        r = pg.goto(url + path)
+        assert r.status == 200 and pg.url.endswith("/reglages/a-propos"), path
+        assert "Method Not Allowed" not in pg.content()
     assert pg.errors == []
     pg.context.close()
