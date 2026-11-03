@@ -28,6 +28,7 @@ class Trip(Base):
     cashier_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)   # participant qui tient la caisse (sinon l'asso)
     groups: Mapped[str] = mapped_column(Text, default="")    # JSON : [{"name": "Minibus", "members": [ids]}]
     roles_conf: Mapped[str] = mapped_column(Text, default="")  # JSON : {"perso": ["Moniteur"], "masques": ["dp"]}
+    rounding: Mapped[str] = mapped_column(String(20), default="participants")   # centimes d'arrondi : participants | asso
     created: Mapped[dt.datetime] = mapped_column(DateTime, default=now)
 
     participants: Mapped[list["Participant"]] = relationship(

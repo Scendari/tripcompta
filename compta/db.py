@@ -92,7 +92,8 @@ class Database:
                      "tickets": "TEXT NOT NULL DEFAULT ''"},
         "expense_shares": {"fixed": "INTEGER"},
         "trips": {"note": "TEXT NOT NULL DEFAULT ''", "cashier_id": "INTEGER", "groups": "TEXT NOT NULL DEFAULT ''",
-                  "roles_conf": "TEXT NOT NULL DEFAULT ''"},
+                  "roles_conf": "TEXT NOT NULL DEFAULT ''",
+                  "rounding": "VARCHAR(20) NOT NULL DEFAULT 'participants'"},
     }
 
     def _migrate(self):

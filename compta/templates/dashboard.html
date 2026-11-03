@@ -110,7 +110,7 @@
       <tfoot><tr><td>Total</td><td class="num">{{ r.total_cost|money }}</td></tr></tfoot>
     </table>
     {% else %}<p class="muted">Aucune dépense. <a href="/v/{{ trip.id }}/depenses/nouvelle">En ajouter une</a></p>{% endif %}
-    {% if r.rounding_gain %}<p class="muted small" style="margin-top:.6rem">Arrondis au centime : {{ r.rounding_gain|money }} au profit de {{ asso_name }}.</p>{% endif %}
+    {% if r.rounding_gain > 0 %}<p class="muted small" style="margin-top:.6rem">Arrondis au centime : {{ r.rounding_gain|money }} au profit de {{ asso_name }}.</p>{% elif r.rounding_gain < 0 %}<p class="muted small" style="margin-top:.6rem">Arrondis au centime : {{ (-r.rounding_gain)|money }} pris en charge par {{ asso_name }}.</p>{% endif %}
   </div>
 </div>
 

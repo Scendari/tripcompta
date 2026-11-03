@@ -21,6 +21,18 @@
     </form>
     <p class="hint">Si un participant tient la caisse, on lui verse l'argent ; il n'a pas à se rembourser lui-même : son propre compte se règle avec la caisse.</p>
   </details>
+  {% set rnd_asso = trip.rounding == 'asso' %}
+  <details class="asso-rename" id="arrondi">
+    <summary class="btn small ghost" title="Qui paie les quelques centimes d'écart quand une part ne tombe pas juste">Centimes d'arrondi : {{ asso_name if rnd_asso else 'participants' }}</summary>
+    <form method="post" action="/v/{{ trip.id }}/asso/arrondi" style="margin-top:.5rem">
+      <div class="choice small" style="flex-direction:column;align-items:flex-start">
+        <label><input type="radio" name="rounding" value="participants" {{ 'checked' if not rnd_asso }}> Payés par les participants <span class="hint">(le total de chacun est arrondi au centime supérieur : {{ asso_name }} ne perd jamais)</span></label>
+        <label><input type="radio" name="rounding" value="asso" {{ 'checked' if rnd_asso }}> Pris en charge par {{ asso_name }} <span class="hint">(arrondi au centime inférieur : personne ne paie plus que sa part exacte)</span></label>
+      </div>
+      <button class="btn small" style="margin-top:.4rem">Enregistrer</button>
+    </form>
+    <p class="hint">Une part ne tombe pas toujours juste (189,22 € ÷ 11 = 17,2018… €). L'écart est d'au plus 1 centime par personne, sur tout le voyage.{% if r.rounding_gain %} Aujourd'hui : {{ (r.rounding_gain|abs)|money }} {{ "au profit de" if r.rounding_gain > 0 else "pris en charge par" }} {{ asso_name }}.{% endif %}</p>
+  </details>
   {% if not cashier %}
   <details class="asso-rename">
     <summary class="btn small ghost">{{ "Renommer" if asso_custom else "Donner un nom à l'asso" }}</summary>
@@ -104,7 +116,8 @@
     <div class="why-result small">
       <b>D'où vient ce résultat ?</b>
       <table>
-        {% if A.rounding %}<tr><td>+ Les arrondis au centime <span class="muted">(chaque part est arrondie au centime supérieur)</span></td><td class="num">{{ A.rounding|money }}</td></tr>{% endif %}
+        {% if A.rounding > 0 %}<tr><td>+ Les arrondis au centime <span class="muted">(le total de chacun est arrondi au centime supérieur)</span></td><td class="num">{{ A.rounding|money }}</td></tr>
+        {% elif A.rounding < 0 %}<tr><td>− Les arrondis au centime <span class="muted">(pris en charge par {{ asso_name }} : le total de chacun est arrondi au centime inférieur)</span></td><td class="num">{{ (-A.rounding)|money }}</td></tr>{% endif %}
         {% if A.charges %}<tr><td>
           <details><summary>− Ce que {{ asso_name }} prend à sa charge</summary>
             <ul class="charge-list">{% for c in A.charges %}<li>{{ c.label }} <span class="muted">— {{ c.reason }}</span> : {{ c.cents|money }}</li>{% endfor %}</ul>

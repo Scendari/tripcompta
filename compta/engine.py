@@ -1,11 +1,13 @@
 """Moteur de calcul — Python pur, sans base de données.
 
 Tous les montants sont en centimes entiers. Les calculs sont faits en fractions
-exactes ; le total de chaque participant est arrondi UNE fois, au centime
-supérieur : l'asso n'y perd jamais, et chacun paie ce que donne une calculette
-(à moins d'un centime près). Les centimes en trop forment « l'écart d'arrondi
-(au profit de l'asso) ». Chaque part de dépense est affichée au centime le plus
-proche.
+exactes ; le total de chaque participant est arrondi UNE fois :
+- par défaut (rounding="participants") au centime supérieur : l'asso n'y perd jamais, et chacun paie ce que donne
+  une calculette (à moins d'un centime près). Les centimes en trop forment « l'écart d'arrondi (au profit de
+  l'asso) » ;
+- au choix (rounding="asso") au centime inférieur : personne ne paie plus que sa part exacte, l'asso prend les
+  centimes à sa charge (au plus 1 centime par personne).
+Chaque part de dépense est affichée au centime le plus proche.
 """
 from __future__ import annotations
 
@@ -296,6 +298,7 @@ class Result:
     expense_totals: dict   # eid -> montant retenu
     families: dict = field(default_factory=dict)   # fid -> Family
     cashier: Optional[int] = None    # participant qui tient la caisse (voyage sans asso) ; None = l'asso
+    rounding_mode: str = "participants"   # qui porte les centimes d'arrondi : "participants" ou "asso"
 
     @property
     def accounts(self) -> list:
@@ -362,8 +365,11 @@ class Result:
         return -sum(a.balance for a in self.accounts if a.balance < 0 and not a.holds_cash)
 
     def is_balanced(self) -> bool:
-        return self.total_shares + self.asso_total - self.rounding_gain == self.total_cost \
-            and self.rounding_gain >= 0
+        if self.total_shares + self.asso_total - self.rounding_gain != self.total_cost:
+            return False
+        if self.rounding_mode == ROUND_ASSO:      # au plus 1 centime par personne, à la charge de l'asso
+            return -len(self.people) <= self.rounding_gain <= len(self.asso_charges)
+        return self.rounding_gain >= 0
 
     def settlements(self) -> list:
         """Virements à faire pour tout solder : (de, vers, montant), avec des Account ou ASSO (la caisse)."""
@@ -386,8 +392,11 @@ def nearest(x: Fraction) -> int:
     return math.floor(x + Fraction(1, 2))
 
 
+ROUND_PARTICIPANTS, ROUND_ASSO = "participants", "asso"
+
+
 def compute(participants, expenses, adjustments=(), withdrawals=(), movements=(),
-            mode: str = ACTUAL, families=()) -> Result:
+            mode: str = ACTUAL, families=(), rounding: str = ROUND_PARTICIPANTS) -> Result:
     names = {p.id: p.name for p in participants}
     pids = [p.id for p in participants]
     wd = {w.participant: w for w in withdrawals}
@@ -574,8 +583,9 @@ def compute(participants, expenses, adjustments=(), withdrawals=(), movements=()
         exact_share[p] += l.exact
         shown[p] += l.cents
     for pid in pids:
-        # Une seule fois, sur le total de chacun : au centime supérieur (l'asso n'y perd jamais)
-        people[pid].share = math.ceil(exact_share[pid])
+        # Une seule fois, sur le total de chacun : au centime supérieur (l'asso n'y perd jamais),
+        # ou inférieur si l'asso prend les centimes à sa charge (personne ne paie plus que sa part exacte)
+        people[pid].share = (math.floor if rounding == ROUND_ASSO else math.ceil)(exact_share[pid])
         people[pid].rounding = people[pid].share - shown[pid]      # écart avec la somme des parts affichées
     for e in expenses:
         splits = e.splits()
@@ -598,7 +608,7 @@ def compute(participants, expenses, adjustments=(), withdrawals=(), movements=()
     shares_total = sum(p.share for p in people.values())
     asso_total = sum(c.cents for c in asso)
     gain = shares_total + asso_total - total_cost
-    if gain < 0:
+    if gain < 0 and rounding != ROUND_ASSO:
         warnings.append("Contrôle : le total ne tombe pas juste (écart négatif). Merci de le signaler.")
 
     # Nettoyage : lignes vides
@@ -615,7 +625,8 @@ def compute(participants, expenses, adjustments=(), withdrawals=(), movements=()
     for p in participants:
         people[p.id].family = p.family if p.family in fams else None
         people[p.id].companion = p.companion
-    return Result(mode, total_cost, lines, people, asso, gain, warnings, expense_totals, fams)
+    return Result(mode, total_cost, lines, people, asso, gain, warnings, expense_totals, fams,
+                  rounding_mode=ROUND_ASSO if rounding == ROUND_ASSO else ROUND_PARTICIPANTS)
 
 
 def _compensate(a: Adjustment, delta: Fraction, e, pool: dict, excluded: set, lines, line,
