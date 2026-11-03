@@ -32,7 +32,7 @@
     <tr><th class="sticky">Participant</th>
       {% for col in cols %}{% set est = col.kind == 'exp' and col.e.actual is none and col.e.planned is not none %}<th class="num {{ 'tot-' ~ col.kind if col.kind != 'exp' }} {{ 'cat-start' if col.start }}{{ ' sub-start' if col.sub_start }}" title="{{ col.label }}{{ ' — montant prévu (réel pas encore saisi)' if est }}">{% if est %}<span class="est">≈</span> {% endif %}{{ col.label }}<div class="muted" style="text-transform:none">{{ col.total|money }}</div></th>{% endfor %}
       {% if has_global %}<th class="num">ou supplément</th>{% endif %}
-      {% if has_round %}<th class="num" title="Chaque case est au centime le plus proche ; le total de chacun est arrondi une seule fois, au centime supérieur.">Arrondi</th>{% endif %}
+      {% if has_round %}<th class="num" title="Chaque case est au centime le plus proche ; le total de chacun est arrondi une seule fois, au centime {{ 'inférieur' if r.rounding_mode == 'asso' else 'supérieur' }}.">Arrondi</th>{% endif %}
       <th class="num">Total</th></tr>
   </thead>
   <tbody>
@@ -72,7 +72,7 @@
 <div class="grid k3" style="margin-top:1rem">
   <div class="card kpi"><div class="label">Parts des participants</div><div class="value">{{ r.total_shares|money }}</div></div>
   <div class="card kpi"><div class="label">+ Pris en charge par {{ asso_name }}</div><div class="value">{{ r.asso_total|money }}</div></div>
-  <div class="card kpi"><div class="label">− Arrondis (gagnés par {{ asso_name }})</div><div class="value">{{ r.rounding_gain|money }}</div>
+  <div class="card kpi"><div class="label">{% if r.rounding_gain < 0 %}+ Arrondis (pris en charge par {{ asso_name }}){% else %}− Arrondis (gagnés par {{ asso_name }}){% endif %}</div><div class="value">{{ (r.rounding_gain|abs)|money }}</div>
     <div class="sub">= {{ r.total_cost|money }}, le coût du voyage {{ '✓' if r.is_balanced() else '✗' }}</div></div>
 </div>
 {% endif %}

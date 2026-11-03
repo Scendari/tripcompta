@@ -1331,7 +1331,7 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
         kind = "recette" if f.get("kind") == "recette" else "depense"
         r = E.compute([E.Participant(p.id, p.name, p.family_id, bool(p.companion)) for p in t.participants],
                       [E.Expense(0, f.get("label") or "Cette dépense", "", planned, actual, None, weights, kind,
-                                 fixed=fixed)])
+                                 fixed=fixed)], rounding=t.rounding or E.ROUND_PARTICIPANTS)
         return render(request, "_expense_preview.html", trip=t, r=r, amount=amt, weights=weights)
 
     @app.post("/v/{tid}/depenses")
@@ -1616,6 +1616,20 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
         c = S.cashier(t)
         return back(f"/v/{tid}/asso", f"C'est {c.name} qui tient la caisse" if c else
                     f"C'est {S.asso_name(s)} qui tient la caisse")
+
+    @app.post("/v/{tid}/asso/arrondi")
+    async def asso_rounding(tid: int, request: Request, s: Session = Depends(get_s)):
+        t = trip_or_404(s, tid)
+        v = (await request.form()).get("rounding")
+        if v not in (E.ROUND_PARTICIPANTS, E.ROUND_ASSO):
+            return back(f"/v/{tid}/asso", "Choix d'arrondi inconnu")
+        if v != (t.rounding or E.ROUND_PARTICIPANTS):
+            db.snapshot("changement de qui paie les centimes d'arrondi")
+            t.rounding = v
+            s.commit()
+        caisse = S.caisse_label(t)
+        return back(f"/v/{tid}/asso", "Les centimes d'arrondi sont payés par les participants" if v == E.ROUND_PARTICIPANTS
+                    else f"Les centimes d'arrondi sont pris en charge par {caisse}")
 
     @app.get("/v/{tid}/repartition", response_class=HTMLResponse)
     def matrix(tid: int, request: Request, s: Session = Depends(get_s)):

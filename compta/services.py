@@ -343,6 +343,7 @@ def engine_inputs(trip: M.Trip) -> dict:
                                   w.date.isoformat() if w.date else "") for w in trip.withdrawals],
         movements=[E.Movement(m.participant_id, m.kind, m.amount,
                               m.date.isoformat() if m.date else "", m.note) for m in trip.movements],
+        rounding=trip.rounding or E.ROUND_PARTICIPANTS,
     )
 
 
@@ -1197,11 +1198,18 @@ def participants_export(trip: M.Trip, result: E.Result, cols: list, with_withdra
     return [known[c] for c in cols], rows
 
 
+ROUNDING_CHOICES = {
+    E.ROUND_PARTICIPANTS: "Payés par les participants",
+    E.ROUND_ASSO: "Pris en charge par l'asso",
+}
+
+
 def final_sentence(m: dict, caisse: str, fmt, formula: bool = False) -> str:
     """« 1 060,36 € en caisse + 3 213,11 € à recevoir − 4 273,44 € à rembourser = 0,03 € : le voyage rapporte… »"""
     final = m["final"]
-    txt = (f"le voyage rapporte {fmt(final)} à {caisse}" + (" (arrondis au centime)" if m["rounding_only"] else "")
-           if final > 0 else f"le voyage coûte {fmt(-final)} à {caisse}" if final < 0
+    rnd = " (arrondis au centime)" if m["rounding_only"] else ""
+    txt = (f"le voyage rapporte {fmt(final)} à {caisse}{rnd}" if final > 0
+           else f"le voyage coûte {fmt(-final)} à {caisse}{rnd}" if final < 0
            else f"le voyage ne coûte rien à {caisse}")
     if not (formula and m["adds_up"]):
         return txt[:1].upper() + txt[1:] + "."
@@ -1227,7 +1235,7 @@ def money_summary(trip: M.Trip, result: E.Result) -> dict:
                 cost_split=bool(advanced) and paid_out + advanced == r.total_cost,
                 received=r.total_paid, other_in=other_in, refunded=refunded, cash=A["cash"],
                 asso_total=r.asso_total, to_collect=r.to_collect, to_refund=r.to_refund, final=final,
-                rounding_only=final == r.rounding_gain and final > 0,
+                rounding_only=final == r.rounding_gain and final != 0,
                 adds_up=A["cash"] + r.to_collect - r.to_refund == final)
 
 
