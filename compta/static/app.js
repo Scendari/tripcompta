@@ -56,7 +56,8 @@
   });
 
   // « Pour qui ? » : boutons « Seulement pour » (rôles, familles, groupes), sélection multiple.
-  // Les personnes cochées = l'ensemble des boutons allumés. Aucun bouton allumé au départ (ce sont des outils).
+  // Les personnes cochées = l'ensemble des boutons allumés. À l'ouverture (et après un ajustement à la main),
+  // un bouton s'allume si les personnes cochées sont exactement les siennes (groupe, puis famille, puis rôle).
   document.querySelectorAll("[data-who-chips]").forEach((box) => {
     const form = box.closest("form");
     const who = () => Array.from(form.querySelectorAll("input[data-who]"));
@@ -94,11 +95,24 @@
       resets.forEach((x) => press(x, x === r));
       if (hint) hint.textContent = r.dataset.reset === "all" ? "Tout le monde est coché." : "Personne n'est coché.";
     }));
+    function sameSet(a, b) { return a.size === b.size && [...a].every((x) => b.has(x)); }
+    function syncFromChecks(manual) {   // les boutons allumés suivent les cases cochées
+      const checked = new Set(who().filter((w) => w.checked).map((w) => w.dataset.pid));
+      const active = btns.filter((b) => b.classList.contains("on"));
+      if (active.length && sameSet(new Set(active.flatMap(ids)), checked)) return;   // toujours d'accord
+      btns.forEach((b) => press(b, false));
+      const match = checked.size > 1 && checked.size < who().length ? btns.slice().reverse().find((b) => sameSet(new Set(ids(b)), checked)) : null;
+      if (match) press(match, true);
+      if (!hint) return;
+      if (match) hint.textContent = "Seulement pour : " + match.textContent.trim() + " (" + checked.size + " pers.). Clique encore un bouton pour l'ajouter ou le retirer.";
+      else if (manual && active.length) hint.textContent = "Sélection ajustée à la main.";
+    }
     form.addEventListener("change", (ev) => {     // ajustement à la main
       if (applying || !ev.target.matches("input[data-who]")) return;
-      if (btns.some((b) => b.classList.contains("on")) && hint) hint.textContent = "Sélection ajustée à la main.";
+      syncFromChecks(true);
       syncResets();
     });
+    syncFromChecks(false);
     syncResets();
   });
 
