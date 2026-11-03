@@ -142,3 +142,65 @@ def test_amounts_written_on_bars(v):
     finally:
         srv.should_exit = True
         th.join(5)
+
+
+# ---------------------------------------------------------------- pour un plongeur
+@pytest.fixture
+def divers(tmp_path):
+    """Plongeurs Anne, Bruno, Chloé, David, Eva ; Zoé accompagne ; Félix (plongeur) se désiste sans rien garder.
+      Gîte 600 pour tous (6 restants)                  → 100 chacun, Zoé comprise
+      Plongées 800 pour Anne, Bruno, Chloé, David       → 200 chacun
+      Stage 1 000 pour Eva seule (le cas extrême)
+      Covoit 300 pour Anne, Bruno, Chloé                → 100 chacun
+    Médianes sur les 5 plongeurs : Logement [100 ×5] = 100 ; Plongée [200, 200, 200, 200, 1000] = 200 ;
+    Transport [0, 0, 100, 100, 100] = 100 → total 400 € (25 / 50 / 25 %).
+    Si Zoé comptait : Transport [0, 0, 0, 100, 100, 100] = 50. Si Félix comptait : 7 valeurs, Transport = 0."""
+    app = create_app(tmp_path / "d")
+    ops = Ops(app.state.db)
+    tid = ops.create_trip("Sortie test")["voyage_id"]
+    ops.add_participants(tid, ["Anne", "Bruno", "Chloé", "David", "Eva", "Félix", {"nom": "Zoé", "accompagnant": True}])
+    ops.add_expense(tid, "Gîte", categorie="Logement", montant_reel="600")
+    ops.add_expense(tid, "Plongées", categorie="Plongée", montant_reel="800", pour=["Anne", "Bruno", "Chloé", "David"])
+    ops.add_expense(tid, "Stage", categorie="Plongée", montant_reel="1000", pour=["Eva"])
+    ops.add_expense(tid, "Covoit", categorie="Transport", montant_reel="300", pour=["Anne", "Bruno", "Chloé"])
+    ops.withdraw(tid, "Félix")
+    with app.state.db.Session() as s:
+        t = s.get(M.Trip, tid)
+        V = S.trip_visuals(t, S.compute_trip(t))
+    return app, ops, tid, V
+
+
+def test_typical_diver_by_hand(divers):
+    app, ops, tid, V = divers
+    shares = {p["name"]: p["share"] for p in V["people"]}
+    assert shares == {"Anne": 40000, "Bruno": 40000, "Chloé": 40000, "David": 30000, "Eva": 110000,
+                      "Zoé": 10000, "Félix": 0}
+    D = V["diver"]
+    assert D["n"] == 5 and D["total"] == 400
+    assert [(x["name"], x["euros"], x["pct"]) for x in D["rows"]] == [
+        ("Plongée", 200, 50), ("Logement", 100, 25), ("Transport", 100, 25)]
+    assert D["text"].splitlines() == [
+        "Combien a coûté « Sortie test » pour un plongeur (environ) :",
+        "- Plongée : 200 €", "- Logement : 100 €", "- Transport : 100 €",
+        "Total : environ 400 €", "(montant médian sur 5 plongeurs, désistements non comptés)"]
+    page = TestClient(app).get(f"/v/{tid}/en-images").text
+    assert "Coût moyen pour un participant" in page and "≈ 400 €" in page
+    assert "Eva" not in page.split('id="v2b"')[1].split("</section>")[0]      # personne n'est nommé
+
+
+def test_typical_diver_even_count_and_rounding():
+    """Nombre pair : moyenne des deux du milieu ; chaque ligne est arrondie à l'euro, le total est leur somme."""
+    assert S._median([100, 300]) == 200 and S._median([5, 1, 3]) == 3 and S._median([1, 2]) == 2   # 1,5 → 2
+
+
+def test_typical_diver_hidden_when_too_few(tmp_path):
+    """Moins de 3 plongeurs : la médiane dévoilerait la part de quelqu'un, pas d'encadré."""
+    app = create_app(tmp_path / "d")
+    ops = Ops(app.state.db)
+    tid = ops.create_trip("Petit")["voyage_id"]
+    ops.add_participants(tid, ["Anne", "Bruno", {"nom": "Zoé", "accompagnant": True}])
+    ops.add_expense(tid, "Gîte", categorie="Logement", montant_reel="300")
+    with app.state.db.Session() as s:
+        t = s.get(M.Trip, tid)
+        assert S.trip_visuals(t, S.compute_trip(t))["diver"] is None
+    assert "Coût moyen pour un participant" not in TestClient(app).get(f"/v/{tid}/en-images").text

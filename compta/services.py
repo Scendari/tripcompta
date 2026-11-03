@@ -1158,6 +1158,8 @@ def trip_visuals(trip: M.Trip, result: E.Result) -> dict:
                          actual=a_, diff=a_ - p_, n=len(both), waiting=len(waiting)))
     plan.sort(key=lambda x: (-max(x["planned"], x["actual"]), x["name"]))
     plan_max = max([max(x["planned"], x["actual"]) for x in plan] + [1])
+    # 5. pour un plongeur : part médiane par catégorie (sans les désistements ni les accompagnants)
+    diver = typical_diver(trip, r, legend, people)
     # chiffres clés
     payers = [p for p in r.people.values() if not p.withdrawn and p.share > 0]
     shares = sorted(p.share for p in payers)
@@ -1171,8 +1173,44 @@ def trip_visuals(trip: M.Trip, result: E.Result) -> dict:
         wd_kept=sum(p.share for p in wd), wd_refund=sum(max(-p.balance, 0) for p in wd),
         costs=costs, legend=legend, spent=spent, people=people, pmax=pmax,
         settle=settle, smax=smax, owed=owed, covered=covered, to_collect=to_collect, to_refund=to_refund,
-        plan=plan, plan_max=plan_max,
+        plan=plan, plan_max=plan_max, diver=diver,
     )
+
+
+DIVER_MIN = 3        # en dessous, la médiane dévoilerait la part de quelqu'un
+
+
+def _median(values: list) -> int:
+    v = sorted(values)
+    n = len(v)
+    return v[n // 2] if n % 2 else round((v[n // 2 - 1] + v[n // 2]) / 2)
+
+
+def typical_diver(trip: M.Trip, result: E.Result, legend: list, people: list) -> dict | None:
+    """Ce que coûte le voyage « pour un plongeur » : pour chaque catégorie, la part médiane des plongeurs
+    (désistements et accompagnants exclus), arrondie à l'euro ; le total est la somme des lignes.
+    La médiane écarte d'elle-même les cas extrêmes et ne montre la part de personne en particulier.
+    None s'il y a moins de DIVER_MIN plongeurs."""
+    companion = {p.id: p.companion for p in trip.participants}
+    divers = [p for p in people if not p["withdrawn"] and not companion.get(p["id"])]
+    if len(divers) < DIVER_MIN:
+        return None
+    names = [c["name"] for c in legend] + ["Arrondis et ajustements"]
+    slots = {c["name"]: c["slot"] for c in legend}
+    rows = []
+    for name in names:
+        vals = [next((sg["cents"] for sg in p["segs"] if sg["name"] == name), 0) for p in divers]
+        euros = round(_median(vals) / 100)
+        if euros > 0:
+            rows.append(dict(name=name, slot=slots.get(name, 0), euros=euros))
+    rows.sort(key=lambda x: -x["euros"])                   # la plus chère d'abord (à égalité : ordre du voyage)
+    total = sum(x["euros"] for x in rows)
+    for x in rows:
+        x["pct"] = round(x["euros"] * 100 / total) if total else 0
+    lines = [f"Combien a coûté « {trip.name} » pour un plongeur (environ) :"]
+    lines += [f"- {x['name']} : {x['euros']} €" for x in rows]
+    lines += [f"Total : environ {total} €", f"(montant médian sur {len(divers)} plongeurs, désistements non comptés)"]
+    return dict(rows=rows, total=total, n=len(divers), text="\n".join(lines))
 
 
 EXPORT_COLS = [            # clé, titre, cochée par défaut

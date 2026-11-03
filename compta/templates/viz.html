@@ -78,6 +78,30 @@
     </tbody></table></div></details>
 </section>
 
+{# ---------------------------------------------------------------- 2 bis. pour un plongeur #}
+{% if V.diver and V.diver.total %}{% set D = V.diver %}
+<section class="card viz-card" aria-labelledby="v2b">
+  <div class="viz-head"><h2 id="v2b">Coût moyen pour un participant</h2>
+    <button type="button" class="btn small ghost" data-copy="#diver-txt" title="Copie un petit texte à coller dans un mail ou un message">📋 <b>Copier</b></button></div>
+  {% set dmax = D.rows[0].euros %}
+  <div class="hbars diver">
+  {% for x in D.rows %}
+    <div class="hbar">
+      <span class="hbar-label">{{ x.name }}</span>
+      <span class="hbar-track"><span class="seg s{{ x.slot }} end" style="width:{{ (x.euros * 100 / dmax)|round(1) }}%" tabindex="0"
+            data-tip="{{ x.name }} : {{ x.euros }} € ({{ x.pct }} % du total)" aria-label="{{ x.name }} : {{ x.euros }} €"></span></span>
+      <span class="hbar-value"><b>{{ x.euros }} €</b> <span class="muted">· {{ x.pct }} %</span></span>
+    </div>
+  {% endfor %}
+    <div class="hbar diver-total">
+      <span class="hbar-label">Total</span><span></span>
+      <span class="hbar-value">≈ {{ D.total }} €</span>
+    </div>
+  </div>
+  <template id="diver-txt">{{ D.text }}</template>
+</section>
+{% endif %}
+
 {# ---------------------------------------------------------------- 3. règlements #}
 <section class="card viz-card" aria-labelledby="v3">
   <h2 id="v3">Où en sont les règlements</h2>
