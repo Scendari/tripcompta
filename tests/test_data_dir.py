@@ -103,6 +103,8 @@ def test_imposed_folder_and_open(tmp_path, monkeypatch):
     opened = []
     import subprocess
     monkeypatch.setattr(subprocess, "Popen", lambda args, **k: opened.append(args))
+    import os
+    monkeypatch.setattr(os, "startfile", lambda p: opened.append([p]), raising=False)   # Windows : Explorateur
     r = c.post("/reglages/ouvrir-dossier", headers={"referer": "http://t/"}, follow_redirects=True)
     assert "Dossier ouvert" in r.text and opened and opened[0][-1] == str(tmp_path / "d")
     home = c.get("/").text

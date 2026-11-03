@@ -115,6 +115,18 @@ def sqlite_copy(src: Path, dst: Path) -> None:
         d.close()
 
 
+def replace(src: Path, dst: Path, tries: int = 8) -> None:
+    """os.replace, en réessayant un peu si Windows bloque momentanément le fichier (antivirus, indexation…)."""
+    for i in range(tries):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if i == tries - 1:
+                raise
+            time.sleep(0.25 * (i + 1))
+
+
 def atomic_copy(src: Path, dst: Path, tries: int = 8) -> None:
     """Copie `src` vers `dst` d'un coup : fichier temporaire dans le même dossier, écrit et vidé sur le disque,
     puis remplacement atomique. Réessaie un peu si le fichier est momentanément bloqué (Windows, antivirus…)."""
@@ -124,14 +136,7 @@ def atomic_copy(src: Path, dst: Path, tries: int = 8) -> None:
             shutil.copyfileobj(fi, fo, 1024 * 1024)
             fo.flush()
             os.fsync(fo.fileno())
-        for i in range(tries):
-            try:
-                os.replace(tmp, dst)
-                return
-            except PermissionError:
-                if i == tries - 1:
-                    raise
-                time.sleep(0.25 * (i + 1))
+        replace(tmp, dst, tries)
     finally:
         tmp.unlink(missing_ok=True)
 
@@ -405,7 +410,7 @@ class CloudSync:
             kept = self.keep_local_copy("pas-encore-envoyee")
         if before_replace:
             before_replace()
-        os.replace(incoming, self.local_db)
+        replace(incoming, self.local_db)
         for ext in ("-journal", "-wal", "-shm"):
             (self.local / f"{DB}{ext}").unlink(missing_ok=True)
         self._save_state(shared=h, local=h)

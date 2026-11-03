@@ -102,10 +102,10 @@ def test_release_info_and_sums():
 def test_install_location():
     assert U.install_location(frozen=False) is None                       # code source : rien à remplacer
     mac = U.install_location("/Applications/Trip Compta.app/Contents/MacOS/Trip Compta", "darwin", True)
-    assert mac == (Path("/Applications/Trip Compta.app"), str(Path("Contents/MacOS/Trip Compta")))
+    assert mac == (Path("/Applications/Trip Compta.app").resolve(), str(Path("Contents/MacOS/Trip Compta")))
     assert U.install_location("/tmp/x/Trip Compta", "darwin", True) is None   # pas dans un .app
     lin = U.install_location("/opt/apps/Trip Compta/Trip Compta", "linux", True)
-    assert lin == (Path("/opt/apps/Trip Compta"), "Trip Compta")
+    assert lin == (Path("/opt/apps/Trip Compta").resolve(), "Trip Compta")
 
 
 def test_clean_args():

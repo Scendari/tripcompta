@@ -44,6 +44,12 @@ def make(tmp, shared, who, pid):
                                  background=False))
 
 
+def stop(app):
+    """« ⏻ Arrêter » : verrou libéré et base refermée (Windows ne remplace pas un fichier encore ouvert)."""
+    app.state.sync.stop()
+    app.state.db.engine.dispose()
+
+
 def seed(app) -> int:
     ops = Ops(app.state.db)
     tid = ops.create_trip("Sortie test")["voyage_id"]
@@ -116,7 +122,7 @@ def test_release_on_quit_and_automatic_handover(cloud_env):
     a = make(tmp, shared, "PC-A", 101)
     b = make(tmp, shared, "Mac-B", 202)
     TestClient(a).post("/voyages", data={"name": "Voyage A"})
-    a.state.sync.stop()                                          # « ⏻ Arrêter » : verrou libéré
+    stop(a)                                                      # « ⏻ Arrêter » : verrou libéré
     assert not (shared / C.LOCK).exists()
     b.state.sync.beat()                                          # battement suivant : B reprend la main seul
     assert not b.state.sync.readonly
@@ -149,13 +155,13 @@ def test_no_lost_input_two_computers_in_turn(cloud_env):
         assert not app.state.sync.readonly
         TestClient(app).post("/voyages", data={"name": f"Voyage {i}"})
         names.append(f"Voyage {i}")
-        app.state.sync.stop()
+        stop(app)
     assert trip_names(shared / C.DB) == sorted(names)
     for who in ("PC-A", "Mac-B"):
         app = make(tmp, shared, who, 5)
         page = TestClient(app).get("/").text
         assert all(n in page for n in names)
-        app.state.sync.stop()
+        stop(app)
 
 
 # ---------------------------------------------------------------- publication d'un coup
@@ -243,10 +249,10 @@ def test_pull_keeps_unpublished_local_changes(cloud_env):
     tmp, shared = cloud_env
     a = make(tmp, shared, "PC-A", 101)
     TestClient(a).post("/voyages", data={"name": "Publié"})
-    a.state.sync.stop()
+    stop(a)
     b = make(tmp, shared, "Mac-B", 202)
     TestClient(b).post("/voyages", data={"name": "De B"})
-    b.state.sync.stop()
+    stop(b)
     # A avait une saisie non publiée (dossier indisponible à ce moment-là) puis redémarre
     local = tmp / "copie PC-A" / C.DB
     con = sqlite3.connect(local)
@@ -325,7 +331,7 @@ def test_folder_not_writable(cloud_env):
     tmp, shared = cloud_env
     a = make(tmp, shared, "PC-A", 101)
     TestClient(a).post("/voyages", data={"name": "Avant"})
-    a.state.sync.stop()
+    stop(a)
     os.chmod(shared, 0o555)
     try:
         b = make(tmp, shared, "Mac-B", 202)
@@ -438,6 +444,7 @@ def test_migration_round_trip_same_amounts(tmp_path, monkeypatch):
     assert "déjà rangés dans ce dossier" in r.text
     # retour sur cet ordinateur : copie ; ce qui y était est gardé dans ses sauvegardes
     Ops(app2.state.db).add_participants(tid, ["David"], inclure_dans_depenses_communes=False)   # saisie « cloud »
+    app.state.db.engine.dispose()                                # (la 1re app, arrêtée, n'a plus la base ouverte)
     r = cl2.post("/reglages/donnees", data={"action": "local"})
     assert "de nouveau rangés sur cet ordinateur" in r.text
     assert list((docs / "TripCompta" / "sauvegardes").glob("avant-retour-*.db"))
@@ -451,6 +458,7 @@ def test_migration_round_trip_same_amounts(tmp_path, monkeypatch):
     r = TestClient(app3).post("/reglages/donnees", data={"action": "ranger", "dossier": str(cloud),
                                                         "mode": "utiliser"})
     assert "va utiliser les voyages rangés" in r.text
+    app2.state.db.engine.dispose()                               # (arrêtée : sa copie de travail est refermée)
     app4 = create_app()
     got = amounts(app4, tid)
     assert app4.state.db.home == cloud and got.pop("David") == (0, 0) and got == EXPECTED
@@ -533,3 +541,21 @@ def test_screens_light_dark_phone(cloud_env):
             th.join(5)
         a.state.sync.stop()
         b.state.sync.stop()
+
+
+def test_ai_server_gets_shared_folder(cloud_env):
+    """L'IA (serveur MCP, autre processus) travaille sur la copie de travail ; ses justificatifs vont dans le
+    dossier partagé."""
+    tmp, shared = cloud_env
+    a = make(tmp, shared, "PC-A", 101)
+    tid = seed(a)
+    import html
+    page = html.unescape(TestClient(a).get(f"/v/{tid}/ia").text).replace("\\\\", "\\")   # JSON : \\ → \
+    assert '"--data-dir"' in page and str(tmp / "copie PC-A") in page
+    assert '"--home"' in page and str(shared) in page
+    from compta.mcp_server import build_server
+    build_server(str(tmp / "copie PC-A"), str(shared))
+    from compta.db import Database
+    d = Database(tmp / "copie PC-A", home=shared)
+    assert d.receipts_dir == shared / C.RECEIPTS and d.backups_dir == tmp / "copie PC-A" / "sauvegardes"
+    a.state.sync.stop()

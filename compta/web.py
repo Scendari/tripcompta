@@ -601,7 +601,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         if not C.is_valid_db(tmp):
             tmp.unlink(missing_ok=True)
             raise OSError("la copie de la base est incomplète")
-        os.replace(tmp, target / C.DB)
+        C.replace(tmp, target / C.DB)
         if db.receipts_dir.is_dir():
             shutil.copytree(db.receipts_dir, receipts_to, dirs_exist_ok=True,
                             ignore=shutil.ignore_patterns(".vignettes", ".*"))
@@ -730,6 +730,8 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             cmd, args = sys.executable, ["--mcp", "--data-dir", str(db.dir)]
         else:
             cmd, args = sys.executable, ["-m", "compta.mcp_server", "--data-dir", str(db.dir)]
+        if db.home != db.dir:                     # dossier synchronisé : les justificatifs y vont
+            args += ["--home", str(db.home)]
         conf = {"mcpServers": {"tripcompta": {"command": cmd, "args": args,
                                                   **({} if frozen else {"cwd": root})}}}
         if not frozen:

@@ -37,11 +37,12 @@ def main():
     ap.add_argument("--data-dir", help="Dossier des données (défaut : Documents/TripCompta)")
     ap.add_argument("--demo", action="store_true", help="Ajoute le voyage de démonstration")
     ap.add_argument("--mcp", action="store_true", help="Démarre le serveur MCP (stdio) pour une IA")
+    ap.add_argument("--home", help=argparse.SUPPRESS)          # MCP : dossier synchronisé (voir compta/cloud.py)
     a = ap.parse_args()
 
     if a.mcp:  # ne rien écrire sur la sortie standard : c'est le canal MCP
         from compta.mcp_server import build_server
-        build_server(a.data_dir).run("stdio")
+        build_server(a.data_dir, a.home).run("stdio")
         return
 
     import uvicorn
