@@ -96,6 +96,8 @@ def main():
                 data = plistlib.load(f)
             data["CFBundleShortVersionString"] = version.split("-")[0]
             data["CFBundleVersion"] = version
+            if dev:                              # distincte de l'app installée dans le Launchpad et Spotlight
+                data["CFBundleDisplayName"] = data["CFBundleName"] = "Trip Compta (dév)"
             with open(plist, "wb") as f:
                 plistlib.dump(data, f)
             # Info.plist modifié : refaire la signature « ad hoc » (sinon macOS refuse d'ouvrir l'app)

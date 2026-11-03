@@ -300,6 +300,7 @@
 
   // Après un redémarrage de l'application (mise à jour), l'onglet se recharge tout seul
   (function watchRestart() {
+    if (document.querySelector(".update-steps")) return;   // la page d'attente de la mise à jour s'en charge
     let boot = null, down = false;
     async function tick() {
       try {

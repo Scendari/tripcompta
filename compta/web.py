@@ -391,7 +391,20 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
                 os._exit(0)
             threading.Thread(target=upd.run_install, daemon=True, kwargs=dict(
                 db=db, port=port, app_args=U.clean_args(app.state.argv), quit_app=quit_now)).start()
-        return render(request, "update.html", version=a["version"])
+        return RedirectResponse("/maj/en-cours", status_code=303)   # page d'attente rechargeable
+
+    @app.get("/maj/en-cours", response_class=HTMLResponse)
+    def update_progress(request: Request):
+        """Page d'attente de l'installation ; sans installation en cours (ex. rechargée après le redémarrage) :
+        retour à « À propos », qui dit si la mise à jour a réussi."""
+        if not upd.job:
+            return RedirectResponse("/reglages/a-propos", status_code=303)
+        return render(request, "update.html", version=upd.job.get("version"))
+
+    @app.get("/maj/installer")
+    def update_install_get():
+        """Adresse du formulaire rouverte comme une page (rechargement après une mise à jour) : pas d'erreur."""
+        return RedirectResponse("/reglages/a-propos", status_code=303)
 
     @app.get("/maj/etat")
     def update_state():
