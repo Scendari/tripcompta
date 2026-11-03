@@ -380,4 +380,47 @@
   document.querySelectorAll("select[data-nav]").forEach((s) => {
     s.addEventListener("change", () => { location.href = s.dataset.nav + encodeURIComponent(s.value); });
   });
+
+  // Participants déjà venus sur d'autres voyages : recherche, « tout le groupe », compteur ; remplissage du formulaire
+  const personKey = (n) => (n || "").normalize("NFKD").replace(/[^\x00-\x7f]/g, "").toLowerCase().split(/\s+/).filter(Boolean).join(" ");
+  document.querySelectorAll("[data-known]").forEach((form) => {
+    const items = [...form.querySelectorAll(".known-list label")];
+    const boxes = items.map((l) => l.querySelector("input"));
+    const submit = form.querySelector("[data-known-submit]");
+    const count = () => {
+      const n = boxes.filter((b) => b.checked).length;
+      submit.disabled = !n;
+      submit.textContent = n ? `Ajouter ${n === 1 ? "la personne cochée" : `les ${n} personnes cochées`}` : "Ajouter les personnes cochées";
+    };
+    form.addEventListener("change", count);
+    const filter = form.querySelector("[data-known-filter]");
+    filter.addEventListener("input", () => {
+      const q = personKey(filter.value);
+      let shown = 0;
+      items.forEach((l) => { const ok = !q || l.dataset.name.includes(q); l.hidden = !ok; shown += ok; });
+      form.querySelector("[data-known-none]").hidden = shown > 0;
+    });
+    filter.addEventListener("keydown", (ev) => { if (ev.key === "Enter") ev.preventDefault(); });
+    form.querySelectorAll("[data-known-trip]").forEach((b) => b.addEventListener("click", () => {
+      const mine = items.filter((l) => l.dataset.trips.includes(` ${b.dataset.knownTrip} `)).map((l) => l.querySelector("input"));
+      const all = mine.every((x) => x.checked);                  // un 2e clic décoche le groupe
+      mine.forEach((x) => { x.checked = !all; });
+      count();
+    }));
+  });
+  document.querySelectorAll("[data-known-fill]").forEach((form) => {
+    let fill = {};
+    try { fill = JSON.parse(form.dataset.knownFill); } catch (e) { return; }
+    const name = form.querySelector("input[name=name]");
+    name.addEventListener("change", () => {
+      const k = fill[personKey(name.value)];
+      if (!k) return;
+      for (const f of ["phone", "email"]) {
+        const inp = form.querySelector(`input[name=${f}]`);
+        if (inp && !inp.value && k[f]) inp.value = k[f];
+      }
+      const role = form.querySelector(`input[name=r_${k.companion ? "accompagnant" : "plongeur"}]`);
+      if (role && !role.checked) { role.checked = true; role.dispatchEvent(new Event("change", { bubbles: true })); }
+    });
+  });
 })();

@@ -1309,6 +1309,16 @@ def money_summary(trip: M.Trip, result: E.Result) -> dict:
                 adds_up=A["cash"] + r.to_collect - r.to_refund == final)
 
 
+def contact_text(p: M.Participant, missing: bool = False) -> str:
+    """« 06 12 34 56 78 · anne@exemple.fr ». missing : signale ce qui manque (« pas d'e-mail ») plutôt que de le taire."""
+    tel, mail = (p.phone or "").strip(), (p.email or "").strip()
+    if not missing:
+        return " · ".join(x for x in (tel, mail) if x)
+    if not tel and not mail:
+        return "(aucun contact)"
+    return f"{tel or '(pas de téléphone)'} · {mail or '(pas d’e-mail)'}".replace("’", "'")
+
+
 def treasurer_mail(trip: M.Trip, result: E.Result) -> tuple:
     """Mail au trésorier, prêt à coller : récapitulatif simple, ce qu'il reste à demander aux participants et
     ce qu'il faut leur rembourser, points à vérifier. Renvoie (objet, texte)."""
@@ -1425,9 +1435,67 @@ def treasurer_mail(trip: M.Trip, result: E.Result) -> tuple:
     if m["asso_total"]:
         L.append(f"(et {caisse} prend à sa charge {fmt(m['asso_total'])} sur ce voyage)")
     L += ["", "UNE FOIS TOUT RÉGLÉ", final_sentence(m, caisse, fmt, formula=True)]
+    # les contacts de chacun, pour demander les paiements et faire les virements
+    if trip.participants:
+        gone = {w.participant_id for w in trip.withdrawals}
+        L += ["", "CONTACTS DES PARTICIPANTS"]
+        for p in sorted(trip.participants, key=lambda p: E.sort_key(p.name)):
+            L.append(f"- {p.name}{' (désistement)' if p.id in gone else ''} : {contact_text(p, missing=True)}")
     L += ["", "Le bilan détaillé (PDF) et les justificatifs (ZIP) sont en pièces jointes.",
           "Je me tiens à votre disposition pour toute question.", "", "Bonne journée,"]
     org = organizer_name(trip)
     if org:
         L.append(org)
     return subject, "\n".join(L)
+
+
+# ---------------------------------------------------------------- personnes déjà venues sur d'autres voyages
+def person_key(name: str) -> str:
+    """Clé pour reconnaître une personne d'un voyage à l'autre : sans majuscules, accents ni espaces en trop."""
+    return " ".join(E.sort_key(str(name or "")).split())
+
+
+def known_people(trip: M.Trip) -> list:
+    """Les personnes des autres voyages qui ne sont pas encore dans celui-ci, une fois chacune (reconnue par son nom),
+    avec ses infos les plus récentes : [{key, name, phone, email, companion, trip, trip_id}], par ordre alphabétique.
+    Un téléphone ou un e-mail absent du dernier voyage est repris d'un voyage plus ancien."""
+    from sqlalchemy.orm import object_session
+    s = object_session(trip)
+    if s is None:
+        return []
+    others = [t for t in s.query(M.Trip).filter(M.Trip.id != trip.id)]
+    others.sort(key=lambda t: (t.start or dt.date.min, t.id))           # du plus ancien au plus récent
+    here = {person_key(p.name) for p in trip.participants}
+    out = {}
+    for t in others:
+        for p in t.participants:
+            k = person_key(p.name)
+            if not k or k in here:
+                continue
+            old = out.get(k, {})
+            out[k] = dict(key=k, name=p.name.strip(), companion=bool(p.companion), trip=t.name, trip_id=t.id,
+                          phone=(p.phone or "").strip() or old.get("phone", ""),
+                          email=(p.email or "").strip() or old.get("email", ""),
+                          trips=sorted(set(old.get("trips", [])) | {t.id}))
+    return sorted(out.values(), key=lambda x: E.sort_key(x["name"]))
+
+
+def known_trips(trip: M.Trip, known: list) -> list:
+    """Les autres voyages qui ont des personnes à reprendre, le plus récent d'abord : [{id, name, people}]."""
+    from sqlalchemy.orm import object_session
+    s = object_session(trip)
+    if s is None or not known:
+        return []
+    by_trip = {}
+    for x in known:
+        for tid in x["trips"]:
+            by_trip.setdefault(tid, []).append(x["key"])
+    trips = [t for t in s.query(M.Trip).filter(M.Trip.id.in_(list(by_trip)))]
+    trips.sort(key=lambda t: (t.start or dt.date.min, t.id), reverse=True)
+    return [dict(id=t.id, name=t.name, people=by_trip[t.id]) for t in trips]
+
+
+def known_person(trip: M.Trip, name: str):
+    """La personne déjà venue sur un autre voyage qui porte ce nom (ou None)."""
+    k = person_key(name)
+    return next((x for x in known_people(trip) if x["key"] == k), None) if k else None

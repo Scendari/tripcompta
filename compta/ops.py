@@ -372,9 +372,14 @@ def do_add_participants(s, t, noms, inclure_dans_depenses_communes=True, famille
         if E.sort_key(name) in existing:
             skipped.append(name)
             continue
-        comp = _truthy(info.get("accompagnant", accompagnant) or False)
-        p = M.Participant(name=name, phone=str(info.get("telephone") or ""),
-                          email=str(info.get("email") or ""), note=str(info.get("note") or ""), companion=comp)
+        kp = S.known_person(t, name)              # déjà venu sur un autre voyage : ses infos par défaut
+        if "accompagnant" in info or accompagnant or not kp:
+            comp = _truthy(info.get("accompagnant", accompagnant) or False)
+        else:
+            comp = kp["companion"]
+        p = M.Participant(name=name, phone=str(info.get("telephone") or (kp or {}).get("phone") or ""),
+                          email=str(info.get("email") or (kp or {}).get("email") or ""),
+                          note=str(info.get("note") or ""), companion=comp)
         t.participants.append(p)
         s.flush()
         fam = info.get("famille", famille)
