@@ -247,7 +247,8 @@ def test_form_and_tooltip_show_the_same_amounts(trip, browser_url):
     assert sorted(want.values()) == [1720] * 9 + [1721] * 2 and len(winners) == 2
     tip = norm(c.get(f"/v/{tid}/depenses").text)
     for n in winners:
-        assert f"{n} : 17,21 € (+1 c tiré au sort)" in tip
+        assert f"<span>{n} : 17,21 €</span>" in tip
+    assert "tiré au sort" not in tip
     with sync_playwright() as p:
         b = p.chromium.launch()
         pg = b.new_page()

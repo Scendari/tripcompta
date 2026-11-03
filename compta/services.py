@@ -459,9 +459,8 @@ def who_detail(trip: M.Trip, e: M.Expense, result: E.Result) -> list:
         elif f:
             out.append(f"Famille {f.name}")
     others = [p.name for p in sorted(trip.participants, key=lambda p: E.sort_key(p.name)) if p.id not in ids]
-    winners = set(result.cent_winners(e.id))
     for p in people:
-        out.append(f"{p.name} : {E.fmt(result.share(p.id, e.id))}" + (" (+1 c tiré au sort)" if p.id in winners else ""))
+        out.append(f"{p.name} : {E.fmt(result.share(p.id, e.id))}")
     to_asso = (result.cent_info.get(e.id) or {}).get("asso")
     if to_asso:
         out.append(f"Centimes d'arrondi : {E.fmt(to_asso)} payés par {caisse_label(trip)}")
