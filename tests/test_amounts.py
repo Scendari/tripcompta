@@ -17,6 +17,12 @@ from compta.demo import seed_demo
 from compta.services import compute_trip
 
 
+def cent(r, pid, key, x):
+    """Part attendue : le montant exact au centime inférieur, + 1 centime si la personne a été tirée au sort
+    pour les centimes restants de cette dépense (chaque dépense tombe juste)."""
+    return math.floor(x) + (1 if pid in r.cent_winners(key) else 0)
+
+
 def near(x):
     """Centime le plus proche (affichage d'une ligne)."""
     return math.floor(F(x) + F(1, 2))
@@ -77,8 +83,10 @@ def test_demo_dives_with_locked_baptism(demo):
     julien = F(231000) * 4 / 49 + gap * 4 / 46
     marie = F(231000) * 6 / 49 + gap * 6 / 46
     assert r.share(P["Camille"], club.id) == 12000
-    assert r.share(P["Julien"], club.id) == near(julien) == 19043      # 190,4347… affiché au centime le plus proche
-    assert r.share(P["Marie"], club.id) == near(marie)
+    assert math.floor(julien) == 19043                                       # 190,4347… € exactement
+    assert r.share(P["Julien"], club.id) == cent(r, P["Julien"], club.id, julien)
+    assert r.share(P["Marie"], club.id) == cent(r, P["Marie"], club.id, marie)
+    assert sum(r.share(p, club.id) for p in P.values()) == 231000           # la dépense tombe juste
     assert r.share(P["Antoine"], club.id) == 0
     assert r.share(P["Hugo"], club.id) == 0          # non plongeur
     assert r.lines[(P["Camille"], club.id)].locked
@@ -92,9 +100,11 @@ def test_demo_hugo_line_by_line(demo):
     gite = E_["Gîte « Les Pins » — 3 nuits"]
     assert r.share(P["Hugo"], gite.id) == 14500 - 4000
     assert r.share(P["Hugo"], E_["Sortie palmes-masque-tuba"].id) == 4500
-    assert r.share(P["Hugo"], E_["Navette bateau Hyères ↔ Port-Cros"].id) == near(F(24000, 11)) == 2182
-    assert r.share(P["Hugo"], E_["Courses communes"].id) == near(F(41235, 11)) == 3749
-    assert r.share(P["Hugo"], E_["Restaurant de clôture"].id) == near(F(42000, 11)) == 3818
+    for label, amount in (("Navette bateau Hyères ↔ Port-Cros", 24000), ("Courses communes", 41235),
+                          ("Restaurant de clôture", 42000)):           # 21,8181… / 37,4863… / 38,1818… €
+        eid = E_[label].id
+        assert r.share(P["Hugo"], eid) == cent(r, P["Hugo"], eid, F(amount, 11))
+        assert sum(r.share(p, eid) for p in P.values()) == amount
 
     # compensation de Thierry : au prorata des totaux EXACTS des non-désistés, hors Thierry
     totals = {}
@@ -103,13 +113,14 @@ def test_demo_hugo_line_by_line(demo):
             totals[pid] = totals.get(pid, 0) + l.exact
     eligible = {p: v for p, v in totals.items() if p not in (P["Thierry"], P["Antoine"]) and v > 0}
     hugo_comp = F(2500) * eligible[P["Hugo"]] / sum(eligible.values())
-    assert r.share(P["Hugo"], "global") == near(hugo_comp)
+    assert r.share(P["Hugo"], "global") == cent(r, P["Hugo"], "global", hugo_comp)
     assert r.share(P["Thierry"], "global") == -2500
-    # le total de Hugo est arrondi UNE fois, au centime supérieur, sur la somme exacte
+    # le total de Hugo est la somme de ses lignes, à moins d'un centime par ligne de sa part exacte
     exact = 10500 + 4500 + F(24000, 11) + F(41235, 11) + F(42000, 11) + hugo_comp
-    assert r.people[P["Hugo"]].share == ceil(exact)
-    assert r.people[P["Hugo"]].share - r.people[P["Hugo"]].rounding == sum(
-        l.cents for (pid, _), l in r.lines.items() if pid == P["Hugo"])
+    hugo = r.people[P["Hugo"]].share
+    assert hugo == sum(l.cents for (pid, _), l in r.lines.items() if pid == P["Hugo"])
+    n_lines = sum(1 for (pid, _) in r.lines if pid == P["Hugo"])
+    assert abs(hugo - exact) < n_lines and r.people[P["Hugo"]].rounding == 0
     assert r.people[P["Hugo"]].paid == 10000
 
 

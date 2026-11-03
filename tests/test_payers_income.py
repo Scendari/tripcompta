@@ -55,8 +55,11 @@ def test_engine_income_rounding_never_costs_the_asso():
     exps = [E.Expense(1, "Gîte", actual=10000, weights=ALL),
             E.Expense(2, "Avoir", actual=1000, weights=ALL, kind="recette")]    # 10 / 3 = 3,333…
     r = E.compute(P, exps)
-    assert r.total_cost == 9000 and r.rounding_gain >= 0 and r.is_balanced()
-    assert r.share(1, 2) == -333                                            # crédit arrondi en faveur de l'asso
+    assert r.total_cost == 9000 and r.rounding_gain == 0 and r.is_balanced() and r.asso_total == 0
+    # avoir de 10 € à 3 : −3,33 / −3,33 / −3,34 (la recette tombe juste) ; gîte : 33,33 / 33,33 / 33,34.
+    # Les centimes tombent chacun son tour : la personne qui a payé 33,34 reçoit 3,34 → tout le monde paie 30,00 €
+    assert sorted(r.share(i, 2) for i in (1, 2, 3)) == [-334, -333, -333]
+    assert [r.people[i].share for i in (1, 2, 3)] == [3000, 3000, 3000]
 
 
 def test_engine_pending_amount_counts_zero():

@@ -23,15 +23,16 @@
   </details>
   {% set rnd_asso = trip.rounding == 'asso' %}
   <details class="asso-rename" id="arrondi">
-    <summary class="btn small ghost" title="Qui paie les quelques centimes d'écart quand une part ne tombe pas juste">Centimes d'arrondi : {{ asso_name if rnd_asso else 'participants' }}</summary>
+    <summary class="btn small ghost" title="Qui paie les quelques centimes qui restent quand une dépense ne se partage pas juste">Centimes d'arrondi : {{ asso_name if rnd_asso else 'tirés au sort' }}</summary>
     <form method="post" action="/v/{{ trip.id }}/asso/arrondi" style="margin-top:.5rem">
       <div class="choice small" style="flex-direction:column;align-items:flex-start">
-        <label><input type="radio" name="rounding" value="participants" {{ 'checked' if not rnd_asso }}> Payés par les participants <span class="hint">(le total de chacun est arrondi au centime supérieur : {{ asso_name }} ne perd jamais)</span></label>
-        <label><input type="radio" name="rounding" value="asso" {{ 'checked' if rnd_asso }}> Pris en charge par {{ asso_name }} <span class="hint">(arrondi au centime inférieur : personne ne paie plus que sa part exacte)</span></label>
+        <label><input type="radio" name="rounding" value="participants" {{ 'checked' if not rnd_asso }}> Tirés au sort parmi les participants <span class="hint">(chacun son tour : personne ne paie plus d'un centime de plus qu'un autre)</span></label>
+        <label><input type="radio" name="rounding" value="asso" {{ 'checked' if rnd_asso }}> Pris en charge par {{ asso_name }} <span class="hint">(personne ne paie plus que sa part exacte)</span></label>
       </div>
       <button class="btn small" style="margin-top:.4rem">Enregistrer</button>
     </form>
-    <p class="hint">Une part ne tombe pas toujours juste (189,22 € ÷ 11 = 17,2018… €). L'écart est d'au plus 1 centime par personne, sur tout le voyage.{% if r.rounding_gain %} Aujourd'hui : {{ (r.rounding_gain|abs)|money }} {{ "au profit de" if r.rounding_gain > 0 else "pris en charge par" }} {{ asso_name }}.{% endif %}</p>
+    {% set asso_cents = r.cent_info.values()|map(attribute='asso')|sum %}
+    <p class="hint">Une dépense ne se partage pas toujours juste (189,22 € ÷ 11 = 17,2018… €) : il reste quelques centimes. Ce réglage vaut pour tout le voyage ; une dépense peut avoir son propre choix (« Pour qui ? » → Centimes d'arrondi → Changer).{% if asso_cents %} Aujourd'hui, {{ asso_name }} paie {{ asso_cents|money }} de centimes d'arrondi.{% endif %}</p>
   </details>
   {% if not cashier %}
   <details class="asso-rename">

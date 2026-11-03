@@ -1,9 +1,10 @@
 {% set n = weights|length %}{% set inc = r.total_cost < 0 %}
 {% set vals = r.people.values()|rejectattr('share', 'eq', 0)|list %}
-{% if vals and vals|map(attribute='share')|unique|list|length == 1 %}
-<p style="margin:0">➜ <b>{{ (vals[0].share|abs)|money }}</b> {{ 'de moins pour chacun' if inc else 'chacun' }} <span class="muted">({{ amount|money }}{{ ' reçus' if inc }} ÷ {{ n }} personne{{ 's' if n > 1 }})</span>{% if r.rounding_gain > 0 %} <span class="muted small">— arrondi au centime : {{ r.rounding_gain|money }} pour {{ asso_name }}</span>{% elif r.rounding_gain < 0 %} <span class="muted small">— arrondi au centime : {{ (-r.rounding_gain)|money }} pris en charge par {{ asso_name }}</span>{% endif %}</p>
+{% set inf = r.cent_info.get(0) or {} %}{% set win = inf.winners or [] %}
+{% set base = vals|rejectattr('id', 'in', win)|map(attribute='share')|unique|list %}
+{% if vals and base|length <= 1 %}{% set b = base[0] if base else vals[0].share - 1 %}
+<p style="margin:0">➜ <b>{{ (b|abs)|money }}</b> {{ 'de moins pour chacun' if inc else 'chacun' }} <span class="muted">({{ amount|money }}{{ ' reçus' if inc }} ÷ {{ n }} personne{{ 's' if n > 1 }})</span>{% if win %} <span class="muted small">— + 1 centime pour {{ "l'un d'eux" if win|length == 1 else win|length ~ " d'entre eux" }} (tiré au sort) : le compte tombe juste</span>{% endif %}{% if inf.asso %} <span class="muted small">— {{ inf.asso|money }} de centimes d'arrondi payés par {{ asso_name }}</span>{% endif %}</p>
 {% elif vals %}
 <p style="margin:0">➜ {{ amount|money }}{{ ' reçus' if inc }} ÷ {{ n }} personne{{ 's' if n > 1 }} :
-  {% for g in vals|groupby('share') %}<b>{{ (g.grouper|abs)|money }}</b> pour {{ g.list|length }}{{ ', ' if not loop.last }}{% endfor %}
-  <span class="muted small">(arrondi au centime)</span></p>
+  {% for g in vals|groupby('share') %}<b>{{ (g.grouper|abs)|money }}</b> pour {{ g.list|length }}{{ ', ' if not loop.last }}{% endfor %}</p>
 {% endif %}

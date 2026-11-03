@@ -1,17 +1,17 @@
 """Moteur de calcul — Python pur, sans base de données.
 
 Tous les montants sont en centimes entiers. Les calculs sont faits en fractions
-exactes ; le total de chaque participant est arrondi UNE fois :
-- par défaut (rounding="participants") au centime supérieur : l'asso n'y perd jamais, et chacun paie ce que donne
-  une calculette (à moins d'un centime près). Les centimes en trop forment « l'écart d'arrondi (au profit de
-  l'asso) » ;
-- au choix (rounding="asso") au centime inférieur : personne ne paie plus que sa part exacte, l'asso prend les
-  centimes à sa charge (au plus 1 centime par personne).
-Chaque part de dépense est affichée au centime le plus proche.
+exactes, puis CHAQUE DÉPENSE TOMBE JUSTE AU CENTIME : chaque part est arrondie au centime inférieur, et les
+centimes qui restent (au plus 1 par personne) sont payés :
+- par des participants tirés au sort (par défaut, rounding="participants") : le tirage est enregistré avec la
+  dépense (Expense.cents_who) ; sans tirage valable, un tirage fixe (selon la dépense et la personne) est utilisé ;
+- ou par l'asso (rounding="asso", ou Expense.cents_mode="asso" pour une seule dépense).
+Le total d'une personne est la somme de ses lignes ; parts + prises en charge par l'asso = coût, au centime.
 """
 from __future__ import annotations
 
 import math
+import zlib
 from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Optional
@@ -124,6 +124,8 @@ class Expense:
     refund: int = 0                      # « dont remboursé » : partie rendue par le fournisseur (réduit le coût)
     refund_to: Optional[int] = None      # qui a reçu ce remboursement (None = l'asso)
     fixed: dict = field(default_factory=dict)    # participant id -> montant fixé (centimes) ; le reste aux autres
+    cents_mode: str = ""                 # centimes d'arrondi de CETTE dépense : "" (réglage du voyage) | "participants" | "asso"
+    cents_who: tuple = ()                # tirage enregistré : qui paie un centime de plus
 
     @property
     def sign(self) -> int:
@@ -299,6 +301,7 @@ class Result:
     families: dict = field(default_factory=dict)   # fid -> Family
     cashier: Optional[int] = None    # participant qui tient la caisse (voyage sans asso) ; None = l'asso
     rounding_mode: str = "participants"   # qui porte les centimes d'arrondi : "participants" ou "asso"
+    cent_info: dict = field(default_factory=dict)  # eid|GLOBAL -> {need, eligible, winners, drawn, asso, mode}
 
     @property
     def accounts(self) -> list:
@@ -337,11 +340,13 @@ class Result:
         return l.cents if l else 0
 
     def subtotal(self, pid, eids) -> int:
-        """Sous-total d'une personne (ou de tous si pid est None) sur plusieurs dépenses, calculé sur les montants
-        exacts puis arrondi au centime le plus proche : comme à la calculette (1 522,29 / 11 = 138,39)."""
+        """Sous-total d'une personne (ou de tous si pid est None) sur plusieurs dépenses : somme des lignes."""
         eids = set(eids)
-        x = sum((l.exact for (p, e), l in self.lines.items() if e in eids and (pid is None or p == pid)), Fraction(0))
-        return nearest(x)
+        return sum(l.cents for (p, e), l in self.lines.items() if e in eids and (pid is None or p == pid))
+
+    def cent_winners(self, eid) -> list:
+        """Qui paie un centime de plus sur cette dépense (centimes d'arrondi)."""
+        return list((self.cent_info.get(eid) or {}).get("winners") or [])
 
     @property
     def asso_total(self) -> int:
@@ -537,12 +542,6 @@ def compute(participants, expenses, adjustments=(), withdrawals=(), movements=()
             _compensate(a, delta, e, active, locked | set(released_asso), lines, line, asso, name,
                         f"{kind} accordée{reason}", warnings, e.label)
 
-    # ---- 2. Montant affiché de chaque part de dépense : au centime le plus proche ----
-    # (l'arrondi qui compte se fait UNE fois, sur le total de chacun, au centime supérieur : étape 5)
-
-    for l in lines.values():
-        l.cents = nearest(l.exact)
-
     # ---- 3. Ajustements sur le total (calculés sur les montants exacts) ----
     global_locked = set()
     for a in [a for a in adjustments if a.expense is None]:
@@ -566,14 +565,9 @@ def compute(participants, expenses, adjustments=(), withdrawals=(), movements=()
                     if p != a.participant and p not in global_locked and p not in wd and t > 0}
         _compensate(a, Fraction(delta), None, eligible, set(), lines, line, asso, name,
                     f"{kind} accordée{reason}", warnings, "le total")
-        # Les écarts « sur le total » vont tous dans la ligne globale de chaque personne.
-        for (p, k), l in lines.items():
-            if k == GLOBAL:
-                l.cents = nearest(l.exact)
 
-    # ---- 4. Prises en charge par l'asso (arrondies au centime supérieur) ----
-    for c in asso:
-        c.cents = math.ceil(c.exact)
+    # ---- 4. Centimes : chaque dépense (et le total des remises) tombe juste ----
+    cent_info = _settle_cents(lines, asso, exp_by_id, rounding, names)
 
     # ---- 5. Synthèse par personne ----
     people = {pid: PersonSummary(pid, names[pid], withdrawn=pid in wd) for pid in pids}
@@ -583,10 +577,8 @@ def compute(participants, expenses, adjustments=(), withdrawals=(), movements=()
         exact_share[p] += l.exact
         shown[p] += l.cents
     for pid in pids:
-        # Une seule fois, sur le total de chacun : au centime supérieur (l'asso n'y perd jamais),
-        # ou inférieur si l'asso prend les centimes à sa charge (personne ne paie plus que sa part exacte)
-        people[pid].share = (math.floor if rounding == ROUND_ASSO else math.ceil)(exact_share[pid])
-        people[pid].rounding = people[pid].share - shown[pid]      # écart avec la somme des parts affichées
+        people[pid].share = shown[pid]           # la somme de ses lignes, chacune au centime
+        people[pid].rounding = 0
     for e in expenses:
         splits = e.splits()
         if e.payers and sum(c for _, c in e.payers) > e.best_known():
@@ -608,7 +600,7 @@ def compute(participants, expenses, adjustments=(), withdrawals=(), movements=()
     shares_total = sum(p.share for p in people.values())
     asso_total = sum(c.cents for c in asso)
     gain = shares_total + asso_total - total_cost
-    if gain < 0 and rounding != ROUND_ASSO:
+    if gain != 0:
         warnings.append("Contrôle : le total ne tombe pas juste (écart négatif). Merci de le signaler.")
 
     # Nettoyage : lignes vides
@@ -626,7 +618,61 @@ def compute(participants, expenses, adjustments=(), withdrawals=(), movements=()
         people[p.id].family = p.family if p.family in fams else None
         people[p.id].companion = p.companion
     return Result(mode, total_cost, lines, people, asso, gain, warnings, expense_totals, fams,
-                  rounding_mode=ROUND_ASSO if rounding == ROUND_ASSO else ROUND_PARTICIPANTS)
+                  rounding_mode=ROUND_ASSO if rounding == ROUND_ASSO else ROUND_PARTICIPANTS, cent_info=cent_info)
+
+
+def fixed_draw(key, eligible, n, counts=None, names=None) -> list:
+    """Tirage de secours (sans tirage enregistré), toujours le même : d'abord ceux qui ont payé le moins de centimes
+    en plus jusque-là (dans l'ordre des dépenses), puis un ordre fixe tiré du libellé et des noms (et non des
+    identifiants : le même voyage, exporté puis importé ailleurs, donne les mêmes montants)."""
+    counts, names = counts or {}, names or {}
+    return sorted(sorted(eligible, key=lambda p: (counts.get(p, 0), zlib.crc32(f"{key}:{names.get(p, p)}".encode()),
+                                                  p))[:n])
+
+
+def _settle_cents(lines, asso, exp_by_id, rounding, names=None) -> dict:
+    """Chaque part au centime inférieur ; les centimes restants d'une dépense vont aux participants tirés au sort,
+    ou à l'asso. Renvoie, par dépense : {need, eligible, winners, drawn, asso, mode}."""
+    keys = {}
+    for (p, k), l in lines.items():
+        keys.setdefault(k, ([], []))[0].append(l)
+    for c in asso:
+        keys.setdefault(c.expense if c.expense is not None else GLOBAL, ([], []))[1].append(c)
+    info, counts = {}, {}
+    order = [k for k in exp_by_id if k in keys] + [k for k in keys if k not in exp_by_id]
+    for k in order:
+        ls, cs = keys[k]
+        for l in ls:
+            l.cents = math.floor(l.exact)
+        for c in cs:
+            c.cents = math.floor(c.exact)
+        left = sum(l.exact for l in ls) + sum(c.exact for c in cs) - sum(l.cents for l in ls) - sum(c.cents for c in cs)
+        left = int(round(left))                     # entier : la dépense (ou le total des remises) est en centimes
+        eligible = sorted(l.participant for l in ls if l.exact != l.cents)
+        e = exp_by_id.get(k)
+        mode = (e.cents_mode if e is not None and e.cents_mode in (ROUND_PARTICIPANTS, ROUND_ASSO) else "") or rounding
+        winners, drawn, to_asso = [], False, 0
+        if left and mode == ROUND_ASSO:
+            to_asso = left
+        elif left:
+            need = min(left, len(eligible))
+            stored = list(e.cents_who) if e is not None else []
+            if len(stored) == need and len(set(stored)) == need and set(stored) <= set(eligible):
+                winners, drawn = stored, True
+            else:
+                winners = fixed_draw(e.label if e is not None else k, eligible, need, counts, names)
+            for l in ls:
+                if l.participant in winners:
+                    l.cents += 1
+            for p in winners:
+                counts[p] = counts.get(p, 0) + 1
+            to_asso = left - need                  # (rare) plus de centimes que de personnes concernées
+        if to_asso:
+            label = e.label if e is not None else "Remises et suppléments"
+            asso.append(AssoCharge(label, "centimes d'arrondi", Fraction(to_asso), cents=to_asso,
+                                   expense=k if k != GLOBAL else None))
+        info[k] = dict(need=len(winners), eligible=eligible, winners=winners, drawn=drawn, asso=to_asso, mode=mode)
+    return info
 
 
 def _compensate(a: Adjustment, delta: Fraction, e, pool: dict, excluded: set, lines, line,

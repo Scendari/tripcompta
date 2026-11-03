@@ -203,9 +203,10 @@ def test_browser_person_account_folds(fam):
         th.join(5)
 
 
-def test_rounding_row_everywhere(tmp_path):
-    """La part totale est arrondie une seule fois : la ligne « Arrondi au centime » fait tomber juste
-    la page de la personne, le tableau des comptes, « Qui paie quoi » et le PDF."""
+def test_cents_drawn_everywhere(tmp_path):
+    """10 € pour 3 : 3,33 € chacun et le centime restant payé par UNE personne tirée au sort (la dépense tombe
+    juste). Ce tirage est enregistré, et c'est le même partout : sa page, les comptes, « Qui paie quoi », la bulle.
+    Plus de ligne « Arrondi au centime »."""
     from compta.ops import Ops
     from compta.db import Database
     ops = Ops(Database(tmp_path / "d"))
@@ -216,21 +217,31 @@ def test_rounding_row_everywhere(tmp_path):
     c = TestClient(app)
     with app.state.db.Session() as s:
         t = s.get(M.Trip, tid)
+        e = t.expenses[0]
         res = S.compute_trip(t)
-        pid = t.participants[0].id
-        acc = S.person_account(t, res, pid)
-    assert acc["debit"] == res.people[pid].share == 334
-    assert any(g["name"] == "Arrondi au centime" and g["debit"] == 1 for g in acc["groups"])
-    assert "Arrondi au centime" in c.get(f"/v/{tid}/p/{pid}").text
+        winner = int(e.cents_who)                                  # tirage enregistré par l'import
+        assert res.cent_winners(e.id) == [winner] and res.cent_info[e.id]["drawn"]
+        for p in t.participants:
+            acc = S.person_account(t, res, p.id)
+            want = 334 if p.id == winner else 333
+            assert acc["debit"] == res.people[p.id].share == res.share(p.id, e.id) == want
+            assert not any(g["kind"] == "arrondi" for g in acc["groups"])
+        names = {p.id: p.name for p in t.participants}
+    person = clean(c.get(f"/v/{tid}/p/{winner}").text)
+    assert "▸</span> Arrondi au centime</button>" not in person                 # plus de ligne d'arrondi à part
+    assert "+ 1 centime tiré au sort (la dépense tombe juste)" in person        # expliqué sur la ligne elle-même
     page = clean(c.get(f"/v/{tid}/comptes").text)
-    assert "Arrondi au centime" in page and "à vérifier" not in page
+    assert "▸</span> Arrondi au centime</button>" not in page and "à vérifier" not in page
     m = clean(c.get(f"/v/{tid}/repartition").text)
-    assert "Arrondi" in m and "3,33 €" in m and "3,34 €" in m
+    assert "3,33 €" in m and "3,34 €" in m and "Arrondis (" not in m
+    tip = clean(c.get(f"/v/{tid}/depenses").text)
+    assert f"{names[winner]} : 3,34 € (+1 c tiré au sort)" in tip
 
 
 def test_subtotals_match_a_calculator(tmp_path):
-    """Cas réel (anonymisé) : 8 dépenses de transport pour 11 personnes, 1 522,29 €.
-    Le sous-total « Transport » de chacun = 1 522,29 / 11 = 138,39 € (pas la somme de 8 lignes arrondies)."""
+    """Cas réel (anonymisé) : 8 dépenses de transport pour 11 personnes, 1 522,29 € = 11 × 138,39 €.
+    Chaque dépense tombe juste, et les centimes restants tombent chacun son tour : 138,39 € pour tout le monde,
+    et c'est bien la somme de ses 8 lignes."""
     ops = Ops(Database(tmp_path / "d"))
     people = [f"P{i:02d}" for i in range(11)]
     amounts = ["603", "41,30", "104,90", "35,40", "127,12", "149,22", "141,35", "320"]
@@ -242,31 +253,14 @@ def test_subtotals_match_a_calculator(tmp_path):
     with app.state.db.Session() as s:
         t = s.get(M.Trip, tid)
         res = S.compute_trip(t)
-        pid = t.participants[0].id
-        acc = S.person_account(t, res, pid)
         eids = [e.id for e in t.expenses]
-    assert sum(l.cents for l in res.lines_for(pid)) == 13840          # 8 lignes arrondies au plus proche
-    assert {g["name"]: g["debit"] for g in acc["groups"]} == {"Transport": 13839}
-    assert res.people[pid].share == 13839 and res.subtotal(pid, eids) == 13839
+        for p in t.participants:
+            acc = S.person_account(t, res, p.id)
+            assert sum(l.cents for l in res.lines_for(p.id)) == 13839
+            assert {g["name"]: g["debit"] for g in acc["groups"]} == {"Transport": 13839}
+            assert res.people[p.id].share == 13839 and res.subtotal(p.id, eids) == 13839
     page = clean(TestClient(app).get(f"/v/{tid}/repartition?vue=totaux").text)
     assert "138,39 €" in page and "138,40 €" not in page
-
-
-def test_rounding_line_explained_with_numbers(tmp_path):
-    """10 € pour 3 : part exacte 3,3333… € arrondie à 3,34 € ; la ligne affichée fait 3,33 € : il manque 0,01 €."""
-    ops = Ops(Database(tmp_path / "d"))
-    tid = ops.import_trip({"voyage": {"nom": "x"}, "participants": ["Anne", "Bob", "Chloé"],
-                           "depenses": [{"libelle": "Péage", "reel": "10", "paye_par": "asso", "pour": "tous"}]})["voyage_id"]
-    app = create_app(tmp_path / "d")
-    with app.state.db.Session() as s:
-        t = s.get(M.Trip, tid)
-        r = S.compute_trip(t)
-        pid = t.participants[0].id
-        g = next(g for g in S.person_account(t, r, pid)["groups"] if g["kind"] == "arrondi")
-    assert clean(g["explain"]) == clean("Sa part exacte est de 3,3333… €, arrondie à 3,34 €. Les montants ci-dessus, "
-                            "arrondis chacun au centime, font 3,33 € : il manque 0,01 €.")
-    page = clean(TestClient(app).get(f"/v/{tid}/p/{pid}").text)
-    assert "Sa part exacte est de 3,3333… €, arrondie à 3,34 €" in page
 
 
 def test_expenses_who_tooltip(tmp_path):

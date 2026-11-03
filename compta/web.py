@@ -147,6 +147,9 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
     except NewerDatabaseError as err:
         return newer_data_app(err, upd)
     db.daily_backup()
+    with db.Session() as s_:                     # centimes d'arrondi : un tirage pour les dépenses qui n'en ont pas
+        if any([S.store_draws(t_) for t_ in s_.query(M.Trip).all()]):
+            s_.commit()
     app = FastAPI(title="Trip Compta", docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json",
                   description="API JSON de Trip Compta : une IA peut lire et remplir les voyages. "
                               "Toutes les écritures acceptent \"simulation\": true.")
@@ -163,6 +166,19 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
     # on note l'action défaisable au début de chaque requête pour savoir si la requête en a créé une.
     import contextvars
     snap_before: contextvars.ContextVar = contextvars.ContextVar("snap_before", default=None)
+
+    @app.middleware("http")
+    async def keep_draws(request, call_next):
+        """Après chaque modification d'un voyage : tirage des centimes d'arrondi pour les dépenses qui n'en ont
+        pas de valable (nouvelle dépense, personnes ou montant changés, désistement…). Jamais refait sinon."""
+        response = await call_next(request)
+        m = re.match(r"/v/(\d+)/", request.url.path)
+        if request.method == "POST" and m and response.status_code < 400 and not request.url.path.endswith("apercu"):
+            with db.Session() as s_:
+                t_ = s_.get(M.Trip, int(m.group(1)))
+                if t_ is not None and S.store_draws(t_):
+                    s_.commit()
+        return response
 
     @app.middleware("http")
     async def remember_snapshot(request, call_next):
@@ -1125,9 +1141,17 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
         who_roles = [chip(v, S.with_role(t, rk)) for rk, v in S.trip_roles(t).items() if S.with_role(t, rk)]
         who_families = [chip(f_.name, f_.members) for f_ in t.families if f_.members]
         who_groups = [chip(g["name"], g["members"]) for g in S.trip_groups(t) if g["members"]]
+        # centimes d'arrondi : le tirage enregistré, et combien chacun en a déjà payé ailleurs (tirage équitable)
+        import json as _json
+        r_ = S.compute_trip(t)
+        inf = r_.cent_info.get(e.id) if e else None
+        cents = dict(mode=(e.cents_mode or "") if e else "", who=inf["winners"] if inf and inf["drawn"] else [],
+                     counts=_json.dumps({str(k): v for k, v in S.cent_counts(r_, skip=e.id if e else None).items()}))
+        if inf and inf["drawn"] and e:
+            amounts = {p: r_.share(p, e.id) for p in weights}          # exactement ce que donne le calcul
         return dict(trip=t, e=e, weights=weights, linked=linked, groups=S.trip_groups(t),
                     who_roles=who_roles, who_families=who_families, who_groups=who_groups, payers=payers, subcats=subcats,
-                    split_mode=split_mode, amounts=amounts, fixed=fixed)
+                    split_mode=split_mode, amounts=amounts, fixed=fixed, cents=cents)
 
     @app.get("/v/{tid}/depenses/nouvelle", response_class=HTMLResponse)
     def new_expense(tid: int, request: Request, s: Session = Depends(get_s)):
@@ -1440,6 +1464,9 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
         s.query(M.ExpenseShare).filter_by(expense_id=e.id).delete()
         for pid, w in weights.items():
             s.add(M.ExpenseShare(expense_id=e.id, participant_id=pid, weight=w, fixed=fixed.get(pid)))
+        if "cents_mode" in f:          # centimes d'arrondi : le choix et le tirage vus à l'écran
+            e.cents_mode = f.get("cents_mode") if f.get("cents_mode") in (E.ROUND_PARTICIPANTS, E.ROUND_ASSO) else ""
+            e.cents_who = ",".join(str(x) for x in S.cents_ids(f.get("cents_who")))
         # justificatifs existants
         wanted = {int(x) for x in f.getlist("receipts")}
         s.query(M.ReceiptLink).filter_by(expense_id=e.id).delete()
@@ -1628,7 +1655,7 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
             t.rounding = v
             s.commit()
         caisse = S.caisse_label(t)
-        return back(f"/v/{tid}/asso", "Les centimes d'arrondi sont payés par les participants" if v == E.ROUND_PARTICIPANTS
+        return back(f"/v/{tid}/asso", "Les centimes d'arrondi sont tirés au sort parmi les participants" if v == E.ROUND_PARTICIPANTS
                     else f"Les centimes d'arrondi sont pris en charge par {caisse}")
 
     @app.get("/v/{tid}/repartition", response_class=HTMLResponse)

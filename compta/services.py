@@ -331,7 +331,8 @@ def engine_inputs(trip: M.Trip) -> dict:
             E.Expense(e.id, e.label, cats.get(e.category_id, "Divers"), e.planned, e.actual, e.payer_id,
                       {s.participant_id: s.weight for s in e.shares}, e.kind or "depense",
                       [(p.payer_id, p.amount) for p in e.payments] or None, e.refund or 0, e.refund_to_id,
-                      {s.participant_id: s.fixed for s in e.shares if s.fixed is not None})
+                      {s.participant_id: s.fixed for s in e.shares if s.fixed is not None},
+                      e.cents_mode or "", cents_ids(e.cents_who))
             for e in trip.expenses
         ],
         adjustments=[
@@ -345,6 +346,42 @@ def engine_inputs(trip: M.Trip) -> dict:
                               m.date.isoformat() if m.date else "", m.note) for m in trip.movements],
         rounding=trip.rounding or E.ROUND_PARTICIPANTS,
     )
+
+
+def cents_ids(raw) -> tuple:
+    return tuple(int(x) for x in str(raw or "").split(",") if x.strip().isdigit())
+
+
+def cent_counts(result: E.Result, skip=None) -> dict:
+    """Combien de centimes d'arrondi chacun a déjà payés en plus (sur toutes les dépenses, sauf `skip`)."""
+    out = {}
+    for k, inf in result.cent_info.items():
+        if k == skip:
+            continue
+        for p in inf["winners"]:
+            out[p] = out.get(p, 0) + 1
+    return out
+
+
+def store_draws(trip: M.Trip, eids=None) -> bool:
+    """Enregistre le tirage des centimes d'arrondi des dépenses qui n'en ont pas de valable (nouvelle dépense
+    venue de l'IA, montant ou personnes changés, désistement…) : c'est exactement celui que le calcul utilise déjà
+    (équitable, toujours le même), si bien que les montants ne bougent pas ; il ne bougera plus ensuite.
+    Un tirage valable n'est jamais refait (le hasard du formulaire, « Tirer d'autres personnes », est gardé).
+    Renvoie True si quelque chose a changé."""
+    r = compute_trip(trip)
+    changed = False
+    for e in trip.expenses:
+        if eids is not None and e.id not in eids:
+            continue
+        inf = r.cent_info.get(e.id)
+        if not inf or not inf["need"]:
+            if e.cents_who:
+                e.cents_who, changed = "", True                  # plus rien à tirer : on oublie l'ancien tirage
+            continue
+        if not inf["drawn"]:
+            e.cents_who, changed = ",".join(map(str, inf["winners"])), True
+    return changed
 
 
 def compute_trip(trip: M.Trip, mode: str = E.ACTUAL, **overrides) -> E.Result:
@@ -422,8 +459,12 @@ def who_detail(trip: M.Trip, e: M.Expense, result: E.Result) -> list:
         elif f:
             out.append(f"Famille {f.name}")
     others = [p.name for p in sorted(trip.participants, key=lambda p: E.sort_key(p.name)) if p.id not in ids]
+    winners = set(result.cent_winners(e.id))
     for p in people:
-        out.append(f"{p.name} : {E.fmt(result.share(p.id, e.id))}")
+        out.append(f"{p.name} : {E.fmt(result.share(p.id, e.id))}" + (" (+1 c tiré au sort)" if p.id in winners else ""))
+    to_asso = (result.cent_info.get(e.id) or {}).get("asso")
+    if to_asso:
+        out.append(f"Centimes d'arrondi : {E.fmt(to_asso)} payés par {caisse_label(trip)}")
     if others and len(others) <= len(people):
         out += ["---", "Pas concernés : " + ", ".join(others)]
     return out
@@ -729,7 +770,7 @@ def person_account(trip: M.Trip, result: E.Result, pid: int) -> dict:
         else:
             e = exp.get(l.expense)
             g = group(e.category.name if e and e.category else "Divers")
-        g["x"] = g.get("x", 0) + l.exact          # sous-total calculé sur les montants exacts (comme à la calculette)
+        g["debit"] += l.cents                      # sous-total = somme des lignes (chaque dépense tombe juste)
         item(g, l.label, debit=l.cents, line=l, eid=l.expense)
     for a in advances(trip, pid):
         e = exp[a["eid"]]
@@ -751,8 +792,6 @@ def person_account(trip: M.Trip, result: E.Result, pid: int) -> dict:
             g["debit"] += m.amount
             item(g, f"Remboursement du {m.date.strftime('%d/%m/%Y') if m.date else '?'}", debit=m.amount, note=m.note)
 
-    for g in groups.values():
-        g["debit"] += E.nearest(g.pop("x", 0))
     share = result.people[pid].share if pid in result.people else 0
     rounding = share - sum(g["debit"] for g in groups.values() if g["kind"] in ("cat", "global")) \
         + sum(a["amount"] for a in advances(trip, pid) if a["income"])     # « reçu pour l'asso » n'est pas sa part
@@ -773,16 +812,10 @@ def person_account(trip: M.Trip, result: E.Result, pid: int) -> dict:
         subs = {}
         for it in g["items"]:
             if it.get("sub"):
-                d_ = subs.setdefault(it["sub"], dict(debit=0, credit=0, n=0, x=0))
-                if it["line"] is not None:
-                    d_["x"] += it["line"].exact
-                    d_["debit"] += it["debit"] - it["line"].cents
-                else:
-                    d_["debit"] += it["debit"]
+                d_ = subs.setdefault(it["sub"], dict(debit=0, credit=0, n=0))
+                d_["debit"] += it["debit"]
                 d_["credit"] += it["credit"]
                 d_["n"] += 1
-        for d_ in subs.values():
-            d_["debit"] += E.nearest(d_.pop("x"))
         g["subs"] = subs
     debit, credit = sum(g["debit"] for g in out), sum(g["credit"] for g in out)
     return dict(groups=out, debit=debit, credit=credit, balance=debit - credit)

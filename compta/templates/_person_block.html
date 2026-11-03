@@ -49,7 +49,7 @@
         <td>{% if it.line and it.line.components %}<details style="display:inline"><summary style="display:inline">{{ it.label }}{% if it.est %} <span class="est small" title="Montant prévu : le réel n'est pas encore saisi">≈ prévu</span>{% endif %}{% if it.line.locked %} 🔒{% endif %}{% if it.note %} <span class="muted small">· {{ it.note }}</span>{% endif %}</summary>
             <div class="explain">
               {% for c in it.line.components %}<div><span>{{ c.text }}</span><span class="num">{{ c.amount|money_sign if c.amount < 0 or loop.index > 1 else c.amount|money }}</span></div>{% endfor %}
-              {% if it.line.exact != it.line.cents %}<div class="muted"><span>Arrondi au centime le plus proche</span><span class="num">{{ it.line.cents|money }}</span></div>{% endif %}
+              {% if it.line.exact != it.line.cents %}<div class="muted"><span>{% if it.line.cents > it.line.exact %}Arrondi au centime, + 1 centime tiré au sort (la dépense tombe juste){% else %}Arrondi au centime{% endif %}</span><span class="num">{{ it.line.cents|money }}</span></div>{% endif %}
             </div></details>
           {% else %}{{ it.label }}{% if it.est %} <span class="est small">≈ prévu</span>{% endif %}{% if it.note %} <span class="muted small">· {{ it.note }}</span>{% endif %}{% endif %}</td>
         <td class="num deb">{{ it.debit|money if it.debit }}</td>

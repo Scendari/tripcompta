@@ -63,7 +63,7 @@ def test_engine_without_families_unchanged():
     P = [E.Participant(1, "A"), E.Participant(2, "B")]
     r = E.compute(P, [E.Expense(1, "x", actual=1001, weights={1: 1, 2: 1})])
     assert [a.name for a in r.accounts] == ["A", "B"] and all(not a.is_family for a in r.accounts)
-    assert r.to_collect == 501 + 501
+    assert r.to_collect == 500 + 501           # 10,01 € à 2 : 5,00 et 5,01 (centime tiré au sort), la dépense tombe juste
 
 
 # ---------------------------------------------------------------- démo familles, à la main

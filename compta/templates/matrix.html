@@ -69,10 +69,9 @@
   </tfoot>
 </table>
 </div>
-<div class="grid k3" style="margin-top:1rem">
+<div class="grid k2" style="margin-top:1rem">
   <div class="card kpi"><div class="label">Parts des participants</div><div class="value">{{ r.total_shares|money }}</div></div>
-  <div class="card kpi"><div class="label">+ Pris en charge par {{ asso_name }}</div><div class="value">{{ r.asso_total|money }}</div></div>
-  <div class="card kpi"><div class="label">{% if r.rounding_gain < 0 %}+ Arrondis (pris en charge par {{ asso_name }}){% else %}− Arrondis (gagnés par {{ asso_name }}){% endif %}</div><div class="value">{{ (r.rounding_gain|abs)|money }}</div>
+  <div class="card kpi"><div class="label">+ Pris en charge par {{ asso_name }}</div><div class="value">{{ r.asso_total|money }}</div>
     <div class="sub">= {{ r.total_cost|money }}, le coût du voyage {{ '✓' if r.is_balanced() else '✗' }}</div></div>
 </div>
 {% endif %}

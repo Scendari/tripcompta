@@ -121,6 +121,8 @@ class Expense(Base):
     actual: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     payer_id: Mapped[Optional[int]] = mapped_column(ForeignKey("participants.id"), nullable=True)
     tickets: Mapped[str] = mapped_column(Text, default="")   # JSON : plusieurs tickets dont le total = réel
+    cents_mode: Mapped[str] = mapped_column(String(20), default="")   # centimes d'arrondi : "" (réglage du voyage) | participants | asso
+    cents_who: Mapped[str] = mapped_column(Text, default="")          # tirage enregistré : ids qui paient un centime de plus
     note: Mapped[str] = mapped_column(Text, default="")
     # "depense" (argent qui sort) ou "recette" (argent reçu : remboursement d'un fournisseur, subvention…)
     kind: Mapped[str] = mapped_column(String(20), default="depense")

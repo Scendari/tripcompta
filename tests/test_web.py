@@ -62,7 +62,7 @@ def test_full_flow(client):
     # Aperçu d'une dépense
     pv = client.post(f"/v/{tid}/depenses/apercu", data={"label": "x", "actual": "10",
                                                         **{f"inc_{i}": "1" for i in list(P.values())[:3]}})
-    assert "3,34" in pv.text
+    assert "3,33" in pv.text and "+ 1 centime pour l&#39;un d&#39;eux (tiré au sort)" in pv.text   # 10 € pour 3
 
     # Versements
     client.post(f"/v/{tid}/argent", data={"participant": P["Anne"], "amount": "50", "kind": "versement"})

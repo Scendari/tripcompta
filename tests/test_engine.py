@@ -3,7 +3,7 @@ from fractions import Fraction
 import pytest
 
 from compta.engine import (
-    ACTUAL, ASSO, GROUP, OTHERS, PERSON, PLANNED, Adjustment, Expense, Movement,
+    ROUND_ASSO, ACTUAL, ASSO, GROUP, OTHERS, PERSON, PLANNED, Adjustment, Expense, Movement,
     Participant, SubExpense, SubTransfer, Withdrawal, compute, fmt, minimal_settlements,
     parse_amount, split_exact, sub_balances,
 )
@@ -67,12 +67,26 @@ def test_subset_only_divers():
 # ---------------------------------------------------------------- arrondis
 
 def test_rounding_up_goes_to_asso():
-    r = compute(P[:3], [Expense(1, "Péage", actual=1000, weights={1: 1, 2: 1, 3: 1})])
-    # 10,00 / 3 = 3,333… : affiché 3,33 ; le TOTAL de chacun est arrondi au centime supérieur -> 3,34
-    assert [r.share(i, 1) for i in (1, 2, 3)] == [333, 333, 333]
-    assert [r.people[i].share for i in (1, 2, 3)] == [334, 334, 334]
-    assert r.people[1].rounding == 1 and r.rounding_gain == 2
+    """10,00 € pour 3 = 3,333… : chacun 3,33 € et le centime restant est payé par UNE personne tirée au sort
+    (la dépense tombe juste : 3,33 + 3,33 + 3,34 = 10,00) ; ou par l'asso si elle prend les centimes."""
+    exp = lambda **kw: [Expense(1, "Péage", actual=1000, weights={1: 1, 2: 1, 3: 1}, **kw)]
+    r = compute(P[:3], exp())
+    assert sorted(r.share(i, 1) for i in (1, 2, 3)) == [333, 333, 334]
+    assert [r.people[i].share for i in (1, 2, 3)] == [r.share(i, 1) for i in (1, 2, 3)]
+    assert r.rounding_gain == 0 and r.cent_info[1]["need"] == 1 and not r.cent_info[1]["drawn"]
     check(r)
+    r = compute(P[:3], exp(cents_who=(2,)))                       # tirage enregistré : Bob
+    assert [r.share(i, 1) for i in (1, 2, 3)] == [333, 334, 333] and r.cent_info[1]["drawn"]
+    assert r.cent_winners(1) == [2]
+    r = compute(P[:3], exp(cents_who=(9,)))                       # tirage qui ne vaut plus : tirage de secours
+    assert not r.cent_info[1]["drawn"] and sum(r.share(i, 1) for i in (1, 2, 3)) == 1000
+    for r in (compute(P[:3], exp(), rounding=ROUND_ASSO), compute(P[:3], exp(cents_mode="asso"))):
+        assert [r.share(i, 1) for i in (1, 2, 3)] == [333, 333, 333]
+        assert r.asso_total == 1 and r.asso_charges[-1].reason == "centimes d'arrondi"
+        assert r.total_shares + r.asso_total == 1000 and r.is_balanced()
+    # le voyage est réglé sur l'asso, mais CETTE dépense sur les participants
+    r = compute(P[:3], exp(cents_mode="participants", cents_who=(3,)), rounding=ROUND_ASSO)
+    assert [r.share(i, 1) for i in (1, 2, 3)] == [333, 333, 334] and r.asso_total == 0
 
 
 def test_rounding_many_expenses_never_negative():
@@ -189,15 +203,17 @@ def test_locked_amount_excluded_from_compensation():
 def test_lock_after_adjustment():
     """Bob est verrouillé à 100 € APRÈS la réduction d'Anne : il reste à 100 €, et l'écart créé par son
     verrou (110 -> 100) est réparti sur les autres, Anne comprise."""
-    exps = [Expense(1, "Gîte", actual=40000, weights=ALL)]
+    exps = [Expense(1, "Gîte", actual=40000, weights=ALL, cents_who=(3,))]
     adj = [
         Adjustment(1, participant=1, expense=1, value=-3000, compensation=OTHERS),
         Adjustment(2, participant=2, expense=1, value=10000, fixed=True),
     ]
     r = compute(P, exps, adj)
     assert r.share(2, 1) == 10000
-    assert r.share(1, 1) == 7333 and r.share(3, 1) == 11333            # 73,333… / 113,333… affichés
-    assert r.people[1].share == 7334 and r.people[3].share == 11334   # totaux arrondis au centime supérieur
+    # exacts : Anne 73,333…, Chloé et David 113,333… ; le centime restant va à Chloé (tirée au sort)
+    assert (r.share(1, 1), r.share(3, 1), r.share(4, 1)) == (7333, 11334, 11333)
+    assert r.people[1].share == 7333 and r.people[3].share == 11334
+    assert sum(r.people[i].share for i in (1, 2, 3, 4)) == 40000
     check(r)
 
 
@@ -235,9 +251,9 @@ def test_global_fixed_total_with_rounding():
     adj = [Adjustment(1, participant=1, value=9000, fixed=True, compensation=OTHERS)]
     r = compute(P[:4], exps, adj)
     assert r.people[1].share == 9000
-    # 10 € répartis sur 3 : 3,34 chacun, arrondi au profit de l'asso
-    assert r.people[2].share == 10334
-    assert r.rounding_gain == 2
+    # 10 € répartis sur 3 : 3,33 chacun + 1 centime pour l'un d'eux : 103,33 / 103,33 / 103,34
+    assert sorted(r.people[i].share for i in (2, 3, 4)) == [10333, 10333, 10334]
+    assert r.rounding_gain == 0 and r.total_shares == 40000
     check(r)
 
 
@@ -262,8 +278,9 @@ def test_withdrawal_group_absorbs():
     exps = [Expense(1, "Gîte", actual=40000, weights=ALL)]
     r = compute(P, exps, withdrawals=[Withdrawal(4, absorber=GROUP)])
     assert r.share(4, 1) == 0
-    assert [r.share(i, 1) for i in (1, 2, 3)] == [13333] * 3
-    assert [r.people[i].share for i in (1, 2, 3)] == [13334] * 3
+    # 400 / 3 = 133,333… : 133,33 chacun, le centime restant pour l'un des trois
+    assert sorted(r.share(i, 1) for i in (1, 2, 3)) == [13333, 13333, 13334]
+    assert [r.people[i].share for i in (1, 2, 3)] == [r.share(i, 1) for i in (1, 2, 3)]
     assert r.people[4].withdrawn
     check(r)
 
@@ -280,12 +297,13 @@ def test_withdrawal_asso_absorbs():
 
 def test_withdrawal_keeps_non_refundable_part_and_gets_refund():
     exps = [Expense(1, "Acompte gîte", actual=20000, weights=ALL),     # non remboursable
-            Expense(2, "Bateau", actual=40000, weights=ALL)]
+            Expense(2, "Bateau", actual=40000, weights=ALL, cents_who=(1,))]
     mv = [Movement(4, "versement", 15000)]
     r = compute(P, exps, withdrawals=[Withdrawal(4, absorber=GROUP, kept={1})], movements=mv)
     assert r.share(4, 1) == 5000          # garde sa part de l'acompte
     assert r.share(4, 2) == 0
-    assert r.share(1, 2) == 13333 and r.people[1].share == 5000 + 13334
+    assert r.share(1, 2) == 13334 and r.people[1].share == 5000 + 13334   # 133,33 + le centime tiré au sort
+    assert r.share(2, 2) == 13333
     assert r.people[4].balance == 5000 - 15000      # on lui doit 100 €
     # remboursement partiel effectué
     r2 = compute(P, exps, withdrawals=[Withdrawal(4, absorber=GROUP, kept={1})],
@@ -387,11 +405,15 @@ def test_rounding_once_per_person_matches_a_calculator():
 
 
 def test_rounding_line_makes_displayed_lines_add_up():
-    """3 × 10 € partagés à 3 : chaque ligne affichée 3,33 € ; total exact 10 € pile -> pas d'arrondi.
-    1 × 10 € à 3 : ligne 3,33 €, total 3,34 € -> ligne « Arrondi » de +0,01 €."""
+    """3 × 10 € partagés à 3 : chaque dépense tombe juste (3,33 + 3,33 + 3,34) et le centime en plus tombe
+    chaque fois sur quelqu'un d'autre : chacun paie 10,00 € pile, et son total est la somme de ses lignes."""
     r = compute(P[:3], [Expense(i, f"D{i}", actual=1000, weights={1: 1, 2: 1, 3: 1}) for i in (1, 2, 3)])
     assert [r.people[i].share for i in (1, 2, 3)] == [1000] * 3
-    assert r.people[1].rounding == 1          # 3 × 3,33 = 9,99 affichés -> +0,01 pour retomber sur 10,00
-    assert r.rounding_gain == 0
+    assert all(ps.rounding == 0 for ps in r.people.values()) and r.rounding_gain == 0
+    for eid in (1, 2, 3):
+        assert sum(r.share(i, eid) for i in (1, 2, 3)) == 1000
+    assert sorted(w for eid in (1, 2, 3) for w in r.cent_winners(eid)) == [1, 2, 3]
     for pid, ps in r.people.items():
-        assert ps.share == sum(l.cents for (p, _), l in r.lines.items() if p == pid) + ps.rounding
+        assert ps.share == sum(l.cents for (p, _), l in r.lines.items() if p == pid)
+
+

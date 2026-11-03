@@ -823,3 +823,9 @@ textarea.modele.modele-libre { min-height: 11rem; height: 14rem; }
 .update-steps li.failed::marker { content: "✗ "; }
 label.check { display: inline-flex; align-items: center; gap: .4rem; font-weight: 500; cursor: pointer; }
 @media (max-width: 600px) { .update-banner { padding: .5rem 1rem; } }
+
+/* centimes d'arrondi (formulaire de dépense) */
+.who-amt { position: relative; }
+.cent-badge { position: absolute; top: -.55rem; right: .3rem; font-size: .68rem; font-weight: 700; color: var(--amber);
+  background: var(--amber-bg); border-radius: 6px; padding: 0 .3rem; line-height: 1.2rem; pointer-events: auto; }
+.cents-choices { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; margin-top: .4rem; }
