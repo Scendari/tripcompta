@@ -686,6 +686,12 @@ details.hbar-group[open] .caret { transform: rotate(90deg); }
   .hbar-track, .hbar-pair { grid-column: 1 / -1; }
 }
 .viz-kpis > .card { margin: 0; }
+/* pour un plongeur */
+.viz-head { display: flex; align-items: center; justify-content: space-between; gap: .6rem; margin-bottom: .8rem; }
+.diver { max-width: 760px; }
+.diver .hbar-value { text-align: right; }
+.hbar.diver-total { border-top: 1px solid var(--border); margin-top: .35rem; padding-top: .5rem; font-weight: 700; font-size: 1.05rem; }
+.hbar.diver-total .hbar-value { font-size: 1.35rem; }
 .seg.faded { opacity: .55; }
 .hbar .caret { font-size: 1rem; line-height: 1; }
 .hbar .caret { font-size: .62rem; width: 1rem; vertical-align: 1px; }
