@@ -177,27 +177,33 @@ def test_published_file_always_valid_under_random_sync(cloud_env):
     stop, copies, bad, extra = threading.Event(), [], [], set()
 
     def synchroniser():
+        import random
         n = 0
         while not stop.is_set():
             for f in os.listdir(shared):
                 if f.endswith(("-journal", "-wal", "-shm")):
                     extra.add(f)
             try:
-                dst = remote / f"copie-{n}.db"
+                dst = remote / f"copie-{n % 8}.db"             # quelques noms réutilisés : le disque ne se remplit pas
                 shutil.copyfile(shared / C.DB, dst)
                 n += 1
-                copies.append(dst)
+                copies.append(n)
                 if not C.is_valid_db(dst):
-                    bad.append(dst.name)
+                    bad.append(f"copie {n}")
             except FileNotFoundError:
                 bad.append("fichier absent pendant un remplacement")
             except PermissionError:                    # Windows : fichier momentanément bloqué, on réessaie
                 pass
+            time.sleep(random.uniform(0, 0.004))       # un vrai client lit par intermittence
     th = threading.Thread(target=synchroniser, daemon=True)
     th.start()
     for i in range(40):
         ops.add_expense(tid, f"Café {i}", categorie="Repas", montant_reel=f"{i + 1}")
-        assert a.state.sync.publish() == "ok"
+        for _ in range(5):                             # Windows : remplacement bloqué par une lecture → réessai
+            res = a.state.sync.publish()               # (dans l'app : au battement suivant)
+            if res == "ok":
+                break
+        assert res == "ok"
     stop.set()
     th.join(5)
     assert len(copies) > 20 and bad == [] and extra == set()
