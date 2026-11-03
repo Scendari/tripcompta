@@ -175,6 +175,21 @@
     if (!row.hidden) { const f = row.querySelector("input[name=amount]"); if (f) f.focus(); }
   });
 
+  // Montants écrits sur les barres : seulement s'ils tiennent dans leur morceau de barre
+  function fitSegNums() {
+    document.querySelectorAll(".seg-num").forEach((n) => {
+      n.classList.remove("hide");
+      const r = document.createRange();
+      r.selectNodeContents(n);
+      if (r.getBoundingClientRect().width > n.parentElement.clientWidth - 8) n.classList.add("hide");
+    });
+  }
+  if (document.querySelector(".seg-num")) {
+    fitSegNums();
+    let t = null;
+    window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(fitSegNums, 100); });
+  }
+
   // Lien direct vers un panneau repliable (…/asso#arrondi) : on l'ouvre
   if (location.hash) {
     const d = document.getElementById(location.hash.slice(1));

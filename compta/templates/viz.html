@@ -66,8 +66,8 @@
   {% for p in V.people %}
     <div class="hbar">
       <span class="hbar-label">{{ p.name }}{% if p.withdrawn %} <span class="muted small">(désisté)</span>{% endif %}</span>
-      <span class="hbar-track stack">{% for sg in p.segs %}<span class="seg s{{ sg.slot }}{{ ' end' if loop.last }}" style="width:{{ (sg.cents * 100 / V.pmax)|round(2) }}%" tabindex="0"
-            data-tip="{{ p.name }} · {{ sg.name }} : {{ sg.cents|money }}" aria-label="{{ p.name }}, {{ sg.name }} : {{ sg.cents|money }}"></span>{% endfor %}</span>
+      <span class="hbar-track stack labeled">{% for sg in p.segs %}<span class="seg s{{ sg.slot }}{{ ' end' if loop.last }}" style="width:{{ (sg.cents * 100 / V.pmax)|round(2) }}%" tabindex="0"
+            data-tip="{{ p.name }} · {{ sg.name }} : {{ sg.cents|money }}" aria-label="{{ p.name }}, {{ sg.name }} : {{ sg.cents|money }}"><span class="seg-num" aria-hidden="true">{{ sg.cents|money }}</span></span>{% endfor %}</span>
       <span class="hbar-value"><b>{{ p.share|money }}</b></span>
     </div>
   {% endfor %}

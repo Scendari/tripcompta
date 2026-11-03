@@ -642,6 +642,12 @@ h2.sec-sep { border-top: 1px solid var(--border); padding-top: 1.1rem; margin-to
 .hbar.sub .hbar-track { height: 10px; }
 .seg { display: block; min-width: 2px; height: 100%; position: relative; outline-offset: 2px; }
 .seg.end { border-radius: 0 4px 4px 0; }
+/* montant écrit sur la barre (masqué par app.js s'il ne tient pas dedans) */
+.hbar-track.labeled { height: 22px; }
+.seg-num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden;
+  font-size: .72rem; font-weight: 600; color: #fff; white-space: nowrap; font-variant-numeric: tabular-nums; pointer-events: none; }
+.seg.s0 .seg-num { color: var(--text); }
+.seg-num.hide { visibility: hidden; }
 .seg:hover, .seg:focus-visible { filter: brightness(1.12) saturate(1.05); }
 .hbar-pair { display: flex; flex-direction: column; gap: 3px; }
 .hbar-pair .hbar-track { height: 10px; }
