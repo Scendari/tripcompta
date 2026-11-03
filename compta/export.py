@@ -563,7 +563,7 @@ def account_pdf(trip: M.Trip, acc_key: str, mode: str = E.ACTUAL) -> tuple:
                 if it.get("sub") and it["sub"] != cur:
                     cur = it["sub"]
                     st = g["subs"][cur]
-                    rows.append([f"   › {cur} — sous-total ({st['n']})", "",
+                    rows.append([f"   › {cur} — sous-total", "",
                                  _m(st["debit"]) if st["debit"] else "", _m(st["credit"]) if st["credit"] else "",
                                  _solde(st["debit"] - st["credit"])])
                 calc = ""

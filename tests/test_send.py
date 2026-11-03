@@ -85,9 +85,9 @@ def test_person_pdf_details_by_subcategory(trip):
     assert "Compte de Anne Martin" in t and "Reste à verser à l'asso : 35,00 €" in t
     # catégorie Transport : 85 € ; sous-totaux Péages 20 €, Essence 15 €, Autres 50 € (location)
     assert "TRANSPORT / COVOIT" in t and "85,00 €" in t
-    assert re.search(r"› Péages — sous-total \(2\) 20,00 €", t)
-    assert re.search(r"› Essence — sous-total \(1\) 15,00 €", t)
-    assert re.search(r"› Autres \(sans sous-catégorie\) — sous-total \(1\) 50,00 €", t)
+    assert re.search(r"› Péages — sous-total 20,00 €", t)
+    assert re.search(r"› Essence — sous-total 15,00 €", t)
+    assert re.search(r"› Autres \(sans sous-catégorie\) — sous-total 50,00 €", t)
     assert "Péage aller" in t and "Location minibus" in t and "LOGEMENT" in t
 
 
