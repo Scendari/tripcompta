@@ -315,8 +315,9 @@ class CloudSync:
             lk = self.read_lock()
             if self.readonly:
                 if lk is None:                       # libéré proprement : on reprend la main tout seul
+                    before = self.owner
                     if self.acquire():
-                        self.notice = f"{self._owner_label(self.owner)} a fermé Trip Compta : tu as de nouveau la main."
+                        self.notice = f"{self._owner_label(before)} a fermé Trip Compta : tu as de nouveau la main."
                 else:
                     self.owner = lk
                 return

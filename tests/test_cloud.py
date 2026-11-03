@@ -127,7 +127,7 @@ def test_release_on_quit_and_automatic_handover(cloud_env):
     b.state.sync.beat()                                          # battement suivant : B reprend la main seul
     assert not b.state.sync.readonly
     cb = TestClient(b)
-    assert "a fermé Trip Compta" in cb.get("/").text
+    assert "« PC-A » a fermé Trip Compta : tu as de nouveau la main" in cb.get("/").text
     cb.post("/voyages", data={"name": "Voyage B"})
     a2 = make(tmp, shared, "PC-A", 303)                          # A relancé plus tard : lecture seule, voit tout
     assert a2.state.sync.readonly and "Voyage B" in TestClient(a2).get("/").text
