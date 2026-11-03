@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from . import engine as E
 from . import models as M
 from . import services as S
-from .db import Database
+from .db import Database, NewerDatabaseError
 
 HERE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(HERE / "templates"))
@@ -98,9 +98,42 @@ def _label(name: str) -> Markup:
 templates.env.filters["capfirst"] = _capfirst
 
 
-def create_app(data_dir=None, restart=None) -> FastAPI:
-    """restart : fonction qui relance l'application (fournie par run.py) ; sans elle, on demande de relancer."""
+def newer_data_app(err: NewerDatabaseError, updater) -> FastAPI:
+    """La base a été ouverte par une version plus récente : on n'y touche pas, on explique quoi faire."""
+    from . import updater as U
+    app = FastAPI(title="Trip Compta", docs_url=None, redoc_url=None, openapi_url=None)
+    app.state.db = None
+    app.state.updater = updater
+    app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
+    boot = uuid.uuid4().hex[:12]
+
+    @app.get("/ping")
+    def ping():
+        return {"app": "tripcompta", "boot": boot, "version": updater.version}
+
+    @app.post("/quitter", response_class=HTMLResponse)
+    def quit_app():
+        import threading
+        threading.Timer(0.5, lambda: os._exit(0)).start()
+        return HTMLResponse("<!doctype html><meta charset=utf-8><title>Trip Compta</title>"
+                            "<body style='font-family:system-ui;text-align:center;padding:4rem'>"
+                            "<h1>Trip Compta est arrêté.</h1><p>Tu peux fermer cet onglet.</p></body>")
+
+    @app.get("/{rest:path}", response_class=HTMLResponse)
+    def explain(request: Request, rest: str = ""):
+        return templates.TemplateResponse(request, "newer_data.html", dict(
+            request=request, err=err, page=U.RELEASES_PAGE, help=U.INSTALL_HELP, trip=None, msg=None,
+            asso_name="", app_version=updater.label, update_banner=None, STATIC_V=templates.env.globals["STATIC_V"]),
+            status_code=409)
+    return app
+
+
+def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
+    """restart : fonction qui relance l'application (fournie par run.py) ; sans elle, on demande de relancer.
+    updater : gestion des mises à jour (les tests en donnent une simulée)."""
     from . import paths as PATHS
+    from . import updater as U
+    upd = updater or U.Updater()
     if data_dir:
         data_source = "lancement"
     elif os.environ.get("TRIPCOMPTA_DATA_DIR") or os.environ.get("COMPTA_DATA_DIR"):
@@ -109,13 +142,22 @@ def create_app(data_dir=None, restart=None) -> FastAPI:
         data_source = "choisi"
     else:
         data_source = "defaut"
-    db = Database(data_dir)
+    try:
+        db = Database(data_dir, app_version=upd.version)
+    except NewerDatabaseError as err:
+        return newer_data_app(err, upd)
     db.daily_backup()
     app = FastAPI(title="Trip Compta", docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json",
                   description="API JSON de Trip Compta : une IA peut lire et remplir les voyages. "
                               "Toutes les écritures acceptent \"simulation\": true.")
     app.state.db = db
     app.state.restart = restart
+    app.state.updater = upd
+    app.state.port = None                 # donnés par run.py (pour relancer après une mise à jour)
+    app.state.argv = []
+    app.state.update_notice = None if upd.dev else upd.startup_notice()
+    if updater is None:
+        upd.start_background()
 
     # « Défaire » est proposé dans le message qui suit une action, et ne vaut que pour CETTE action :
     # on note l'action défaisable au début de chaque requête pour savoir si la requête en a créé une.
@@ -167,6 +209,12 @@ def create_app(data_dir=None, restart=None) -> FastAPI:
         ctx.setdefault("caisse_title", _capfirst(ctx["asso_name"]) if ctx["asso_name"].startswith("la caisse")
                        else Markup("Caisse de ") + ctx["asso_name"])
         ctx["request"] = request
+        ctx.setdefault("app_version", upd.label)
+        ctx.setdefault("update_banner", None if upd.job else upd.banner())
+        if not upd.dev and not app.state.update_notice:
+            app.state.update_notice = upd.failure_notice()
+        if app.state.update_notice and not ctx.get("msg"):
+            ctx["msg"], app.state.update_notice = app.state.update_notice, None
         return templates.TemplateResponse(request, name, ctx)
 
     def back(url: str, msg: str | None = None, redo: str | None = None):
@@ -263,7 +311,78 @@ def create_app(data_dir=None, restart=None) -> FastAPI:
     @app.get("/ping")
     def ping():
         """Sert à reconnaître Trip Compta (script de redémarrage) et à recharger l'onglet après un redémarrage."""
-        return {"app": "tripcompta", "boot": boot_id}
+        return {"app": "tripcompta", "boot": boot_id, "version": upd.version}
+
+    # ------------------------------------------------------------------ à propos, mises à jour
+    def _about(request, **ctx):
+        latest = upd.latest()
+        checked = upd.checked_at()
+        ok, why = upd.installable()
+        return render(request, "about.html", info=upd, latest=latest, available=upd.available(),
+                      checked=dt.datetime.fromtimestamp(checked).strftime("%d/%m/%Y à %H:%M") if checked else None,
+                      installable=ok, not_installable=why, page=(latest or {}).get("page") or U.RELEASES_PAGE,
+                      help=U.INSTALL_HELP, update_banner=None, **ctx)
+
+    @app.get("/reglages/a-propos", response_class=HTMLResponse)
+    def about_page(request: Request):
+        return _about(request)
+
+    @app.post("/reglages/verifier-maj")
+    def check_now(request: Request):
+        res = upd.check(force=True)
+        if not res["ok"]:
+            return back("/reglages/a-propos", res["error"])
+        a = upd.available()
+        if a:
+            return back("/reglages/a-propos", f"Une nouvelle version est disponible : {a['version']}.")
+        if upd.dev:
+            v = (res["latest"] or {}).get("version")
+            return back("/reglages/a-propos", f"Dernière version publiée : {v}." if v else
+                        "Aucune version publiée pour l'instant.")
+        return back("/reglages/a-propos", "Tu as déjà la dernière version.")
+
+    @app.post("/reglages/maj-auto")
+    async def toggle_auto(request: Request):
+        f = await request.form()
+        on = f.get("auto") == "1"
+        upd.set_auto(on)
+        return back("/reglages/a-propos", "Vérification automatique activée" if on else
+                    "Vérification automatique désactivée")
+
+    @app.post("/maj/plus-tard")
+    async def update_later(request: Request):
+        f = await request.form()
+        upd.later(f.get("version") or "")
+        return back(_return_path(request), "D'accord : tu retrouveras la mise à jour dans « À propos ».")
+
+    @app.post("/maj/installer", response_class=HTMLResponse)
+    def update_install(request: Request):
+        ok, why = upd.installable()
+        a = upd.available()
+        if not a:
+            return back("/reglages/a-propos", "Pas de nouvelle version à installer.")
+        if not ok:
+            return back("/reglages/a-propos", why)
+        if not (upd.job and upd.job["step"] not in ("erreur",)):
+            import threading
+            upd.job = dict(step="sauvegarde", percent=0, error=None, version=a["version"])
+            port = app.state.port or request.url.port or 8765
+
+            def quit_now():
+                import time as _t
+                _t.sleep(1.5)                     # laisser la page d'attente voir « redémarrage »
+                db.engine.dispose()
+                os._exit(0)
+            threading.Thread(target=upd.run_install, daemon=True, kwargs=dict(
+                db=db, port=port, app_args=U.clean_args(app.state.argv), quit_app=quit_now)).start()
+        return render(request, "update.html", version=a["version"])
+
+    @app.get("/maj/etat")
+    def update_state():
+        j = dict(upd.job or {})
+        if j.get("step") == "erreur":
+            upd.job = None                         # on pourra réessayer
+        return j or {"step": "aucune"}
 
     @app.post("/quitter", response_class=HTMLResponse)
     def quit_app():

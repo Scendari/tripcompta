@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Version trop ancienne · Trip Compta{% endblock %}
+{% block page %}
+<div class="card" style="max-width:680px;margin:2rem auto">
+  <h1 style="margin-top:0">⚠️ Cette version de Trip Compta est trop ancienne pour tes données</h1>
+  <p>Tes données ont déjà été ouvertes avec <b>Trip Compta {{ err.stored }}</b>. Cette application est la version
+    <b>{{ err.current }}</b>, plus ancienne : pour ne rien abîmer, elle ne les ouvre pas. <b>Rien n'a été modifié.</b></p>
+  <p>Que faire : installe la dernière version de Trip Compta, puis relance-la.</p>
+  <p><a class="btn" href="{{ page }}" target="_blank" rel="noopener">Télécharger la dernière version</a>
+    <a class="btn link small" href="{{ help }}" target="_blank" rel="noopener">Comment l'installer ?</a></p>
+  <p class="small muted">Dossier des données : <span class="break">{{ err.path }}</span></p>
+</div>
+{% endblock %}

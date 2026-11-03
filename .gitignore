@@ -17,3 +17,6 @@ dist/
 brouillons_ia/
 justificatifs/
 sauvegardes/
+
+# Écrit par build_tools/build.py pendant la fabrication
+compta/_build.py

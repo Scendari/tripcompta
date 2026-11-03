@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Mise à jour · Trip Compta{% endblock %}
+{% block page %}
+<div class="card" style="max-width:640px;margin:2rem auto;text-align:center" id="maj" data-version="{{ version }}">
+  <h1 style="margin-top:0">🔄 Mise à jour vers la version {{ version }}</h1>
+  <ol class="update-steps">
+    <li data-step="sauvegarde">Copie de sécurité de tes données</li>
+    <li data-step="telechargement">Téléchargement <span class="update-pct"></span></li>
+    <li data-step="verification">Vérification du fichier</li>
+    <li data-step="preparation">Préparation</li>
+    <li data-step="redemarrage">Redémarrage de Trip Compta</li>
+  </ol>
+  <p class="muted small" id="maj-note">Ne ferme pas cet onglet : il se recharge tout seul à la fin (environ une minute).</p>
+  <div class="flash err hidden" role="alert" id="maj-err"></div>
+  <p class="hidden" id="maj-back"><a class="btn ghost" href="/reglages/a-propos">← Retour</a></p>
+</div>
+<script>
+(function () {
+  var order = ["sauvegarde", "telechargement", "verification", "preparation", "redemarrage"];
+  var items = document.querySelectorAll(".update-steps li");
+  var boot = null, restarting = false;
+  fetch("/ping", {cache: "no-store"}).then(function (r) { return r.json(); }).then(function (j) { boot = j.boot; });
+  function show(step, pct) {
+    var k = order.indexOf(step);
+    items.forEach(function (li, i) { li.className = i < k ? "done" : (i === k ? "now" : ""); });
+    var p = document.querySelector(".update-pct");
+    p.textContent = step === "telechargement" && pct ? "(" + pct + " %)" : "";
+  }
+  function waitRestart() {
+    fetch("/ping", {cache: "no-store"}).then(function (r) { return r.json(); }).then(function (j) {
+      if (boot && j.boot !== boot) { location.href = "/"; return; }
+      setTimeout(waitRestart, 800);
+    }).catch(function () { setTimeout(waitRestart, 800); });
+  }
+  function tick() {
+    if (restarting) return;
+    fetch("/maj/etat", {cache: "no-store"}).then(function (r) { return r.json(); }).then(function (j) {
+      if (j.step === "erreur") {
+        var e = document.getElementById("maj-err");
+        e.textContent = j.error; e.classList.remove("hidden");
+        document.getElementById("maj-back").classList.remove("hidden");
+        document.getElementById("maj-note").classList.add("hidden");
+        items.forEach(function (li) { if (li.className === "now") li.className = "failed"; });
+        return;
+      }
+      if (j.step && j.step !== "aucune") show(j.step, j.percent);
+      if (j.step === "redemarrage") { restarting = true; setTimeout(waitRestart, 1500); return; }
+      setTimeout(tick, 600);
+    }).catch(function () { restarting = true; show("redemarrage"); waitRestart(); });
+  }
+  tick();
+})();
+</script>
+{% endblock %}

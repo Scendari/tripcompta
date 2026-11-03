@@ -1,0 +1,146 @@
+# Publier une version de Trip Compta.
+#
+#   git tag -a v1.2.0 -m "Les nouveautés, une par ligne"     (v1.2.0-beta1 : version d'essai, non proposée)
+#   git push origin v1.2.0
+#
+# 1. Les tests (rien n'est publié s'ils échouent) ; 2. les quatre applications ; 3. la Release GitHub, avec
+# SHA256SUMS.txt. Les applications déjà installées proposent ensuite la mise à jour toutes seules.
+name: Publier une version
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.14"
+  TZ: Europe/Paris
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: L'étiquette correspond à la version du code
+        run: |
+          python - <<'PY'
+          import os, re, sys
+          sys.path.insert(0, ".")
+          from compta import __version__
+          tag = os.environ["GITHUB_REF_NAME"]
+          m = re.match(r"^v(\d+\.\d+\.\d+)(-(alpha|beta|rc)\d*)?$", tag)
+          if not m:
+              sys.exit(f"Étiquette illisible : {tag} (attendu v1.2.0 ou v1.2.0-beta1)")
+          if m.group(1) != __version__:
+              sys.exit(f"L'étiquette {tag} ne correspond pas à compta/__init__.py ({__version__})")
+          print(f"Version {tag[1:]}")
+          PY
+      - name: Installer
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m playwright install --with-deps chromium
+      - name: Tests
+        run: python -m pytest -q
+
+  build:
+    name: Fabriquer (${{ matrix.asset }})
+    needs: tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: macos-14
+            asset: TripCompta-mac-arm64.zip
+            exe: dist/Trip Compta.app/Contents/MacOS/Trip Compta
+          - os: macos-15-intel
+            asset: TripCompta-mac-intel.zip
+            exe: dist/Trip Compta.app/Contents/MacOS/Trip Compta
+          - os: windows-latest
+            asset: TripCompta-windows.zip
+            exe: dist/Trip Compta/Trip Compta.exe
+          - os: ubuntu-22.04
+            asset: TripCompta-linux.tar.gz
+            exe: dist/Trip Compta/Trip Compta
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Installer
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller pytest httpx
+      - name: Tester le script de mise à jour sur ce système
+        run: python -m pytest -q tests/test_update_script.py
+      - name: Fabriquer l'application
+        env:
+          TRIPCOMPTA_RELEASE: ${{ github.ref_name }}
+        run: python build_tools/build.py
+      - name: Vérifier qu'elle démarre
+        shell: bash
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          python build_tools/smoke.py "${{ matrix.exe }}" "$V"
+      - name: Emballer (Mac)
+        if: runner.os == 'macOS'
+        run: ditto -c -k --sequesterRsrc --keepParent "dist/Trip Compta.app" "${{ matrix.asset }}"
+      - name: Emballer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path "dist/Trip Compta" -DestinationPath "${{ matrix.asset }}"
+      - name: Emballer (Linux)
+        if: runner.os == 'Linux'
+        run: tar -czf "${{ matrix.asset }}" -C dist "Trip Compta"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publier
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Empreintes
+        working-directory: assets
+        run: |
+          sha256sum TripCompta-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          test "$(ls TripCompta-* | wc -l)" -eq 4
+      - name: Créer la Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          if [ "$(git cat-file -t "$TAG")" = "tag" ]; then
+            git tag -l --format='%(contents)' "$TAG" | sed '/-----BEGIN PGP/,$d' > notes.md
+          fi
+          if [ ! -s notes.md ]; then echo "Nouvelle version de Trip Compta." > notes.md; fi
+          printf '\nPremière installation : https://github.com/%s/blob/main/INSTALLER.md\n' "$GITHUB_REPOSITORY" >> notes.md
+          PRE=""
+          case "$TAG" in *-*) PRE="--prerelease";; esac
+          gh release create "$TAG" assets/* --verify-tag --title "Trip Compta ${TAG#v}" --notes-file notes.md $PRE

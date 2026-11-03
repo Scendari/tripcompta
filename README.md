@@ -4,7 +4,11 @@ Application locale pour l'organisateur d'un voyage associatif : participants, d�
 avances, montants fixés et remises, désistements, justificatifs, comptes « entre nous », et un bilan PDF lisible
 par un trésorier qui n'est pas comptable. Une IA (Claude) peut aussi remplir l'application à partir d'un fichier.
 
-Tout fonctionne **sur ton ordinateur**, dans ton navigateur. Rien n'est envoyé sur Internet.
+Tout fonctionne **sur ton ordinateur**, dans ton navigateur. Rien n'est envoyé sur Internet (sauf, une fois par
+jour, la question « y a-t-il une nouvelle version ? », désactivable).
+
+> **👉 Installer Trip Compta (application toute prête, sans Python, qui se met à jour toute seule) :
+> voir [INSTALLER.md](INSTALLER.md).** La suite concerne le lancement depuis le code source.
 
 ---
 
@@ -51,11 +55,10 @@ pip install -r requirements-dev.txt
 python build_tools/build.py
 ```
 
-- Sur **Mac**, cela produit `dist/Trip Compta.app` (testé).
-- Sur **Windows**, lancer la même commande **sur un PC Windows** produit `dist\Trip Compta\Trip Compta.exe`
-  (PyInstaller ne sait pas fabriquer un .exe depuis un Mac).
-
-L'application n'étant pas signée, macOS demande la première fois : clic droit → **Ouvrir**.
+Sur **Mac**, cela produit `dist/Trip Compta.app` ; sur Windows ou Linux, la même commande lancée **sur ce
+système** produit `dist/Trip Compta/` (PyInstaller ne fabrique que pour le système où il tourne). Une application
+fabriquée ainsi est une **version de développement** (« 1.0.0-dev (commit) ») : elle ne se met jamais à jour
+toute seule. Les versions publiées sont fabriquées par GitHub (voir « Publier une version »).
 
 ---
 
@@ -242,6 +245,28 @@ python -m playwright install chromium     # une fois, pour le test navigateur
 python -m pytest                          # tous les tests
 SCREENSHOTS=captures python -m pytest tests/test_e2e.py   # + captures d'écran de chaque écran
 ```
+
+### Publier une version
+
+Les versions publiées sont fabriquées par **GitHub Actions** (`.github/workflows/release.yml`) quand on pousse
+une étiquette `v…` : tests (rien n'est publié s'ils échouent), puis les quatre applications (Mac Apple Silicon,
+Mac Intel, Windows, Linux), chacune lancée pour vérifier qu'elle démarre, puis la Release GitHub avec
+`SHA256SUMS.txt`. Les applications installées la proposent ensuite toutes seules (bandeau, une vérification par jour).
+
+```bash
+# 1. le numéro dans compta/__init__.py (__version__ = "1.2.0"), commit, push
+# 2. l'étiquette, avec les nouveautés (une par ligne : c'est ce que les utilisateurs liront)
+git tag -a v1.2.0 -m "- Nouveau : …
+- Correction : …"
+git push origin v1.2.0
+gh run watch                     # suivre la fabrication (≈ 15 min)
+```
+
+Une étiquette `v1.2.0-beta1` publie une **pré-version** : fabriquée pareil, téléchargeable par lien, mais jamais
+proposée aux utilisateurs. Mise à jour côté application : `compta/updater.py` (vérification, téléchargement,
+empreinte, sauvegarde `avant-maj-<version>.db`) et `compta/scripts/remplacer.sh|.ps1` (remplace l'application,
+la relance, remet l'ancienne si la nouvelle ne répond pas). Une base ouverte par une version plus récente
+(X.Y.Z supérieur) est refusée par une version plus ancienne, sans être modifiée.
 
 Pile : Python 3.10+, FastAPI, Jinja2, SQLAlchemy/SQLite, fpdf2 (police DejaVu embarquée), SDK MCP, PyInstaller.
 Pas de framework JavaScript : un petit `static/app.js` pour les aperçus en direct.

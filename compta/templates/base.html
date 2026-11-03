@@ -20,6 +20,14 @@
     <button class="iconbtn quit-btn" title="Arrêter l'application">⏻ Arrêter</button>
   </form>
 </header>
+{% if update_banner %}
+<div class="update-banner" role="status">
+  <span>🎁 <b>Trip Compta {{ update_banner.version }} est disponible.</b></span>
+  <a class="btn link small" href="/reglages/a-propos#nouveautes">Voir les nouveautés</a>
+  <a class="btn small" href="/reglages/a-propos#installer">Mettre à jour</a>
+  <form method="post" action="/maj/plus-tard" class="inline"><input type="hidden" name="version" value="{{ update_banner.version }}"><button class="btn link small" title="Masquer jusqu'à la prochaine version">Plus tard</button></form>
+</div>
+{% endif %}
 {% if trip %}
 <div class="layout">
   <aside class="side">
