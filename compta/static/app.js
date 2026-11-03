@@ -161,6 +161,16 @@
     if (!row.hidden) { const f = row.querySelector("input[name=amount]"); if (f) f.focus(); }
   });
 
+  // Lien direct vers une ligne de modification (…#edit-m12) : on l'ouvre
+  if (/^#edit-/.test(location.hash)) {
+    const row = document.querySelector(location.hash);
+    if (row && row.classList.contains("edit-row")) {
+      row.hidden = false;
+      document.querySelectorAll(`[data-toggle-row="${location.hash}"][aria-expanded]`).forEach((x) => x.setAttribute("aria-expanded", "true"));
+      (row.previousElementSibling || row).scrollIntoView({block: "center"});
+    }
+  }
+
   // Afficher un bloc selon un choix radio : data-show-when="name=value"
   function syncShow() {
     document.querySelectorAll("[data-show-when]").forEach((el) => {

@@ -212,3 +212,34 @@ def test_form_preview_deducts_refund(trip):
     finally:
         srv.should_exit = True
         th.join(5)
+
+
+def test_advances_page_shows_refunds_already_given(trip):
+    """« Payé / reçu » : avancé 120 € par Anne, puis l'asso lui rend 100 € (deux fois) : on voit les deux."""
+    app, c, tid, Pp, ops = trip
+    data = {"label": "Gîte", "category": "Logement", "actual": "120", "payer": str(Pp["Anne"]),
+            "payer_kind": "participant", **{f"inc_{i}": "1" for i in Pp.values()}}
+    c.post(f"/v/{tid}/depenses", data=data)
+    ops.add_movement(tid, "Anne", "60", type="remboursement", date="2026-05-15", note="Avance du gîte")
+    ops.add_movement(tid, "Anne", "40", type="remboursement", date="2026-06-01")
+    ops.add_movement(tid, "Bob", "40", type="versement", date="2026-04-01")      # un versement : pas ici
+    page = re.sub(r"[  \xa0]", " ", c.get(f"/v/{tid}/participants/avances").text)
+    assert "Payé par des participants (avances)" in page
+    i = page.index("Déjà remboursé par")
+    block = page[i:]
+    assert "100,00 €" in block[:400]                                            # total du bloc
+    assert "15/05/2026" in block and "Avance du gîte" in block and "60,00 €" in block
+    assert "01/06/2026" in block and "Remboursement</td>" in block               # sans motif : libellé par défaut
+    assert "Total Anne" in block and "Bob" not in block                          # pas les versements
+    mids = re.findall(r"/argent/mouvements#edit-m(\d+)", block)
+    assert len(mids) == 2
+    # le lien ouvre bien la ligne de modification de ce mouvement
+    money = c.get(f"/v/{tid}/argent/mouvements").text
+    assert all(f'id="edit-m{m}"' in money for m in mids)
+
+
+def test_advances_page_only_refunds(trip):
+    app, c, tid, Pp, ops = trip
+    ops.add_movement(tid, "Bob", "25", type="remboursement")
+    page = c.get(f"/v/{tid}/participants/avances").text
+    assert "Déjà remboursé par" in page and "Personne n&#39;a avancé" not in page and "Personne n'a avancé" not in page
