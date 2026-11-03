@@ -152,7 +152,6 @@
           <input type="hidden" name="w_{{ p.id }}" value="{{ (weights[p.id] if p.id in weights else 1)|string }}" data-weight>
           <input type="hidden" name="fx_{{ p.id }}" value="{{ '1' if fx }}" data-fixed>
           <button type="button" class="fix-off" data-unfix title="Ne plus fixer : {{ p.name }} reprend une part égale" aria-label="Ne plus fixer le montant de {{ p.name }}">🔒<span aria-hidden="true">×</span></button>
-          <span class="cent-badge" hidden title="Centime d'arrondi tiré au sort">+1 c</span>
           <input class="who-amount amount" type="text" inputmode="decimal" name="m_{{ p.id }}" value="{{ amounts[p.id]|amount_input if p.id in amounts else '' }}" placeholder="0,00" aria-label="Montant pour {{ p.name }} (tape un montant pour le fixer)" {{ 'disabled' if p.id not in weights }}>
         </span>
       </div>
@@ -318,17 +317,22 @@ document.getElementById('add-payer').addEventListener('click', function () {
     return pool.slice(0, need).sort(function (a, b) { return a - b; });
   }
   function nameOf(p) { var i = list.querySelector('input[data-pid="' + p + '"]'); return i ? i.closest('label').textContent.replace(/\(acc\.\)/, '').trim() : '?'; }
+  function whoTxt(winners) {       // beaucoup de tirés : « tous sauf … » est plus court
+    var conc = rows().filter(function (r) { return on(r) && !isFixed(r); }).map(pidOf);
+    var others = conc.filter(function (p) { return winners.indexOf(p) < 0; });
+    if (winners.length > 3 && others.length < winners.length) return 'tous sauf ' + joinNames(others.map(nameOf));
+    return joinNames(winners.map(nameOf));
+  }
   function joinNames(ns) { return ns.length > 1 ? ns.slice(0, -1).join(', ') + ' et ' + ns[ns.length - 1] : ns[0]; }
   function showCents(left, winners) {
     form.querySelector('[data-cents-mode]').value = cents.mode;
     form.querySelector('[data-cents-who]').value = winners.join(',');
-    rows().forEach(function (r) { r.querySelector('.cent-badge').hidden = winners.indexOf(pidOf(r)) < 0; });
     centsBox.hidden = !left;
     if (!left) return;
     var asso = centsEffective() === 'asso';
     centsText.textContent = asso
       ? '🏛️ Centimes d’arrondi : ' + fmt(left) + ' payé' + (left > 1 ? 's' : '') + ' par ' + list.dataset.caisse
-      : '🎲 Centimes d’arrondi : ' + fmt(left) + ' payé' + (left > 1 ? 's' : '') + ' par ' + joinNames(winners.map(nameOf)) + ' (tiré' + (winners.length > 1 ? 's' : '') + ' au sort)';
+      : '🎲 Centimes d’arrondi : ' + fmt(left) + ' payé' + (left > 1 ? 's' : '') + ' par ' + whoTxt(winners) + ' (tiré' + (winners.length > 1 ? 's' : '') + ' au sort)';
     form.querySelector('[data-cents-redraw]').hidden = asso;
     form.querySelector('[data-cents-asso]').hidden = asso;
     form.querySelector('[data-cents-people]').hidden = !asso;

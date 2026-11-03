@@ -192,7 +192,6 @@ def test_form_draw_change_and_save(trip, browser_url):
         line = norm(pg.inner_text("[data-cents-text]"))
         assert re.fullmatch(r"🎲 Centimes d’arrondi : 0,01 € payé par (Anne|Bob|Chloé) \(tiré au sort\)", line), line
         first = line.split("par ")[1].split(" (")[0]
-        assert pg.locator(".cent-badge:not([hidden])").count() == 1
         pg.click("[data-cents-toggle]")
         pg.click("[data-cents-redraw]")                          # « Tirer d'autres personnes »
         second = norm(pg.inner_text("[data-cents-text]")).split("par ")[1].split(" (")[0]
@@ -200,7 +199,6 @@ def test_form_draw_change_and_save(trip, browser_url):
         pg.click("[data-cents-asso]")                            # « Faire payer l'asso »
         assert vals() == ["3,33"] * 3 and norm(pg.inner_text("[data-cents-text]")).startswith(
             "🏛️ Centimes d’arrondi : 0,01 € payé par l'asso")
-        assert pg.locator(".cent-badge:not([hidden])").count() == 0
         pg.click("[data-cents-people]")                          # « Tirer au sort parmi les participants »
         assert sorted(vals()) == ["3,33", "3,33", "3,34"]
         shown = norm(pg.inner_text("[data-cents-text]")).split("par ")[1].split(" (")[0]
@@ -259,4 +257,11 @@ def test_form_and_tooltip_show_the_same_amounts(trip, browser_url):
         assert {int(k): v for k, v in got.items()} == {k: f"{v // 100},{v % 100:02d}" for k, v in want.items()}
         text = norm(pg.inner_text("[data-cents-text]"))
         assert all(n in text for n in winners) and "0,02 €" in text
+        assert pg.locator(".cent-badge").count() == 0                      # pas de « +1 c » sur les montants
+        # beaucoup de tirés : « tous sauf … »  (100,09 € pour 11 = 9,0990… → 9,09 chacun, 10 centimes pour 10 personnes)
+        pg.fill("#actual", "100,09")
+        text = norm(pg.inner_text("[data-cents-text]"))
+        assert re.fullmatch(r"🎲 Centimes d’arrondi : 0,10 € payés par tous sauf [^,]+ \(tirés au sort\)", text), text
+        vals = pg.eval_on_selector_all(".who-amount:not([disabled])", "els => els.map(e => e.value)")
+        assert sorted(vals) == ["9,09"] + ["9,10"] * 10
         b.close()
