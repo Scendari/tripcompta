@@ -76,10 +76,14 @@ def main():
         "--workpath", str(ROOT / "build"),
         "--specpath", str(ROOT / "build"),
     ]
+    icons = ROOT / "build_tools" / "icone"          # dessin : build_tools/icone/fabriquer_icone.py
     if sys.platform == "darwin":
-        args += ["--windowed", "--osx-bundle-identifier", "org.asso.comptavoyages"]
+        args += ["--windowed", "--osx-bundle-identifier", "org.asso.comptavoyages",
+                 "--icon", str(icons / "TripCompta.icns")]
     else:
         args += ["--console"]   # une fenêtre affiche l'adresse ; la fermer arrête l'application
+        if sys.platform == "win32":
+            args += ["--icon", str(icons / "TripCompta.ico")]
     try:
         PyInstaller.__main__.run(args)
     finally:
