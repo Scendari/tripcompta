@@ -20,6 +20,24 @@
     <button class="iconbtn quit-btn" title="Arrêter l'application">⏻ Arrêter</button>
   </form>
 </header>
+{% if cloud %}
+{% if cloud.problem %}
+<div class="cloud-banner err" role="alert"><span>⚠️ {{ cloud.problem }}</span>
+  <a class="btn small ghost" href="/reglages/donnees">Où ranger mes voyages</a></div>
+{% elif cloud.readonly %}
+<div class="cloud-banner ro" role="status"><span>🔒 <b>Lecture seule</b> : tes voyages sont ouverts sur « {{ cloud.owner or 'un autre ordinateur' }} »{% if cloud.since %} depuis {{ cloud.since }}{% endif %}.
+  {% if cloud.stale %}Cet ordinateur ne donne plus signe de vie (éteint ou planté ?).{% else %}Ferme Trip Compta là-bas pour pouvoir les modifier ici.{% endif %}</span>
+  {% if cloud.stale %}<form method="post" action="/reglages/prendre-la-main" class="inline" data-confirm="Prendre la main ? Si Trip Compta est encore ouvert sur « {{ cloud.owner }} », il passera en lecture seule."><button class="btn small">Prendre la main</button></form>{% endif %}
+</div>
+{% endif %}
+{% if cloud.conflicts and not cloud.problem %}
+<div class="cloud-banner warn" role="status"><span>⚠️ {{ cloud.conflicts }} autre{{ 's' if cloud.conflicts > 1 }} version{{ 's' if cloud.conflicts > 1 }} des voyages {{ 'sont apparues' if cloud.conflicts > 1 else 'est apparue' }} dans le dossier ({{ cloud.service }} n'a pas pu les fusionner). Rien n'est perdu : choisis laquelle garder.</span>
+  <a class="btn small" href="/reglages/donnees#conflits">Choisir</a></div>
+{% endif %}
+<div class="cloud-line"><a href="/reglages/donnees" title="{{ cloud.folder }}">☁️ Rangé dans {{ cloud.service }}{% if cloud.saved and not cloud.readonly %} · enregistré à {{ cloud.saved }}{% endif %}{% if cloud.readonly %} · lecture seule{% endif %}</a>
+  {% if cloud.inbox %}<span aria-hidden="true">·</span> {% if trip %}<a href="/v/{{ trip.id }}/justificatifs#a-trier">📥 {{ cloud.inbox }} justificatif{{ 's' if cloud.inbox > 1 }} à trier</a>{% else %}<span>📥 {{ cloud.inbox }} justificatif{{ 's' if cloud.inbox > 1 }} à trier</span>{% endif %}{% endif %}
+</div>
+{% endif %}
 {% if update_banner %}
 <div class="update-banner" role="status">
   <span>🎁 <b>Trip Compta {{ update_banner.version }} est disponible.</b></span>

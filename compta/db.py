@@ -49,21 +49,33 @@ def default_data_dir() -> Path:
 
 
 class Database:
-    def __init__(self, data_dir: Path | str | None = None, app_version: str | None = None):
+    """`data_dir` : où l'app travaille. `home` (dossier synchronisé, voir cloud.py) : là où sont rangés la version
+    publiée de la base et les justificatifs ; la base, l'historique « Annuler », les sauvegardes et les vignettes
+    restent alors dans `data_dir`, sur l'ordinateur. Sans `home`, tout est dans `data_dir` (comme avant)."""
+
+    def __init__(self, data_dir: Path | str | None = None, app_version: str | None = None,
+                 home: Path | str | None = None):
         from . import version as V
         self.dir = Path(data_dir) if data_dir else default_data_dir()
+        self.home = Path(home) if home else self.dir
         self.app_version = app_version or V.build_info()["version"]
         # AVANT toute écriture : une version plus ancienne refuse une base passée par une version plus récente
         stored = stored_version(self.dir / "compta.db")
         if stored and V.base(stored) and V.base(self.app_version) and V.base(stored) > V.base(self.app_version):
             raise NewerDatabaseError(stored, self.app_version, self.dir)
         self.dir.mkdir(parents=True, exist_ok=True)
-        self.receipts_dir = self.dir / "justificatifs"
+        self.receipts_dir = self.home / "justificatifs"
+        self.thumbs_dir = (self.receipts_dir if self.home == self.dir else self.dir) / ".vignettes"
         self.backups_dir = self.dir / "sauvegardes"
         self.undo_dir = self.dir / ".annuler"
         self.redo_dir = self.dir / ".retablir"
-        for d in (self.receipts_dir, self.backups_dir, self.undo_dir, self.redo_dir):
+        for d in (self.backups_dir, self.undo_dir, self.redo_dir):
             d.mkdir(exist_ok=True)
+        try:                                     # dossier synchronisé introuvable : ne rien y créer
+            if self.home == self.dir or self.home.is_dir():
+                self.receipts_dir.mkdir(exist_ok=True)
+        except OSError:
+            pass
         self.path = self.dir / "compta.db"
         self.engine = create_engine(f"sqlite:///{self.path}", connect_args={"check_same_thread": False})
 
@@ -207,6 +219,12 @@ class Database:
         self._copy(snap, self.path)
         snap.unlink()
         snap.with_suffix(".json").unlink(missing_ok=True)
+        self.after_replace()
+
+    def after_replace(self):
+        """La base a été remplacée sur le disque (Annuler, version reprise du dossier synchronisé) : on la rouvre
+        et on la met à niveau si elle vient d'une version plus ancienne."""
+        self.engine.dispose()
         Base.metadata.create_all(self.engine)
         self._migrate()
 

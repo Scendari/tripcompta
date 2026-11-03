@@ -59,13 +59,14 @@ def chosen(tmp_path, monkeypatch):
 def test_move_data_to_another_folder(chosen):
     app, c, tmp, calls = chosen
     page = c.get("/reglages/donnees").text
-    assert str(tmp / "a") in page and "que tu as choisi" in page and "Revenir au dossier par défaut" in page
+    assert str(tmp / "a") in page and "que tu as choisi" in page and "Revenir sur cet ordinateur" in page
     r = c.post("/reglages/donnees", data={"dossier": str(tmp / "b"), "mode": "deplacer"})
     import html
     assert "Redémarrage" in r.text and "n'a pas été touché" in html.unescape(r.text)
     import time; time.sleep(0.8)
     assert calls == ["relance"]
-    assert json.loads((tmp / "reglages.json").read_text())["data_dir"] == str(tmp / "b")
+    conf = json.loads((tmp / "reglages.json").read_text())
+    assert conf["data_dir"] == str(tmp / "b") and conf["partage"] is True   # dossier protégé (verrou…)
     con = sqlite3.connect(tmp / "b" / "compta.db")
     assert con.execute("SELECT name FROM trips").fetchall() == [("Sortie",)]
     assert (tmp / "b" / "justificatifs" / "1_x.jpg").read_bytes() == b"IMG"
@@ -77,23 +78,27 @@ def test_change_errors(chosen):
     def post(**d):
         return c.post("/reglages/donnees", data=d).text.replace("&#39;", "'").replace("&quot;", '"')
     assert "chemin complet" in post(dossier="relatif/dossier", mode="deplacer")
-    assert "déjà le dossier utilisé" in post(dossier=str(tmp / "a"), mode="deplacer")
-    assert "pas de données Trip Compta" in post(dossier=str(tmp / "vide"), mode="utiliser")
+    assert "déjà rangés dans ce dossier" in post(dossier=str(tmp / "a"), mode="deplacer")
+    assert "pas encore de voyages Trip Compta" in post(dossier=str(tmp / "vide"), mode="utiliser")
+    assert "est introuvable" in post(dossier=str(tmp / "nulle part" / "x"), mode="deplacer")   # faute de frappe
     (tmp / "plein").mkdir()
     (tmp / "plein" / "compta.db").write_bytes(b"")
-    assert "contient déjà des données" in post(dossier=str(tmp / "plein"), mode="deplacer")
+    assert "contient déjà des voyages" in post(dossier=str(tmp / "plein"), mode="deplacer")
     assert calls == []
-    # utiliser un dossier qui a déjà des données ; puis revenir au défaut
-    assert "va utiliser les données" in post(dossier=str(tmp / "plein"), mode="utiliser")
-    assert "Retour au dossier par défaut" in post(action="defaut")
-    assert json.loads((tmp / "reglages.json").read_text())["data_dir"] is None
+    # utiliser un dossier qui a déjà des données ; puis revenir sur cet ordinateur (Documents/TripCompta)
+    assert "va utiliser les voyages" in post(dossier=str(tmp / "plein"), mode="utiliser")
+    assert "de nouveau rangés sur cet ordinateur" in post(action="defaut")
+    conf = json.loads((tmp / "reglages.json").read_text())
+    assert conf["data_dir"] is None and conf["partage"] is False
+    con = sqlite3.connect(tmp / "Docs" / "TripCompta" / "compta.db")      # les voyages y ont été copiés
+    assert con.execute("SELECT name FROM trips").fetchall() == [("Sortie",)]
 
 
 def test_imposed_folder_and_open(tmp_path, monkeypatch):
     app = create_app(tmp_path / "d")                                  # imposé au lancement
     c = TestClient(app)
     page = c.get("/reglages/donnees").text
-    assert "imposé au lancement" in page and "Changer de dossier</button>" not in page
+    assert "imposé au lancement" in page and "Ranger mes voyages ici" not in page
     assert "imposé au lancement" in c.post("/reglages/donnees", data={"dossier": "/tmp/x"}).text
     opened = []
     import subprocess

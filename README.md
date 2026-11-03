@@ -76,6 +76,34 @@ Une base créée avec une version plus ancienne est mise à niveau toute seule �
 
 **Sauvegarder = copier ce dossier** (clé USB, Dropbox, iCloud…).
 
+### Retrouver ses voyages sur plusieurs ordinateurs (Dropbox, Google Drive, OneDrive, iCloud…)
+
+Aucun serveur : Trip Compta range ses voyages dans un **dossier synchronisé** de ton choix, et c'est le logiciel de
+ton cloud qui les recopie sur tes autres ordinateurs (Mac, Windows, Linux).
+
+1. Installe l'application de ton cloud pour ordinateur (Dropbox, Google Drive pour ordinateur, OneDrive, iCloud,
+   kDrive, Proton Drive…), s'il n'y est pas déjà.
+2. Dans Trip Compta : accueil → **☁️ Où ranger mes voyages** (lien en bas). Les dossiers synchronisés trouvés sur
+   l'ordinateur sont proposés ; sinon « Autre dossier… » → **Parcourir…**.
+3. Sur le 1er ordinateur : **Y copier mes voyages** (tout est copié et vérifié, l'ancien dossier n'est pas touché).
+   Sur les suivants, une fois la synchronisation faite : **Utiliser les voyages déjà dans ce dossier**.
+
+Dans le dossier synchronisé : `compta.db` (la version enregistrée), `justificatifs/`, `Justificatifs à trier/` et
+`tripcompta-verrou.json`. Sur chaque ordinateur restent l'historique Défaire/Rétablir, les sauvegardes du jour et
+les brouillons IA. L'app travaille sur une copie et, après chaque modification, enregistre une version complète
+**d'un seul coup** (jamais de fichier à moitié écrit).
+
+- **Un seul ordinateur à la fois** peut modifier : les autres ouvrent les voyages en **lecture seule** (« ouverts
+  sur « PC du club » depuis 14 h 02 ») et se mettent à jour quand on revient sur l'app. **⏻ Arrêter** libère la
+  main ; si un ordinateur est resté allumé ou a planté, l'autre peut **Prendre la main** au bout de 3 minutes.
+- **iCloud Drive, OneDrive** : clic droit sur le dossier → « Toujours garder sur cet appareil » (sinon le fichier
+  peut n'exister que dans le cloud ; Trip Compta le signale).
+- **Copies en conflit** (« compta (conflicted copy…).db », « compta (copie en conflit…).db », « compta-PC.db »…) :
+  Trip Compta les signale ; tu choisis laquelle garder, l'autre est rangée dans « Anciennes versions ».
+- **Depuis un téléphone** : avec l'app de ton cloud, dépose les photos de tickets dans `Justificatifs à trier` ;
+  dans 📎 Justificatifs, coche-les et rattache-les aux dépenses (ils sont ensuite rangés dans `Rangés/`).
+- **Revenir sur cet ordinateur** : même page ; les voyages sont recopiés dans `Documents/TripCompta`.
+
 ---
 
 ## Ce que fait l'application

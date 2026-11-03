@@ -11,9 +11,11 @@ def _isolated_data(tmp_path_factory):
     """Jamais les vraies données pendant les tests : dossier et réglages de l'ordinateur isolés."""
     import os
     root = tmp_path_factory.mktemp("isolation")
-    old = {k: os.environ.get(k) for k in ("TRIPCOMPTA_DATA_DIR", "COMPTA_DATA_DIR", "TRIPCOMPTA_CONFIG")}
+    old = {k: os.environ.get(k) for k in ("TRIPCOMPTA_DATA_DIR", "COMPTA_DATA_DIR", "TRIPCOMPTA_CONFIG",
+                                          "TRIPCOMPTA_DOCUMENTS")}
     os.environ["TRIPCOMPTA_DATA_DIR"] = str(root / "donnees")
     os.environ["TRIPCOMPTA_CONFIG"] = str(root / "reglages.json")
+    os.environ["TRIPCOMPTA_DOCUMENTS"] = str(root / "Documents")     # « Revenir sur cet ordinateur » en test
     yield
     for k, v in old.items():
         if v is None:
