@@ -17,12 +17,12 @@
   </div>
   {% else %}<p class="pill ok">🟢 Tout le monde est quitte</p>{% endfor %}
   <h3 style="margin-top:1.2rem">Où en est chacun</h3>
-  <table>
+  <div class="table-wrap"><table>
     <thead><tr><th>Nom</th><th class="num">A payé</th><th class="num">Sa part</th><th class="num">Situation</th></tr></thead>
     <tbody>{% for m in sub.members %}{% set b = v.balances.get(m, 0) %}
       <tr><td>{{ names[m] }}</td><td class="num">{{ v.paid.get(m, 0)|money }}</td><td class="num">{{ v.shares.get(m, 0)|money }}</td>
         <td class="num">{% if b > 0 %}<span class="pill du">on lui doit {{ b|money }}</span>{% elif b < 0 %}<span class="pill doit">doit {{ (-b)|money }}</span>{% else %}<span class="pill ok">quitte</span>{% endif %}</td></tr>{% endfor %}</tbody>
-  </table>
+  </table></div>
 </div>
 <form class="card" method="post" action="/v/{{ trip.id }}/entre-nous/{{ sub.id }}/depense" id="subexp">
   <h3>+ Une dépense</h3>

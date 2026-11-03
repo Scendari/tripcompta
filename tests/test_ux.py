@@ -98,6 +98,16 @@ def test_every_page_mobile_no_horizontal_scroll(server, browser, width):
     assert not page.errors, page.errors
 
 
+def test_mobile_no_horizontal_scroll_with_wide_font(server, browser):
+    """Les polices de Linux et de Windows sont plus larges que celles du Mac : même essai avec Verdana."""
+    page = new_page(browser, width=390, height=844)
+    for url in urls(server):
+        page.goto(url)
+        page.add_style_tag(content="*{font-family:Verdana,'DejaVu Sans',sans-serif !important}")
+        sw = page.evaluate("document.documentElement.scrollWidth")
+        assert sw <= 391, (url, sw)
+
+
 def test_destructive_actions_ask_confirmation(server, browser):
     page = new_page(browser)
     for url in urls(server):
