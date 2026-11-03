@@ -10,9 +10,29 @@
 {% if trip.participants %}<button type="button" class="btn small ghost export-btn" data-toggle-row="#export" aria-expanded="false" aria-controls="export">⤓ Exporter</button>{% endif %}
 <details class="card add-person" id="ajout" {{ 'open' if open_add or not trip.participants }}>
   <summary class="btn small">+ Ajouter un participant</summary>
-  <form method="post" action="/v/{{ trip.id }}/participants" id="add-form" style="margin-top:.8rem">
+  {% if known %}
+  <form method="post" action="/v/{{ trip.id }}/participants/reprendre" class="known" data-known>
+    <h3>Déjà venus sur un autre voyage</h3>
+    <p class="hint">Coche les personnes à reprendre : leur nom, leur téléphone, leur e-mail et « plongeur ou accompagnant » sont recopiés.</p>
+    <div class="known-tools">
+      <input type="search" placeholder="Chercher un nom…" aria-label="Chercher un nom" data-known-filter>
+      {% for kt in known_trips %}<button type="button" class="btn small ghost" data-known-trip="{{ kt.id }}">Tout le groupe « {{ kt.name }} » ({{ kt.people|length }})</button>{% endfor %}
+    </div>
+    <div class="known-list">
+      {% for x in known %}<label class="chk" data-trips=" {{ x.trips|join(' ') }} " data-name="{{ x.key }}"><input type="checkbox" name="known" value="{{ x.key }}">
+        <span><b>{{ x.name }}</b>{% if x.companion %} <span class="pill grey">accompagnant</span>{% endif %}
+        <span class="muted small d-block">{{ x.trip }}{% if x.phone %} · {{ x.phone }}{% endif %}{% if x.email %} · {{ x.email }}{% endif %}</span></span></label>{% endfor %}
+      <p class="muted small" data-known-none hidden>Personne ne porte ce nom.</p>
+    </div>
+    <div class="row known-actions"><button class="btn small" data-known-submit disabled>Ajouter les personnes cochées</button></div>
+  </form>
+  <h3 class="known-or">Ou une nouvelle personne</h3>
+  {% endif %}
+  <form method="post" action="/v/{{ trip.id }}/participants" id="add-form" style="margin-top:.8rem"
+        {% if known %}data-known-fill="{{ known_fill|tojson|forceescape }}"{% endif %}>
+    {% if known %}<datalist id="known-names">{% for x in known %}<option value="{{ x.name }}">{% endfor %}</datalist>{% endif %}
     <div class="person-edit">
-      <div class="field"><label for="a-name">Nom <span class="hint">(prénom et nom)</span></label><input type="text" id="a-name" name="name" required autocomplete="off" {{ 'autofocus' if open_add }}></div>
+      <div class="field"><label for="a-name">Nom <span class="hint">(prénom et nom)</span></label><input type="text" id="a-name" name="name" required autocomplete="off" {{ 'autofocus' if open_add }}{% if known %} list="known-names"{% endif %}></div>
       <div class="field"><label for="a-phone">Téléphone</label><input type="tel" id="a-phone" name="phone" placeholder="06 12 34 56 78"></div>
       <div class="field"><label for="a-email">E-mail</label><input type="email" id="a-email" name="email"></div>
       <div class="field wide"><label for="a-note">Note</label><input type="text" id="a-note" name="note" placeholder="ex. niveau 2, allergie…"></div>

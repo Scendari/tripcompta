@@ -774,7 +774,11 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
         t = trip_or_404(s, tid)
         r = S.compute_trip(t, mode_of(request))
         groups = S.trip_groups(t)
+        known = S.known_people(t)
         return render(request, "participants.html", trip=t, r=r, groups=groups, export_cols=S.EXPORT_COLS,
+                      known=known, known_trips=S.known_trips(t, known),
+                      known_fill={S.person_key(x["name"]): dict(phone=x["phone"], email=x["email"],
+                                                                companion=x["companion"]) for x in known},
                       open_add=request.query_params.get("ajout") == "1",
                       open_edit=int(request.query_params.get("modifier") or 0) if (request.query_params.get("modifier") or "").isdigit() else 0,
                       pgroups={p.id: [g["name"] for g in groups if p.id in g["ids"]] for p in t.participants},
@@ -914,6 +918,29 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
             return (f.get("family_new") or "").strip() if pick == "__new__" else pick
         return f.get("family") if "family" in f else None
 
+    @app.post("/v/{tid}/participants/reprendre")
+    async def take_known_people(tid: int, request: Request, s: Session = Depends(get_s)):
+        """Ajoute des personnes déjà venues sur d'autres voyages : nom, téléphone, e-mail, plongeur ou accompagnant
+        (pas la famille, les rôles, les groupes ni la note, propres à chaque voyage)."""
+        t = trip_or_404(s, tid)
+        f = await request.form()
+        wanted = set(f.getlist("known"))
+        people = [x for x in S.known_people(t) if x["key"] in wanted]
+        if not people:
+            return back(f"/v/{tid}/participants?ajout=1#ajout", "Coche au moins une personne")
+        db.snapshot(f"reprise de {len(people)} participant(s) d'autres voyages")
+        added = [M.Participant(name=x["name"], phone=x["phone"], email=x["email"], companion=x["companion"])
+                 for x in people]
+        t.participants.extend(added)
+        s.flush()
+        for p in added:
+            S.set_roles(t, p, [S.COMPANION if p.companion else S.DIVER])
+        s.commit()
+        msg = f"{added[0].name} ajouté" if len(added) == 1 else f"{len(added)} participants ajoutés"
+        if t.expenses:
+            msg += " — pense à les cocher dans « Pour qui ? » des dépenses qui les concernent"
+        return back(f"/v/{tid}/participants", msg)
+
     @app.post("/v/{tid}/participants")
     async def add_participants(tid: int, request: Request, s: Session = Depends(get_s)):
         t = trip_or_404(s, tid)
@@ -937,6 +964,7 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
             join = [e for e in shared if f.get(f"join_{e.id}")]
         else:  # ancien formulaire : case unique
             join = shared if f.get("join_all") else []
+        kp = S.known_person(t, new[0]) if len(new) == 1 else None   # déjà venu sur un autre voyage ?
         added = [M.Participant(name=n, companion=companion) for n in new]
         t.participants.extend(added)
         s.flush()
@@ -949,6 +977,8 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
         if len(added) == 1 and "name" in f:      # formulaire « un participant » : toutes ses infos
             p = added[0]
             p.phone, p.email, p.note = (f.get(k, "").strip() for k in ("phone", "email", "note"))
+            if kp:                               # déjà venu sur un autre voyage : ses contacts s'il n'en a pas saisi
+                p.phone, p.email = p.phone or kp["phone"], p.email or kp["email"]
             if f.getlist("groups"):
                 S.set_person_groups(t, p.id, f.getlist("groups"))
         s.commit()

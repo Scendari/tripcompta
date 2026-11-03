@@ -197,7 +197,7 @@ tr.family-row td { background: var(--bg-2); }
 label { font-weight: 600; font-size: .9rem; display: block; margin-bottom: .25rem; }
 .field { margin-bottom: .9rem; }
 .hint { font-size: .82rem; color: var(--muted); font-weight: 400; margin-top: .2rem; }
-input[type=text], input[type=date], input[type=number], input[type=email], input[type=tel], select, textarea {
+input[type=text], input[type=date], input[type=number], input[type=email], input[type=tel], input[type=search], select, textarea {
   width: 100%; padding: .55rem .7rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card);
   color: var(--text); font: inherit;
 }
@@ -838,3 +838,19 @@ label.check { display: inline-flex; align-items: center; gap: .4rem; font-weight
 
 /* centimes d'arrondi (formulaire de dépense) */
 .cents-choices { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; margin-top: .4rem; }
+
+/* participants déjà venus sur d'autres voyages */
+.known { margin-top: .8rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+.known h3, .known-or { margin: 0 0 .2rem; font-size: 1rem; }
+.known-or { margin-top: 1rem; }
+.known .hint { margin: 0 0 .6rem; }
+.known-tools { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin-bottom: .5rem; }
+.known-tools input[type=search] { flex: 1 1 200px; width: auto; max-width: 280px; padding: .35rem .6rem; }
+.known-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: .15rem .8rem;
+  max-height: 300px; overflow-y: auto; padding: .3rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.known-list label { display: flex; align-items: flex-start; gap: .5rem; padding: .3rem .35rem; border-radius: 6px; cursor: pointer; }
+.known-list label:hover { background: var(--bg-2); }
+.known-list label[hidden] { display: none; }
+.known-list input { margin-top: .2rem; }
+.known-list .d-block { display: block; overflow-wrap: anywhere; }
+.known-actions { justify-content: flex-end; margin-top: .6rem; }

@@ -243,14 +243,19 @@ def trip_pdf(trip: M.Trip, mode: str = E.ACTUAL) -> bytes:
 
     rmap = S.roles_map(trip)
 
+    people_by_id = {p.id: p for p in trip.participants}
+
     def pname(p):
         tags = [S.ROLE_SHORT[x] for x in rmap.get(p.id, []) if x in S.TEAM_ROLES] + (["acc."] if p.companion else [])
-        return p.name + (f" ({', '.join(tags)})" if tags else "") + (" (désisté)" if p.withdrawn else "")
+        name = p.name + (f" ({', '.join(tags)})" if tags else "") + (" (désisté)" if p.withdrawn else "")
+        q = people_by_id.get(p.id)
+        lines = [x.strip() for x in ((q.phone, q.email) if q else ()) if x and x.strip()]
+        return "\n".join([name] + lines)                        # ses contacts sous son nom, un par ligne
     for a in r.accounts:
         if a.is_family:
             rows.append([a.name, _m(a.share), _m(a.paid), _m(a.advanced), _m(a.refunded), _status(a)])
             for p in a.members:
-                rows.append(["    " + pname(p), _m(p.share), _m(p.paid), _m(p.advanced), _m(p.refunded), ""])
+                rows.append(["\n".join("    " + x for x in pname(p).split("\n")), _m(p.share), _m(p.paid), _m(p.advanced), _m(p.refunded), ""])
         else:
             p = a.members[0]
             rows.append([pname(p), _m(p.share), _m(p.paid), _m(p.advanced), _m(p.refunded), _status(p)])
@@ -265,8 +270,8 @@ def trip_pdf(trip: M.Trip, mode: str = E.ACTUAL) -> bytes:
         pdf.para("Les familles règlent leurs comptes ensemble : leur « Reste » est donné sur la ligne de la famille, "
                  "le détail de chaque membre en dessous.", 8.5, color=MUTED)
     tot = r.people.values()
-    pdf.table_(["Nom", "Sa part", "A versé", "A avancé", "Remboursé", "Reste"], rows,
-               [42, 26, 26, 26, 26, 34], ["LEFT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT"],
+    pdf.table_(["Nom et contact", "Sa part", "A versé", "A avancé", "Remboursé", "Reste"], rows,
+               [56, 21, 21, 21, 23, 38], ["LEFT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT"],
                total=["Total", _m(sum(p.share for p in tot)), _m(sum(p.paid for p in tot)),
                       _m(sum(p.advanced for p in tot)), _m(sum(p.refunded for p in tot)), ""])
 
@@ -516,6 +521,11 @@ def account_pdf(trip: M.Trip, acc_key: str, mode: str = E.ACTUAL) -> tuple:
     pdf.h1(f"Compte de {acc.name}")
     when = " → ".join(_d(x) for x in (trip.start, trip.end) if x)
     pdf.para(" · ".join(x for x in (trip.name, trip.place, when) if x), 10, color=MUTED)
+    by_id = {p.id: p for p in trip.participants}
+    for m in acc.members:                                  # ses contacts (ceux de chaque membre pour une famille)
+        c = S.contact_text(by_id[m.id]) if m.id in by_id else ""
+        if c:
+            pdf.para(f"{m.name} : {c}" if acc.is_family else c, 9, color=MUTED)
     pdf.para(f"Calculé sur les {'montants réels' if mode == E.ACTUAL else 'montants prévus'}, le "
              f"{dt.date.today().strftime('%d/%m/%Y')}.", 8.5, color=MUTED)
 
