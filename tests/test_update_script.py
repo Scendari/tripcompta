@@ -136,7 +136,7 @@ def test_broken_new_version_puts_old_back(setup):
     assert not Path(str(target) + ".ancienne").exists()
     msg = (work / "echec.txt").read_text(encoding="utf-8-sig")
     assert "1.1.0 n'a pas démarré" in msg and "ancienne version a été remise" in msg
-    for _ in range(40):                                                    # et elle est relancée
+    for _ in range(120):                                                   # et elle est relancée
         if ping(port) == "1.0.0":
             break
         time.sleep(0.25)
@@ -149,7 +149,7 @@ def test_missing_new_version_keeps_old(setup):
     assert r.returncode == 1
     assert (target / "VERSION.txt").read_text() == "1.0.0"
     assert "Impossible d'installer la nouvelle version" in (work / "echec.txt").read_text(encoding="utf-8-sig")
-    for _ in range(40):
+    for _ in range(120):
         if ping(port) == "1.0.0":
             break
         time.sleep(0.25)

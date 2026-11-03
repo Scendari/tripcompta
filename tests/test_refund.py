@@ -110,3 +110,105 @@ def test_ledger_shows_refund(trip):
     assert "Appartement annulé (remboursement)" in items
     page = re.sub(r"[ \xa0]", " ", c.get(f"/v/{tid}/comptes").text)
     assert "90,29 €" in page                                       # onglet Comptes : reçu pour la caisse
+
+
+# ------------------------------------------------------------- coût partagé = payé − remboursé, PARTOUT
+# (retour d'un organisateur : l'aperçu du formulaire répartissait 120,29 € au lieu de 30 € ; le calcul était juste)
+
+def test_table_shows_shared_cost_first(trip):
+    app, c, tid, Pp, ops = trip
+    data = {"label": "Appartement annulé", "category": "Logement", "actual": "120,29", "payer": "asso",
+            "payer_kind": "asso", "has_refund": "1", "refund": "90,29", "refund_to": str(Pp["Anne"]),
+            **{f"inc_{i}": "1" for i in Pp.values()}}
+    c.post(f"/v/{tid}/depenses", data=data)
+    page = re.sub(r"[  \xa0]", " ", c.get(f"/v/{tid}/depenses").text)
+    cell = re.search(r'<td class="num">(30,00 €)<div class="small muted"[^>]*>(payé 120,29 € − 90,29 € remboursés '
+                     r'\(à Anne\))</div>', page)
+    assert cell, "le montant affiché doit être le coût partagé (30 €), le détail en dessous"
+
+
+def test_fixed_share_checked_against_shared_cost(trip):
+    app, c, tid, Pp, ops = trip
+    base = {"label": "Appartement annulé", "category": "Logement", "actual": "120", "payer": "asso",
+            "payer_kind": "asso", "has_refund": "1", "refund": "90", "refund_to": "asso",
+            **{f"inc_{i}": "1" for i in Pp.values()}}
+    # 40 € fixés pour Anne : plus que les 30 € à partager → refusé, avec le bon montant
+    r = c.post(f"/v/{tid}/depenses", data={**base, f"fx_{Pp['Anne']}": "1", f"m_{Pp['Anne']}": "40"},
+               follow_redirects=True)
+    txt = re.sub(r"[  \xa0]", " ", r.text)
+    assert "Les montants fixés font 40,00 €, plus que le coût à partager (30,00 €)" in txt
+    assert ops.trip(tid)["depenses"] == []
+    # 10 € fixés : accepté ; Bob et Chloé se partagent les 20 € restants (à la main : 30 − 10 = 20 ÷ 2 = 10)
+    r = c.post(f"/v/{tid}/depenses", data={**base, f"fx_{Pp['Anne']}": "1", f"m_{Pp['Anne']}": "10"},
+               follow_redirects=True)
+    p = {x["nom"]: x["sa_part"] for x in ops.trip(tid)["participants"]}
+    assert p == {"Anne": 10.0, "Bob": 10.0, "Chloé": 10.0}
+    # tous fixés pour 30 € pile : accepté (et pas « il reste 90 € »)
+    eid = ops.trip(tid)["depenses"][0]["id"]
+    allfx = {**base, **{f"fx_{i}": "1" for i in Pp.values()}, f"m_{Pp['Anne']}": "5", f"m_{Pp['Bob']}": "10",
+             f"m_{Pp['Chloé']}": "15"}
+    r = c.post(f"/v/{tid}/depenses/{eid}", data=allfx, follow_redirects=True)
+    p = {x["nom"]: x["sa_part"] for x in ops.trip(tid)["participants"]}
+    assert p == {"Anne": 5.0, "Bob": 10.0, "Chloé": 15.0}
+
+
+def test_ai_fixed_share_checked_against_shared_cost(trip):
+    app, c, tid, Pp, ops = trip
+    ops.import_trip({"voyage_id": tid, "depenses": [{"libelle": "Appart", "reel": "120", "rembourse": "90",
+                                                     "pour": "tous"}]}, voyage=tid, verifier_id=tid)
+    with pytest.raises(Exception) as e:
+        ops.import_trip({"voyage_id": tid, "depenses_a_modifier": [{"depense": "Appart", "fixe": {"Anne": "40"}}]},
+                        voyage=tid, verifier_id=tid)
+    assert "plus que la dépense (30,00" in str(e.value).replace(" ", " ").replace("\xa0", " ")
+    r = ops.import_trip({"voyage_id": tid, "depenses_a_modifier": [{"depense": "Appart", "fixe": {"Anne": "6"}}]},
+                        voyage=tid, verifier_id=tid)
+    assert {p["nom"]: p["sa_part"] for p in r["apercu"]["participants"]} == {"Anne": 6.0, "Bob": 12.0, "Chloé": 12.0}
+
+
+def test_form_preview_deducts_refund(trip):
+    """Dans le navigateur : l'aperçu « Pour qui ? » répartit le coût partagé, et suit la case et le montant."""
+    import threading
+    import time
+
+    import uvicorn
+    from playwright.sync_api import sync_playwright
+    from tests.conftest import _free_port
+    app, c, tid, Pp, ops = trip
+    ops.add_participants(tid, [f"P{i}" for i in range(4, 16)])            # 15 personnes, comme le cas réel
+    port = _free_port()
+    srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
+    th = threading.Thread(target=srv.run, daemon=True)
+    th.start()
+    while not srv.started:
+        time.sleep(0.05)
+    try:
+        with sync_playwright() as p:
+            b = p.chromium.launch()
+            pg = b.new_page()
+            errors = []
+            pg.on("pageerror", lambda e: errors.append(str(e)))
+            pg.goto(f"http://127.0.0.1:{port}/v/{tid}/depenses/nouvelle")
+            pg.fill("#label", "Appartement annulé")
+            pg.fill("#actual", "120,29")
+            pg.locator("[data-who-chips] button", has_text="Tout le monde").click()
+            status = pg.locator("#split-status")
+            norm = lambda s: s.replace(" ", " ").replace("\xa0", " ")
+            assert norm(status.inner_text()) == "120,29 € réparti entre 15 personnes."
+            pg.check("input[name=has_refund]")
+            pg.fill("#refund", "90,29")
+            assert norm(status.inner_text()) == "30,00 € (120,29 € − 90,29 € remboursés) réparti entre 15 personnes."
+            amounts = pg.eval_on_selector_all(".who-amount", "els => els.map(e => e.value).filter(v => v)")
+            assert amounts == ["2,00"] * 15                                    # 30 € ÷ 15, comme le calcul
+            pg.uncheck("input[name=has_refund]")                               # décoché : de nouveau 120,29
+            assert norm(status.inner_text()) == "120,29 € réparti entre 15 personnes."
+            pg.check("input[name=has_refund]")
+            assert "30,00 €" in norm(status.inner_text())
+            # un montant fixé plus grand que le coût partagé : averti avant d'enregistrer
+            first = pg.locator(".who-amount").first
+            first.fill("40")
+            assert "plus que le coût à partager (30,00 € (120,29 € − 90,29 € remboursés))" in norm(status.inner_text())
+            assert errors == []
+            b.close()
+    finally:
+        srv.should_exit = True
+        th.join(5)

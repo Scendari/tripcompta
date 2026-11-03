@@ -1,4 +1,4 @@
-# Trip Compta (Windows) : remplace l'application par la nouvelle version, la relance, et vérifie qu'elle répond.
+﻿# Trip Compta (Windows) : remplace l'application par la nouvelle version, la relance, et vérifie qu'elle répond.
 # Si elle ne répond pas, l'ancienne version est remise en place et relancée.
 # Lancé par l'application elle-même, juste avant qu'elle se ferme. Les données ne sont jamais touchées.
 #
@@ -35,11 +35,27 @@ function Launch($app) {
   }
 }
 
-function Ping-Version {
+# Requêtes directes, sans proxy : Invoke-RestMethod cherche un proxy à chaque appel (très lent sur certains PC)
+function Http($method, $path) {
   try {
-    $r = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/ping" -TimeoutSec 2
-    return [string]$r.version
+    $req = [System.Net.HttpWebRequest]::Create("http://127.0.0.1:$Port$path")
+    $req.Method = $method
+    $req.Proxy = $null
+    $req.Timeout = 2000
+    $req.ReadWriteTimeout = 2000
+    if ($method -eq "POST") { $req.ContentLength = 0 }
+    $resp = $req.GetResponse()
+    $reader = New-Object System.IO.StreamReader($resp.GetResponseStream())
+    $body = $reader.ReadToEnd()
+    $reader.Close(); $resp.Close()
+    return $body
   } catch { return "" }
+}
+
+function Ping-Version {
+  $body = Http "GET" "/ping"
+  if ($body -match '"version"\s*:\s*"([^"]*)"') { return $Matches[1] }
+  return ""
 }
 
 function Move-Folder($from, $to) {
@@ -94,7 +110,7 @@ for ($i = 0; $i -lt $WaitPing; $i++) {
 }
 
 Log "La nouvelle version ne répond pas : retour à l'ancienne"
-try { Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$Port/quitter" -TimeoutSec 2 | Out-Null } catch {}
+Http "POST" "/quitter" | Out-Null
 Start-Sleep -Seconds 1
 Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
 Start-Sleep -Milliseconds 800

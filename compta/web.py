@@ -1362,9 +1362,12 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
             total_ = (actual if actual is not None else planned) or 0
             if not total_:
                 return back(ref, "Indique le montant de la dépense avant de fixer des montants")
+            refund_ = (amount(f, "refund") or 0) if f.get("has_refund") else 0
+            total_ = max(0, total_ - refund_)          # c'est le coût, remboursement déduit, qui est partagé
             got = sum(fixed.values())
             if got > total_:
-                return back(ref, f"Les montants fixés font {E.fmt(got)}, plus que la dépense ({E.fmt(total_)})")
+                what = "le coût à partager" if refund_ else "la dépense"
+                return back(ref, f"Les montants fixés font {E.fmt(got)}, plus que {what} ({E.fmt(total_)})")
             if len(fixed) == len(weights) and got != total_:
                 return back(ref, f"Il reste {E.fmt(total_ - got)} à répartir : tous les montants sont fixés. "
                                  f"Laisse au moins une personne sans montant fixé, ou corrige les montants.")
