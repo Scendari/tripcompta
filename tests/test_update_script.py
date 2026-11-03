@@ -92,6 +92,9 @@ def run_script(target, new, exe, port, version, work, extra=(), wait=25):
     t0 = time.time()
     r = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=wait + 60)
     r.duration = time.time() - t0
+    log = Path(work) / "maj.log"
+    print("--- journal du script ---\n" + (log.read_text(encoding="utf-8-sig", errors="replace") if log.exists() else "(aucun)")
+          + "\n--- sortie ---\n" + r.stdout + r.stderr)          # visible si le test échoue
     return r
 
 

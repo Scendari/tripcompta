@@ -29,7 +29,9 @@ function Launch($app) {
   $quoted = $argList | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }
   $env:TRIPCOMPTA_RESTARTED = "1"
   if ($exe -match '\.(cmd|bat)$') {
-    Start-Process -FilePath "cmd.exe" -ArgumentList (@("/c", '"' + $exe + '"') + $quoted) -WindowStyle Hidden
+    # cmd /c "  "programme" options  " : les guillemets extérieurs protègent ceux de l'intérieur
+    $line = '/c "' + '"' + $exe + '" ' + ($quoted -join ' ') + '"'
+    Start-Process -FilePath "cmd.exe" -ArgumentList $line -WindowStyle Hidden
   } else {
     Start-Process -FilePath $exe -ArgumentList $quoted -WorkingDirectory $app
   }
