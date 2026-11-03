@@ -804,6 +804,9 @@ class Ops:
         self.db = db
 
     def _write(self, label: str, fn, trip_id=None, simulation: bool = False) -> dict:
+        if not simulation and (self.db.dir / "LECTURE-SEULE").exists():   # voir cloud.py
+            raise OpsError("Les voyages sont ouverts en lecture seule sur cet ordinateur (ils sont ouverts sur un "
+                           "autre ordinateur, ou le dossier synchronisé est indisponible) : rien n'a été modifié.")
         s = self.db.Session()
         snapped = False
         try:

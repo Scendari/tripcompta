@@ -78,10 +78,52 @@ mkdir -p ~/Applications && tar -xzf /tmp/TripCompta.tar.gz -C ~/Applications
 
 ---
 
+## Retrouver tes voyages sur plusieurs ordinateurs
+
+Tu peux ranger tes voyages dans **ton** Dropbox, Google Drive, OneDrive, iCloud Drive, kDrive ou Proton Drive :
+ils te suivent sur tous tes ordinateurs, sans aucun serveur (rien n'est envoyé ailleurs que chez ton service).
+
+**Sur le premier ordinateur**
+
+1. Vérifie que l'application de ton cloud est installée sur l'ordinateur (le dossier Dropbox, Google Drive,
+   OneDrive ou iCloud Drive apparaît dans le Finder ou l'Explorateur).
+2. Dans Trip Compta, sur l'accueil : **☁️ Où ranger mes voyages** (en bas).
+3. Choisis ton service dans la liste (ou « Autre dossier… » puis **Parcourir…**), garde **Y copier mes voyages**,
+   puis **Ranger mes voyages ici**. Tout est copié et vérifié ; Trip Compta redémarre tout seul.
+
+**Sur les autres ordinateurs**
+
+1. Installe Trip Compta, attends que ton cloud ait fini de synchroniser le dossier **TripCompta**.
+2. **☁️ Où ranger mes voyages** → choisis le même dossier → **Utiliser les voyages déjà dans ce dossier**.
+
+**Réglages par service**
+
+| Service | À faire une fois |
+|---|---|
+| iCloud Drive (Mac) | Finder → clic droit sur le dossier TripCompta → **Toujours garder sur cet appareil** |
+| OneDrive (Windows / Mac) | Clic droit sur le dossier TripCompta → **Toujours conserver sur cet appareil** |
+| Google Drive pour ordinateur | Clic droit sur le dossier → **Disponible hors connexion** (ou réglage « Dupliquer les fichiers ») |
+| Dropbox | Clic droit → **Rendre disponible hors connexion** (si tu utilises « en ligne uniquement ») |
+| kDrive, Proton Drive, pCloud | Garde le dossier disponible hors connexion |
+
+**À deux ordinateurs**
+
+- **Un seul à la fois** peut modifier les voyages. Sur l'autre, ils s'ouvrent en **lecture seule**, avec le nom de
+  l'ordinateur qui a la main, et se mettent à jour quand tu reviens sur l'app.
+- Quand tu as fini : **⏻ Arrêter**. L'autre ordinateur reprend la main tout seul.
+- Ordinateur resté allumé ou planté : au bout de 3 minutes, l'autre peut **Prendre la main**.
+- Si ton cloud a gardé deux versions (« copie en conflit »), Trip Compta te le dit et te laisse choisir ; rien
+  n'est effacé.
+
+**Depuis ton téléphone** : dans l'app de ton cloud, dépose les photos de tickets dans le dossier
+**TripCompta / Justificatifs à trier**. Dans Trip Compta → 📎 Justificatifs, coche-les et choisis les dépenses.
+
+---
+
 ## Questions
 
-- **Où sont mes données ?** Dans le dossier **Documents/TripCompta** (modifiable dans l'application, en bas de
-  l'accueil). Elles ne sont jamais touchées par une mise à jour, et une copie de sécurité est faite juste avant
+- **Où sont mes données ?** Dans le dossier **Documents/TripCompta**, ou dans le dossier synchronisé que tu as
+  choisi (**☁️ Où ranger mes voyages**, en bas de l'accueil). Elles ne sont jamais touchées par une mise à jour, et une copie de sécurité est faite juste avant
   (dans `sauvegardes/`).
 - **Comment savoir quelle version j'ai ?** En bas de l'accueil : **À propos**. On peut aussi y vérifier les mises
   à jour à la main, ou désactiver la vérification automatique.

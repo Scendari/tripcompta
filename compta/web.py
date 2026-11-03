@@ -7,12 +7,14 @@ import io
 import os
 import mimetypes
 import re
+import time
 import uuid
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response, StreamingResponse
+from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response,
+                               StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -20,7 +22,7 @@ from sqlalchemy.orm import Session
 from . import engine as E
 from . import models as M
 from . import services as S
-from .db import Database, NewerDatabaseError
+from .db import Database, NewerDatabaseError, stored_version
 
 HERE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(HERE / "templates"))
@@ -128,11 +130,27 @@ def newer_data_app(err: NewerDatabaseError, updater) -> FastAPI:
     return app
 
 
-def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
+def _hm(value) -> str:
+    """« 2026-11-03T14:02:11 » ou horodatage → « 14 h 02 » (avec la date si ce n'est pas aujourd'hui)."""
+    if not value:
+        return ""
+    try:
+        d = dt.datetime.fromtimestamp(value) if isinstance(value, (int, float)) else dt.datetime.fromisoformat(value)
+    except (ValueError, TypeError, OSError):
+        return ""
+    hm = f"{d.hour} h {d.minute:02d}"
+    return hm if d.date() == dt.date.today() else f"{d:%d/%m} à {hm}"
+
+
+def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI:
     """restart : fonction qui relance l'application (fournie par run.py) ; sans elle, on demande de relancer.
-    updater : gestion des mises à jour (les tests en donnent une simulée)."""
+    updater : gestion des mises à jour (les tests en donnent une simulée).
+    cloud (tests) : {"shared": dossier synchronisé, "local": copie de travail, "identity": {"host", "pid"}} ;
+    sinon le dossier synchronisé vient des réglages (« Où ranger mes voyages »)."""
+    from . import cloud as C
     from . import paths as PATHS
     from . import updater as U
+    from . import version as V
     upd = updater or U.Updater()
     if data_dir:
         data_source = "lancement"
@@ -142,9 +160,30 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
         data_source = "choisi"
     else:
         data_source = "defaut"
+    cfg = PATHS.read_config()
+    sync = None
+    if cloud is not None:
+        shared = Path(cloud["shared"])
+        sync = C.CloudSync(shared, Path(cloud.get("local") or C.local_dir_for(shared, PATHS.config_file().parent)),
+                           identity=cloud.get("identity"))
+        data_source = "choisi"
+    elif data_source == "choisi" and cfg.get("partage"):
+        shared = Path(cfg["data_dir"]).expanduser()
+        sync = C.CloudSync(shared, C.local_dir_for(shared, PATHS.config_file().parent))
     try:
-        db = Database(data_dir, app_version=upd.version)
+        if sync is not None:
+            sdb = sync.shared_db
+            stored = stored_version(sdb) if sdb.exists() and not C.cloud_only(sdb) else None
+            if stored and V.base(stored) and V.base(upd.version) and V.base(stored) > V.base(upd.version):
+                raise NewerDatabaseError(stored, upd.version, sync.shared)
+            sync.open()
+            db = Database(sync.local, app_version=upd.version, home=sync.shared)
+            sync.publish()
+        else:
+            db = Database(data_dir, app_version=upd.version)
     except NewerDatabaseError as err:
+        if sync is not None:
+            sync.release()
         return newer_data_app(err, upd)
     db.daily_backup()
     with db.Session() as s_:                     # centimes d'arrondi : un tirage pour les dépenses qui n'en ont pas
@@ -159,8 +198,16 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
     app.state.port = None                 # donnés par run.py (pour relancer après une mise à jour)
     app.state.argv = []
     app.state.update_notice = None if upd.dev else upd.startup_notice()
+    app.state.sync = sync
     if updater is None:
         upd.start_background()
+    if sync is not None:
+        import atexit
+        atexit.register(sync.stop)
+        if (cloud or {}).get("background", True):
+            # battement du verrou + publication de ce qu'aurait écrit l'IA (autre processus) dans la copie de travail
+            sync.start(on_tick=lambda: (not sync.readonly and not sync.problem and sync.local_dirty()
+                                        and sync.publish()))
 
     # « Défaire » est proposé dans le message qui suit une action, et ne vaut que pour CETTE action :
     # on note l'action défaisable au début de chaque requête pour savoir si la requête en a créé une.
@@ -187,6 +234,57 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
             return await call_next(request)
         finally:
             snap_before.reset(token)
+
+    def cloud_refresh():
+        """En revenant sur l'app : dossier revenu ? nouvelle version publiée par un autre ordinateur ?"""
+        if sync.problem:
+            if sync.check_folder() is None:              # le dossier est revenu (cloud relancé, clé rebranchée)
+                sync.problem = None
+                sync.open()
+                db.after_replace()
+            elif sync.shared.is_dir() and sync.shared_changed() and sync.pull(before_replace=db.engine.dispose):
+                db.after_replace()                       # dossier lisible mais protégé : on suit quand même
+            return
+        if sync.shared_changed() and sync.pull(before_replace=db.engine.dispose):
+            db.after_replace()
+            stored = stored_version(db.path)
+            if stored and V.base(stored) and V.base(upd.version) and V.base(stored) > V.base(upd.version):
+                sync.readonly = True
+                sync.problem = (f"Ces voyages ont été enregistrés par Trip Compta {stored}, plus récente que celle-ci : "
+                                f"mets à jour Trip Compta (ℹ️ À propos) pour pouvoir les modifier.")
+
+    READ_OK = ("/reglages", "/maj/", "/quitter", "/apercu-fichier")
+
+    def readonly_message() -> str:
+        if sync.problem:
+            return "Lecture seule : " + sync.problem
+        o = sync.owner or {}
+        since = _hm(o.get("depuis"))
+        txt = (f"Lecture seule : tes voyages sont ouverts sur « {o.get('ordinateur') or 'un autre ordinateur'} »"
+               + (f" depuis {since}" if since else "") + ". Ferme Trip Compta là-bas pour pouvoir les modifier ici.")
+        if o and sync.lock_is_stale(o):
+            txt += " (Cet ordinateur ne donne plus signe de vie : tu peux « Prendre la main ».)"
+        return txt
+
+    @app.middleware("http")
+    async def cloud_sync(request, call_next):
+        if sync is None:
+            return await call_next(request)
+        path = request.url.path
+        if request.method == "GET" and not path.startswith(("/static", "/ping", "/maj/etat")):
+            try:
+                cloud_refresh()
+            except Exception:
+                pass
+        writing = request.method in ("POST", "PUT", "PATCH", "DELETE")
+        if writing and sync.readonly and not path.startswith(READ_OK) and not path.endswith("apercu"):
+            if path.startswith("/api/"):
+                return JSONResponse({"detail": readonly_message()}, status_code=423)
+            return back(urlparse(request.headers.get("referer") or "/").path or "/", readonly_message())
+        response = await call_next(request)
+        if writing and response.status_code < 400 and not sync.readonly and not sync.problem:
+            sync.publish()
+        return response
 
     from .api import install_api
     install_api(app)
@@ -225,6 +323,9 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
         ctx.setdefault("caisse_title", _capfirst(ctx["asso_name"]) if ctx["asso_name"].startswith("la caisse")
                        else Markup("Caisse de ") + ctx["asso_name"])
         ctx["request"] = request
+        ctx.setdefault("cloud", cloud_status())
+        if sync is not None and sync.notice and not ctx.get("msg"):
+            ctx["msg"], sync.notice = sync.notice, None
         ctx.setdefault("app_version", upd.label)
         ctx.setdefault("update_banner", None if upd.job else upd.banner())
         if not upd.dev and not app.state.update_notice:
@@ -232,6 +333,18 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
         if app.state.update_notice and not ctx.get("msg"):
             ctx["msg"], app.state.update_notice = app.state.update_notice, None
         return templates.TemplateResponse(request, name, ctx)
+
+    def cloud_status() -> dict | None:
+        """État du dossier synchronisé, pour l'en-tête des pages (None : données rangées sur l'ordinateur)."""
+        if sync is None:
+            return None
+        o = sync.owner or {}
+        saved = max([x for x in (sync.published_at, sync.pulled_at) if x] or [0]) or None
+        return dict(service=sync.service or "le dossier synchronisé", folder=str(sync.shared),
+                    readonly=sync.readonly, problem=sync.problem, owner=o.get("ordinateur"),
+                    since=_hm(o.get("depuis")), stale=bool(o) and sync.lock_is_stale(o), saved=_hm(saved),
+                    conflicts=len(sync.conflicts()) if not sync.problem else 0,
+                    inbox=len(sync.inbox()) if not sync.problem else 0)
 
     def back(url: str, msg: str | None = None, redo: str | None = None):
         if msg:
@@ -387,6 +500,8 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
             def quit_now():
                 import time as _t
                 _t.sleep(1.5)                     # laisser la page d'attente voir « redémarrage »
+                if sync is not None:
+                    sync.stop()
                 db.engine.dispose()
                 os._exit(0)
             threading.Thread(target=upd.run_install, daemon=True, kwargs=dict(
@@ -417,17 +532,29 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
     def quit_app():
         import os
         import threading
+        if sync is not None:
+            if not sync.readonly and not sync.problem:
+                sync.publish()
+            sync.stop()                                  # libère le verrou : un autre ordinateur peut prendre la main
         threading.Timer(0.5, lambda: os._exit(0)).start()
         return HTMLResponse("<!doctype html><meta charset=utf-8><title>Trip Compta</title>"
                             "<body style='font-family:system-ui;text-align:center;padding:4rem'>"
                             "<h1>Trip Compta est arrêté.</h1><p>Tu peux fermer cet onglet. "
-                            "Tes données sont enregistrées dans « " + str(db.dir) + " ».</p></body>")
+                            "Tes données sont enregistrées dans « " + str(db.home) + " ».</p></body>")
 
-    # ------------------------------------------------------------------ dossier des données
+    # ------------------------------------------------------------------ où ranger mes voyages
     def _data_page(request, **ctx):
-        cur = db.dir
-        return render(request, "data_dir.html", data_dir=cur, source=data_source,
-                      default_dir=PATHS.documents_dir() / PATHS.FOLDER, synced=PATHS.looks_synced(cur),
+        cur = db.home
+        default_dir = PATHS.documents_dir() / PATHS.FOLDER
+        clouds = C.cloud_roots()
+        for c_ in clouds:
+            try:
+                c_["current"] = sync is not None and Path(c_["target"]).resolve() == sync.shared.resolve()
+            except OSError:
+                c_["current"] = False
+        return render(request, "data_dir.html", data_dir=cur, source=data_source, shared=sync is not None,
+                      default_dir=default_dir, synced=PATHS.looks_synced(cur), clouds=clouds,
+                      conflicts=sync.conflicts() if sync is not None and not sync.problem else [],
                       can_restart=app.state.restart is not None, **ctx)
 
     @app.get("/reglages/donnees", response_class=HTMLResponse)
@@ -438,7 +565,7 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
     def data_dir_open(request: Request):
         import subprocess
         import sys as _sys
-        target = str(db.dir)
+        target = str(db.home)
         try:
             if _sys.platform == "darwin":
                 subprocess.Popen(["open", target])
@@ -450,68 +577,148 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
             return back(urlparse(request.headers.get("referer") or "/").path, f"Impossible d'ouvrir le dossier : {target}")
         return back(urlparse(request.headers.get("referer") or "/").path, "Dossier ouvert")
 
+    @app.post("/reglages/parcourir")
+    def data_dir_browse():
+        """Fenêtre « choisir un dossier » du système ; renvoie le chemin choisi (ou rien si annulé)."""
+        return {"path": C.pick_folder()}
+
     def _restart_page(request, message):
+        if sync is not None:
+            sync.stop()
         if app.state.restart is not None:
             import threading
             threading.Timer(0.6, app.state.restart).start()
         return render(request, "restart.html", message=message, can_restart=app.state.restart is not None)
 
+    def _copy_voyages(target: Path, receipts_to: Path, drafts_to: Path | None):
+        """Copie complète et vérifiée de la base (fichier temporaire puis remplacement d'un coup) et des
+        justificatifs vers `target`. Le dossier d'origine n'est pas touché."""
+        import shutil
+        target.mkdir(parents=True, exist_ok=True)
+        tmp = target / ".compta.db.copie"
+        tmp.unlink(missing_ok=True)
+        C.sqlite_copy(db.path, tmp)
+        if not C.is_valid_db(tmp):
+            tmp.unlink(missing_ok=True)
+            raise OSError("la copie de la base est incomplète")
+        os.replace(tmp, target / C.DB)
+        if db.receipts_dir.is_dir():
+            shutil.copytree(db.receipts_dir, receipts_to, dirs_exist_ok=True,
+                            ignore=shutil.ignore_patterns(".vignettes", ".*"))
+        if drafts_to is not None and (db.dir / "brouillons_ia").is_dir():
+            shutil.copytree(db.dir / "brouillons_ia", drafts_to, dirs_exist_ok=True)
+
     @app.post("/reglages/donnees", response_class=HTMLResponse)
     async def data_dir_change(request: Request):
-        import shutil
-        import sqlite3
         f = await request.form()
+        action = f.get("action") or "ranger"
         if data_source in ("lancement", "env"):
             return _data_page(request, error="Le dossier est imposé au lancement de l'application : il ne se change "
                                               "pas ici.")
-        if f.get("action") == "defaut":
-            PATHS.write_config(data_dir=None)
-            return _restart_page(request, "Retour au dossier par défaut.")
+        if action == "proteger":                 # ancien réglage : dossier choisi, synchronisé, sans protection
+            PATHS.write_config(partage=True)
+            return _restart_page(request, "Trip Compta protège maintenant ce dossier synchronisé (verrou et "
+                                          "enregistrements sûrs).")
+        if action in ("local", "defaut"):        # retour au dossier sur cet ordinateur (Documents/TripCompta)
+            target = PATHS.documents_dir() / PATHS.FOLDER
+            try:
+                same = target.resolve() == db.home.resolve()
+            except OSError:
+                same = False
+            if not same:
+                try:
+                    if (target / C.DB).exists():  # ce qui y était (l'ancien dossier) est gardé dans ses sauvegardes
+                        (target / "sauvegardes").mkdir(parents=True, exist_ok=True)
+                        C.sqlite_copy(target / C.DB, target / "sauvegardes" /
+                                      f"avant-retour-{dt.datetime.now():%Y-%m-%d-%Hh%M%S}.db")
+                    _copy_voyages(target, target / "justificatifs", target / "brouillons_ia")
+                except (OSError, Exception) as e:
+                    return _data_page(request, error=f"Impossible de copier les voyages vers « {target} » : {e}")
+            PATHS.write_config(data_dir=None, partage=False)
+            return _restart_page(request, f"Tes voyages sont de nouveau rangés sur cet ordinateur, dans « {target} »."
+                                 + (f" Le dossier « {db.home} » n'a pas été touché." if sync is not None else ""))
         raw = (f.get("dossier") or "").strip().strip('"').strip("'")
+        if raw == "__autre__":
+            raw = (f.get("autre") or "").strip().strip('"').strip("'")
         if not raw:
-            return _data_page(request, error="Indique le dossier.", value=raw)
+            return _data_page(request, error="Choisis un dossier.", value=raw)
         target = Path(raw).expanduser()
         if not target.is_absolute():
             return _data_page(request, error="Indique le chemin complet du dossier (par exemple "
                                               f"{PATHS.documents_dir() / 'Asso' / PATHS.FOLDER}).", value=raw)
         try:
-            same = target.resolve() == db.dir.resolve()
+            same = target.resolve() == db.home.resolve()
         except OSError:
             same = False
         if same:
-            return _data_page(request, error="C'est déjà le dossier utilisé.", value=raw)
-        has_data = (target / "compta.db").exists()
+            return _data_page(request, error="Tes voyages sont déjà rangés dans ce dossier.", value=raw)
+        if not target.parent.is_dir() and not target.is_dir():
+            return _data_page(request, error=f"Le dossier « {target.parent} » est introuvable.", value=raw)
+        has_data = (target / C.DB).exists() or (target / f".{C.DB}.icloud").exists()
         if f.get("mode") == "utiliser":
             if not has_data:
-                return _data_page(request, error="Il n'y a pas de données Trip Compta dans ce dossier (fichier "
-                                                  "« compta.db » introuvable).", value=raw, mode="utiliser")
-            PATHS.write_config(data_dir=str(target))
-            return _restart_page(request, f"Trip Compta va utiliser les données de « {target} ».")
-        # déplacer : copie complète, vérifiée, puis on bascule ; l'ancien dossier reste intact
+                return _data_page(request, error="Il n'y a pas encore de voyages Trip Compta dans ce dossier (fichier "
+                                                  "« compta.db » introuvable). Choisis « Y copier mes voyages ».",
+                                  value=raw, mode="utiliser")
+            PATHS.write_config(data_dir=str(target), partage=True)
+            return _restart_page(request, f"Trip Compta va utiliser les voyages rangés dans « {target} ».")
         if has_data:
-            return _data_page(request, error="Ce dossier contient déjà des données Trip Compta. Choisis « Utiliser "
-                                              "les données déjà là-bas », ou un autre dossier.", value=raw)
+            return _data_page(request, error="Ce dossier contient déjà des voyages Trip Compta (sans doute rangés "
+                                              "depuis un autre ordinateur). Choisis « Utiliser les voyages déjà dans "
+                                              "ce dossier », ou un autre dossier.", value=raw)
         try:
-            target.mkdir(parents=True, exist_ok=True)
+            new_local = C.local_dir_for(target, PATHS.config_file().parent)
+            _copy_voyages(target, target / C.RECEIPTS, new_local / "brouillons_ia")
+            (target / C.INBOX).mkdir(exist_ok=True)
+        except (OSError, Exception) as e:
+            return _data_page(request, error=f"Impossible de copier les voyages vers ce dossier : {e}", value=raw)
+        PATHS.write_config(data_dir=str(target), partage=True)
+        svc = C.service_name(target)
+        return _restart_page(request, f"Tes voyages ont été copiés dans « {target} »"
+                             + (f" ({svc})" if svc else "") + f". L'ancien dossier « {db.home} » n'a pas été "
+                             f"touché : tu pourras le supprimer quand tu auras vérifié que tout est là.")
+
+    @app.post("/reglages/prendre-la-main")
+    def take_over(request: Request):
+        ref = urlparse(request.headers.get("referer") or "/").path or "/"
+        if sync is None or sync.problem:
+            return back(ref, "Rien à faire : tes voyages ne sont pas ouverts ailleurs.")
+        o = sync.read_lock()
+        if o and not sync._mine(o) and not sync.lock_is_stale(o):
+            return back(ref, f"« {o.get('ordinateur')} » utilise encore les voyages : ferme Trip Compta là-bas d'abord.")
+        sync.acquire(force=True)
+        if sync.pull(before_replace=db.engine.dispose):       # la dernière version publiée par l'autre ordinateur
+            db.after_replace()
+        return back(ref, "Tu as la main : tu peux de nouveau modifier tes voyages.")
+
+    @app.post("/reglages/conflit")
+    async def resolve_conflict(request: Request):
+        """Une copie en conflit (laissée par le service de cloud) : la garder comme version des voyages, ou la ranger
+        de côté (dossier « Anciennes versions »). Rien n'est jamais effacé."""
+        f = await request.form()
+        if sync is None or sync.readonly or sync.problem:
+            return back("/reglages/donnees", "Impossible pour l'instant : les voyages sont en lecture seule ici.")
+        name = f.get("nom") or ""
+        src = sync.shared / name
+        if name.startswith(".") or "/" in name or "\\" in name or not C.CONFLICT_RE.match(name) or not src.is_file():
+            return back("/reglages/donnees#conflits", "Version introuvable.")
+        side = sync.shared / C.OLD_VERSIONS
+        side.mkdir(exist_ok=True)
+        stamp = dt.datetime.now().strftime("%Y-%m-%d %Hh%M%S")
+        if f.get("choix") == "utiliser":
+            if not C.is_valid_db(src):
+                return back("/reglages/donnees#conflits", "Cette version est abîmée : elle ne peut pas être utilisée.")
+            db.snapshot(f"choix d'une autre version des voyages ({name})")
             db.engine.dispose()
-            src = sqlite3.connect(db.path)
-            dst = sqlite3.connect(target / "compta.db")
-            with dst:
-                src.backup(dst)                          # copie cohérente même si la base est ouverte
-            src.close()
-            ok = dst.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
-            dst.close()
-            if not ok:
-                raise OSError("la copie de la base est incomplète")
-            for name in ("justificatifs", "sauvegardes", "brouillons_ia"):
-                if (db.dir / name).is_dir():
-                    shutil.copytree(db.dir / name, target / name, dirs_exist_ok=True)
-        except OSError as e:
-            return _data_page(request, error=f"Impossible de copier les données vers ce dossier : {e}", value=raw)
-        PATHS.write_config(data_dir=str(target))
-        return _restart_page(request, f"Tes données ont été copiées dans « {target} ». L'ancien dossier "
-                                      f"« {db.dir} » n'a pas été touché : tu pourras le supprimer quand tu "
-                                      f"auras vérifié que tout est là.")
+            C.sqlite_copy(sync.shared_db, side / f"compta (remplacée le {stamp}).db")
+            C.sqlite_copy(src, db.path)
+            db.after_replace()
+            sync.publish()
+            os.replace(src, side / name)
+            return back("/reglages/donnees", "Cette version est maintenant celle de tes voyages. L'autre est rangée "
+                                              f"dans « {C.OLD_VERSIONS} ». « Défaire » revient en arrière.")
+        os.replace(src, side / name)
+        return back("/reglages/donnees", f"Version rangée dans le dossier « {C.OLD_VERSIONS} » (rien n'est effacé).")
 
     # ------------------------------------------------------------------ IA
     def mcp_conf(request: Request) -> dict:
@@ -710,7 +917,7 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
             r = S.compute_trip(t, mode_of(request))
             cards.append((t, r))
         q = request.query_params
-        return render(request, "index.html", cards=cards, data_dir=db.dir,
+        return render(request, "index.html", cards=cards, data_dir=db.home,
                       open_new=q.get("nouveau") == "1", open_import=q.get("importer") == "1")
 
     @app.post("/voyages")
@@ -1985,7 +2192,80 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
     def receipts(tid: int, request: Request, s: Session = Depends(get_s)):
         t = trip_or_404(s, tid)
         missing = [e for e in t.expenses if e.actual is not None and not e.receipt_links]
-        return render(request, "receipts.html", trip=t, missing=missing)
+        inbox = sync.inbox() if sync is not None and not sync.problem else None
+        return render(request, "receipts.html", trip=t, missing=missing, inbox=inbox,
+                      inbox_folder=str(sync.shared / C.INBOX) if sync is not None else "")
+
+    # « Justificatifs à trier » : photos ou PDF déposés dans le dossier synchronisé depuis un téléphone
+    def _inbox_path(name: str) -> Path:
+        p_ = C.inbox_file(sync.shared, name) if sync is not None else None
+        if p_ is None:
+            raise HTTPException(404, "Fichier introuvable")
+        return p_
+
+    @app.get("/a-trier/fichier")
+    def inbox_file(nom: str):
+        p_ = _inbox_path(nom)
+        return FileResponse(p_, media_type=mimetypes.guess_type(p_.name)[0] or None,
+                            headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(p_.name)}"})
+
+    @app.get("/a-trier/vignette")
+    def inbox_thumb(nom: str):
+        import hashlib
+        p_ = _inbox_path(nom)
+        st_ = p_.stat()
+        key = hashlib.sha1(f"{p_.name}|{st_.st_size}|{st_.st_mtime_ns}".encode()).hexdigest()[:16]
+        cache = db.thumbs_dir / f"a-trier-{key}.jpg"
+        if not cache.exists():
+            try:
+                data = _thumbnail(p_.read_bytes(), p_.suffix.lower() == ".pdf")
+                cache.parent.mkdir(exist_ok=True)
+                cache.write_bytes(data)
+            except Exception:
+                return Response(TRANSPARENT_PNG, media_type="image/png", headers={"Cache-Control": "no-store"})
+        return FileResponse(cache, media_type="image/jpeg")
+
+    @app.post("/v/{tid}/justificatifs/a-trier")
+    async def inbox_attach(tid: int, request: Request, s: Session = Depends(get_s)):
+        """Ajoute au voyage les fichiers cochés de « Justificatifs à trier » (et les lie aux dépenses cochées) ;
+        les originaux sont rangés dans « Justificatifs à trier/Rangés » (jamais effacés)."""
+        import shutil
+        t = trip_or_404(s, tid)
+        f = await request.form()
+        names_ = [n for n in f.getlist("nom") if n]
+        if not names_:
+            return back(f"/v/{tid}/justificatifs#a-trier", "Coche au moins un fichier")
+        files = [_inbox_path(n) for n in names_]
+        db.snapshot(f"ajout de {len(files)} justificatif(s) à trier")
+        link_to = {int(x) for x in f.getlist("expenses")}
+        done = sync.shared / C.INBOX / C.INBOX_DONE
+        done.mkdir(exist_ok=True)
+        added = []
+        for src in files:
+            ext = src.suffix.lower()[:10]
+            stored = f"{t.id}_{uuid.uuid4().hex}{ext}"
+            shutil.copyfile(src, db.receipts_dir / stored)
+            number = max([r.number for r in t.receipts] or [0]) + 1
+            ctype = mimetypes.guess_type(src.name)[0] or ("image/heic" if ext in (".heic", ".heif") else "")
+            rec = M.Receipt(trip_id=t.id, number=number, original_name=src.name, stored_name=stored, content_type=ctype)
+            t.receipts.append(rec)
+            s.flush()
+            for eid in link_to:
+                s.add(M.ReceiptLink(receipt_id=rec.id, expense_id=eid))
+            added.append(rec)
+        s.commit()
+        for src in files:                        # après l'enregistrement : rangés, pas effacés
+            dst = done / src.name
+            n_ = 2
+            while dst.exists():
+                dst = done / f"{src.stem} ({n_}){src.suffix}"
+                n_ += 1
+            try:
+                os.replace(src, dst)
+            except OSError:
+                pass
+        codes = ", ".join(r.code for r in added)
+        return back(f"/v/{tid}/justificatifs", f"{len(added)} justificatif(s) ajouté(s) : {codes}")
 
     @app.post("/v/{tid}/justificatifs")
     async def receipts_upload(tid: int, request: Request, s: Session = Depends(get_s)):
@@ -2048,7 +2328,7 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
         if not rec or rec.trip_id != tid:
             raise HTTPException(404, "Justificatif introuvable")
         src = db.receipts_dir / rec.stored_name
-        cache = db.receipts_dir / ".vignettes" / f"{Path(rec.stored_name).stem}.jpg"
+        cache = db.thumbs_dir / f"{Path(rec.stored_name).stem}.jpg"
         if not cache.exists():
             if not src.exists():
                 raise HTTPException(404, "Fichier introuvable sur le disque")

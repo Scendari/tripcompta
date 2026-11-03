@@ -3,7 +3,7 @@
 Ordre de priorité :
   1. l'option `--data-dir` au lancement (développement, tests) ;
   2. la variable d'environnement TRIPCOMPTA_DATA_DIR (ou l'ancienne COMPTA_DATA_DIR) ;
-  3. le dossier choisi dans l'application (« Changer de dossier »), mémorisé dans un petit fichier de réglages
+  3. le dossier choisi dans l'application (« Où ranger mes voyages », voir cloud.py), mémorisé dans un petit fichier de réglages
      propre à l'ordinateur (il ne peut pas être rangé dans le dossier des données lui-même) ;
   4. par défaut : <Documents>/TripCompta, où <Documents> est le VRAI dossier Documents (sous Windows avec OneDrive,
      c'est souvent C:\\Users\\<nom>\\OneDrive\\Documents, et pas C:\\Users\\<nom>\\Documents).
@@ -26,7 +26,9 @@ CLOUD_HINTS = ("dropbox", "onedrive", "icloud", "mobile documents", "google driv
 
 
 def documents_dir() -> Path:
-    """Le dossier Documents de l'utilisateur, tel que le système le connaît."""
+    """Le dossier Documents de l'utilisateur, tel que le système le connaît (TRIPCOMPTA_DOCUMENTS : tests)."""
+    if os.environ.get("TRIPCOMPTA_DOCUMENTS"):
+        return Path(os.environ["TRIPCOMPTA_DOCUMENTS"])
     if sys.platform == "win32":
         try:                                   # FOLDERID_Documents : suit la redirection OneDrive
             import ctypes

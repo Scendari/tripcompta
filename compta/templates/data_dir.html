@@ -1,37 +1,109 @@
 {% extends "base.html" %}
 {% block page %}
 <div class="page-head"><div class="grow">
-  <h1>Dossier des données</h1>
-  <p class="muted">Là où Trip Compta range tes voyages, tes justificatifs et les sauvegardes automatiques.</p>
+  <h1>Où ranger mes voyages</h1>
+  <p class="muted">Sur cet ordinateur, ou dans un dossier synchronisé (Dropbox, Google Drive, OneDrive, iCloud Drive…) pour retrouver tes voyages sur tous tes ordinateurs. Aucun serveur : c'est ton service de cloud qui fait la synchronisation.</p>
 </div><a class="btn ghost small" href="/">← Mes voyages</a></div>
 {% if error %}<div class="flash err" role="alert">{{ error }}</div>{% endif %}
 
 <div class="card data-card">
-  <span class="label-like">Dossier actuel</span>
+  <span class="label-like">Tes voyages sont rangés</span>
+  {% if shared %}
+  <p class="data-where">☁️ Dans <b>{{ cloud.service }}</b></p>
+  <p class="data-path">{{ data_dir }}</p>
+  <p class="small muted data-state">
+    {% if cloud.problem %}⚠️ {{ cloud.problem }}
+    {% elif cloud.readonly %}🔒 Lecture seule : ouverts sur « {{ cloud.owner or 'un autre ordinateur' }} »{% if cloud.since %} depuis {{ cloud.since }}{% endif %}.
+    {% elif cloud.saved %}✓ Enregistré dans le dossier à {{ cloud.saved }}.
+    {% else %}✓ Prêt.{% endif %}</p>
+  <p class="hint">Sur cet ordinateur restent seulement l'historique « Défaire / Rétablir », les sauvegardes automatiques et les brouillons de la page IA.</p>
+  {% else %}
+  <p class="data-where">💻 Sur cet ordinateur</p>
   <p class="data-path">{{ data_dir }}</p>
   <p class="small muted" style="margin:.2rem 0 .7rem">
     {% if source == 'defaut' %}C'est le dossier par défaut (dans tes Documents).
     {% elif source == 'choisi' %}C'est le dossier que tu as choisi.
     {% else %}Ce dossier est imposé au lancement de l'application.{% endif %}</p>
-  {% if synced %}<p class="warn-box small">⚠️ Ce dossier semble synchronisé dans le cloud (Dropbox, OneDrive, iCloud…). Ça marche, mais n'ouvre jamais Trip Compta sur deux ordinateurs en même temps : la base pourrait s'abîmer. Pour passer un voyage d'un ordinateur à l'autre, utilise plutôt <b>Exporter / importer un voyage</b>.</p>{% endif %}
+  {% if synced and source == 'choisi' %}<div class="warn-box small">⚠️ Ce dossier semble synchronisé dans le cloud, mais il n'est pas protégé : si Trip Compta est ouvert sur deux ordinateurs en même temps, des saisies peuvent se perdre.
+    <form method="post" action="/reglages/donnees" class="inline"><button class="btn small" name="action" value="proteger">Protéger ce dossier</button></form></div>
+  {% elif synced %}<p class="warn-box small">⚠️ Ce dossier semble synchronisé dans le cloud (iCloud, OneDrive…). N'ouvre pas Trip Compta sur deux ordinateurs en même temps ; pour le faire sans risque, choisis ce dossier ci-dessous.</p>{% endif %}
+  {% endif %}
   <form method="post" action="/reglages/ouvrir-dossier" class="inline"><button class="btn small ghost">📂 Ouvrir le dossier</button></form>
 </div>
 
+{% if conflicts %}
+<div class="card data-card" id="conflits">
+  <h3 style="margin-top:0">⚠️ Plusieurs versions de tes voyages</h3>
+  <p class="hint">{{ cloud.service }} a gardé {{ 'ces versions' if conflicts|length > 1 else 'cette version' }} à côté de la version actuelle (deux ordinateurs ont enregistré en même temps). Rien n'est perdu. Garde celle qui contient tes dernières saisies ; l'autre est rangée dans le dossier « Anciennes versions », jamais effacée.</p>
+  <ul class="conflict-list">
+  {% for c in conflicts %}
+    <li><div class="grow"><b>{{ c.name }}</b><span class="muted small d-block">enregistrée le {{ c.date.strftime('%d/%m/%Y à %H h %M') }}{% if not c.valid %} · ⚠️ abîmée, inutilisable{% endif %}</span></div>
+      {% if c.valid %}<form method="post" action="/reglages/conflit" class="inline" data-confirm="Utiliser cette version pour tes voyages ? La version actuelle sera rangée dans « Anciennes versions » (et « Défaire » reviendra en arrière)."><input type="hidden" name="nom" value="{{ c.name }}"><button class="btn small" name="choix" value="utiliser">Utiliser cette version</button></form>{% endif %}
+      <form method="post" action="/reglages/conflit" class="inline"><input type="hidden" name="nom" value="{{ c.name }}"><button class="btn small ghost" name="choix" value="ranger">Garder la version actuelle</button></form></li>
+  {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
 {% if source in ('defaut', 'choisi') %}
-<form class="card data-card" method="post" action="/reglages/donnees">
-  <h3 style="margin-top:0">Changer de dossier</h3>
-  <div class="field"><label for="dossier">Nouveau dossier <span class="hint">(chemin complet)</span></label>
-    <input type="text" id="dossier" name="dossier" value="{{ value or '' }}" placeholder="{{ default_dir.parent / 'Asso' / 'TripCompta' }}" autocomplete="off" spellcheck="false"></div>
-  <p class="hint" style="margin-top:-.4rem">Astuce : dans le Finder ou l'Explorateur, tu peux copier le chemin d'un dossier (Mac : clic droit + touche ⌥ → « Copier … comme nom de chemin » ; Windows : clic droit → « Copier en tant que chemin d'accès ») et le coller ici.</p>
-  <div class="choice" style="margin:.4rem 0 .8rem">
-    <label><input type="radio" name="mode" value="deplacer" {{ 'checked' if mode != 'utiliser' }}> Y copier mes données</label>
-    <label><input type="radio" name="mode" value="utiliser" {{ 'checked' if mode == 'utiliser' }}> Utiliser les données déjà là-bas</label>
+<form class="card data-card" method="post" action="/reglages/donnees" id="choisir" data-data-choice>
+  <h3 style="margin-top:0">{{ 'Ranger mes voyages ailleurs' if shared else 'Ranger mes voyages dans un dossier synchronisé' }}</h3>
+  <div class="data-options">
+    {% for c in clouds %}
+    <label class="data-option{{ ' current' if c.current }}"><input type="radio" name="dossier" value="{{ c.target }}" data-has="{{ 1 if c.has_data else 0 }}" {{ 'disabled' if c.current }}>
+      <span><b>{{ c.name }}</b>{% if c.current %} <span class="pill ok">actuel</span>{% elif c.has_data %} <span class="pill grey">contient déjà des voyages</span>{% endif %}
+        <span class="muted small d-block">{{ c.target }}</span></span></label>
+    {% endfor %}
+    <label class="data-option"><input type="radio" name="dossier" value="__autre__" {{ 'checked' if value or not clouds }}>
+      <span><b>Autre dossier…</b>
+        <span class="data-other"><input type="text" name="autre" value="{{ value or '' }}" placeholder="{{ default_dir.parent / 'Dropbox' / 'TripCompta' }}" autocomplete="off" spellcheck="false" aria-label="Chemin du dossier">
+        <button type="button" class="btn small ghost" data-browse>Parcourir…</button></span></span></label>
   </div>
-  <p class="hint" style="margin-top:0"><b>Y copier mes données</b> : tout est copié et vérifié ; l'ancien dossier n'est pas touché. <b>Utiliser les données déjà là-bas</b> : par exemple un dossier Trip Compta sur une clé USB. Trip Compta redémarre tout seul ensuite.</p>
+  {% if not clouds %}<p class="hint">Aucun dossier synchronisé trouvé sur cet ordinateur. Installe l'application de ton service pour ordinateur (Dropbox, Google Drive pour ordinateur, OneDrive, iCloud…), puis reviens ici.</p>{% endif %}
+  <div class="choice" style="margin:.7rem 0 .4rem">
+    <label><input type="radio" name="mode" value="copier" {{ 'checked' if mode != 'utiliser' }}> Y copier mes voyages</label>
+    <label><input type="radio" name="mode" value="utiliser" {{ 'checked' if mode == 'utiliser' }}> Utiliser les voyages déjà dans ce dossier</label>
+  </div>
+  <p class="hint"><b>Y copier mes voyages</b> : tout est copié et vérifié ; l'ancien dossier n'est pas touché. <b>Utiliser les voyages déjà dans ce dossier</b> : sur ton 2e ordinateur, pour retrouver les voyages rangés depuis le premier. Trip Compta redémarre tout seul ensuite.</p>
   <div class="row" style="gap:.5rem;justify-content:flex-end">
-    {% if source == 'choisi' %}<button class="btn ghost" name="action" value="defaut" formnovalidate>Revenir au dossier par défaut</button>{% endif %}
-    <button class="btn">Changer de dossier</button>
+    <button class="btn" name="action" value="ranger">Ranger mes voyages ici</button>
   </div>
 </form>
+
+<div class="card data-card">
+  <h3 style="margin-top:0">Avec plusieurs ordinateurs</h3>
+  <ul class="data-help">
+    <li><b>Un seul ordinateur à la fois</b> peut modifier les voyages. Sur les autres, ils s'ouvrent en <b>lecture seule</b>, avec le nom de l'ordinateur qui a la main, et se mettent à jour quand tu reviens sur l'app.</li>
+    <li>Quand tu as fini, clique sur <b>⏻ Arrêter</b> : l'autre ordinateur pourra prendre la main. Si un ordinateur est resté allumé ou a planté, l'autre pourra « Prendre la main » au bout de 3 minutes.</li>
+    <li><b>iCloud Drive, OneDrive</b> : fais un clic droit sur le dossier TripCompta et choisis « Toujours garder sur cet appareil », sinon le fichier peut n'être que dans le cloud.</li>
+    <li><b>Depuis ton téléphone</b> : avec l'app de ton cloud, dépose les photos de tickets dans le dossier « Justificatifs à trier » ; tu les rattacheras aux dépenses dans 📎 Justificatifs.</li>
+  </ul>
+</div>
+
+{% if shared or source == 'choisi' %}
+<form class="card data-card" method="post" action="/reglages/donnees" data-confirm="Ranger de nouveau tes voyages sur cet ordinateur (dans {{ default_dir }}) ? Ils y sont copiés ; ce qui s'y trouvait est gardé dans ses sauvegardes, et le dossier actuel n'est pas touché.">
+  <h3 style="margin-top:0">Revenir sur cet ordinateur</h3>
+  <p class="hint">Tes voyages sont copiés dans <b>{{ default_dir }}</b> et ne sont plus synchronisés.</p>
+  <div class="row" style="justify-content:flex-end"><button class="btn ghost" name="action" value="local">Ranger mes voyages sur cet ordinateur</button></div>
+</form>
 {% endif %}
+{% endif %}
+<script>
+(function () {
+  var form = document.querySelector('[data-data-choice]'); if (!form) return;
+  var other = form.querySelector('input[name=autre]');
+  var otherRadio = form.querySelector('input[value=__autre__]');
+  function mode(m) { var r = form.querySelector('input[name=mode][value=' + m + ']'); if (r) r.checked = true; }
+  form.addEventListener('change', function (ev) {
+    if (ev.target.name === 'dossier' && ev.target.dataset.has) mode(ev.target.dataset.has === '1' ? 'utiliser' : 'copier');
+  });
+  other.addEventListener('focus', function () { otherRadio.checked = true; });
+  form.querySelector('[data-browse]').addEventListener('click', function () {
+    var b = this; b.disabled = true; b.textContent = 'Choisis le dossier…';
+    fetch('/reglages/parcourir', {method: 'POST'}).then(function (r) { return r.json(); }).then(function (j) {
+      if (j.path) { other.value = j.path; otherRadio.checked = true; }
+    }).finally(function () { b.disabled = false; b.textContent = 'Parcourir…'; });
+  });
+})();
+</script>
 {% endblock %}
