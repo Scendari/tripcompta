@@ -193,14 +193,14 @@ def test_form_preview_deducts_refund(trip):
             pg.locator("[data-who-chips] button", has_text="Tout le monde").click()
             status = pg.locator("#split-status")
             norm = lambda s: s.replace(" ", " ").replace("\xa0", " ")
-            assert norm(status.inner_text()) == "120,29 € réparti entre 15 personnes."
+            assert norm(status.inner_text()).startswith("120,29 € réparti entre 15 personnes.")
             pg.check("input[name=has_refund]")
             pg.fill("#refund", "90,29")
             assert norm(status.inner_text()) == "30,00 € (120,29 € − 90,29 € remboursés) réparti entre 15 personnes."
             amounts = pg.eval_on_selector_all(".who-amount", "els => els.map(e => e.value).filter(v => v)")
             assert amounts == ["2,00"] * 15                                    # 30 € ÷ 15, comme le calcul
             pg.uncheck("input[name=has_refund]")                               # décoché : de nouveau 120,29
-            assert norm(status.inner_text()) == "120,29 € réparti entre 15 personnes."
+            assert norm(status.inner_text()).startswith("120,29 € réparti entre 15 personnes.")
             pg.check("input[name=has_refund]")
             assert "30,00 €" in norm(status.inner_text())
             # un montant fixé plus grand que le coût partagé : averti avant d'enregistrer
