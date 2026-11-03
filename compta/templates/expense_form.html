@@ -142,7 +142,9 @@
         <span class="only-btns">{% for x in who_groups %}<button type="button" class="only-btn" data-only="{{ x.ids|join(',') }}" aria-pressed="false" title="{{ x.names }}">{{ x.label }}</button>{% endfor %}</span></div>{% endif %}
       <p class="hint" style="margin:.2rem 0 .4rem" data-only-hint>Clique un ou plusieurs boutons : seules leurs personnes sont cochées. Tu peux ensuite ajuster au cas par cas ci-dessous.</p>
     </div>
-    <div class="who-list" data-rounding="{{ trip.rounding or 'participants' }}" data-caisse="{{ asso_name }}">
+    <input type="hidden" name="cents_mode" value="{{ cents.mode }}" data-cents-mode>
+    <input type="hidden" name="cents_who" value="{{ cents.who|join(',') }}" data-cents-who>
+    <div class="who-list" data-rounding="{{ trip.rounding or 'participants' }}" data-caisse="{{ asso_name }}" data-cent-counts="{{ cents.counts }}">
       {% for p in trip.participants %}{% set fx = p.id in fixed %}
       <div class="who{{ ' is-fixed' if fx }}">
         <label><input type="checkbox" data-who data-pid="{{ p.id }}" data-companion="{{ 1 if p.companion else 0 }}" name="inc_{{ p.id }}" value="1" {{ 'checked' if p.id in weights }}> {{ p.name }}{% if p.companion %} <span class="hint">(acc.)</span>{% endif %}</label>
@@ -150,13 +152,22 @@
           <input type="hidden" name="w_{{ p.id }}" value="{{ (weights[p.id] if p.id in weights else 1)|string }}" data-weight>
           <input type="hidden" name="fx_{{ p.id }}" value="{{ '1' if fx }}" data-fixed>
           <button type="button" class="fix-off" data-unfix title="Ne plus fixer : {{ p.name }} reprend une part égale" aria-label="Ne plus fixer le montant de {{ p.name }}">🔒<span aria-hidden="true">×</span></button>
+          <span class="cent-badge" hidden title="Centime d'arrondi tiré au sort">+1 c</span>
           <input class="who-amount amount" type="text" inputmode="decimal" name="m_{{ p.id }}" value="{{ amounts[p.id]|amount_input if p.id in amounts else '' }}" placeholder="0,00" aria-label="Montant pour {{ p.name }} (tape un montant pour le fixer)" {{ 'disabled' if p.id not in weights }}>
         </span>
       </div>
       {% endfor %}
     </div>
     <div id="split-status" class="split-status" aria-live="polite"></div>
-    <p class="hint rounding-note">Centimes d'arrondi : {{ ('pris en charge par ' ~ asso_name) if trip.rounding == 'asso' else 'payés par les participants' }} — <a href="/v/{{ trip.id }}/asso#arrondi">changer</a> <span class="muted">(pour tout le voyage)</span></p>
+    <div class="cents-line" hidden>
+      <p class="small" style="margin:.35rem 0 0"><span data-cents-text></span> · <button type="button" class="btn link small" data-cents-toggle aria-expanded="false">Changer</button></p>
+      <div class="cents-choices" hidden>
+        <button type="button" class="btn small ghost" data-cents-redraw>🎲 Tirer d'autres personnes</button>
+        <button type="button" class="btn small ghost" data-cents-asso>🏛️ Faire payer {{ asso_name }}</button>
+        <button type="button" class="btn small ghost" data-cents-people>🎲 Tirer au sort parmi les participants</button>
+        <span class="hint">Pour tout le voyage : <a href="/v/{{ trip.id }}/asso#arrondi">réglage sur la page {{ asso_name }}</a>.</span>
+      </div>
+    </div>
   </fieldset>
 
   <fieldset class="step">
@@ -291,17 +302,53 @@ document.getElementById('add-payer').addEventListener('click', function () {
   function total() { return gross() - refunded(); }
   function totalTxt(t) { var r = refunded(); return r ? fmt(t) + ' (' + fmt(gross()) + ' − ' + fmt(r) + ' remboursés)' : fmt(t); }
   function rows() { return Array.prototype.slice.call(list.querySelectorAll('.who')); }
-  function gapTxt(g) {
-    if (!g) return '';
-    return ' Chaque part est arrondie au centime : l’écart de ' + fmt(Math.abs(g)) + ' se règle sur le total de chacun ('
-      + (list.dataset.rounding === 'asso' ? 'pris en charge par ' + list.dataset.caisse : 'payé par les participants') + ').';
+  // ---- centimes d'arrondi : qui paie les centimes restants de cette dépense
+  var cents = { mode: form.querySelector('[data-cents-mode]').value,
+                who: form.querySelector('[data-cents-who]').value.split(',').filter(Boolean),
+                avoid: [], counts: JSON.parse(list.dataset.centCounts || '{}') };
+  var centsBox = form.querySelector('.cents-line'), centsText = form.querySelector('[data-cents-text]');
+  function pidOf(r) { return r.querySelector('input[data-who]').dataset.pid; }
+  function centsEffective() { return cents.mode || list.dataset.rounding || 'participants'; }
+  function draw(elig, need, avoid) {          // au hasard, parmi ceux qui en ont payé le moins jusque-là
+    var pool = elig.slice(), others = elig.filter(function (p) { return avoid.indexOf(p) < 0; }).length >= need;
+    for (var i = pool.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), x = pool[i]; pool[i] = pool[j]; pool[j] = x; }
+    pool.sort(function (a, b) {
+      return ((others && avoid.indexOf(a) >= 0) - (others && avoid.indexOf(b) >= 0)) || ((cents.counts[a] || 0) - (cents.counts[b] || 0));
+    });
+    return pool.slice(0, need).sort(function (a, b) { return a - b; });
   }
+  function nameOf(p) { var i = list.querySelector('input[data-pid="' + p + '"]'); return i ? i.closest('label').textContent.replace(/\(acc\.\)/, '').trim() : '?'; }
+  function joinNames(ns) { return ns.length > 1 ? ns.slice(0, -1).join(', ') + ' et ' + ns[ns.length - 1] : ns[0]; }
+  function showCents(left, winners) {
+    form.querySelector('[data-cents-mode]').value = cents.mode;
+    form.querySelector('[data-cents-who]').value = winners.join(',');
+    rows().forEach(function (r) { r.querySelector('.cent-badge').hidden = winners.indexOf(pidOf(r)) < 0; });
+    centsBox.hidden = !left;
+    if (!left) return;
+    var asso = centsEffective() === 'asso';
+    centsText.textContent = asso
+      ? '🏛️ Centimes d’arrondi : ' + fmt(left) + ' payé' + (left > 1 ? 's' : '') + ' par ' + list.dataset.caisse
+      : '🎲 Centimes d’arrondi : ' + fmt(left) + ' payé' + (left > 1 ? 's' : '') + ' par ' + joinNames(winners.map(nameOf)) + ' (tiré' + (winners.length > 1 ? 's' : '') + ' au sort)';
+    form.querySelector('[data-cents-redraw]').hidden = asso;
+    form.querySelector('[data-cents-asso]').hidden = asso;
+    form.querySelector('[data-cents-people]').hidden = !asso;
+  }
+  form.querySelector('[data-cents-toggle]').addEventListener('click', function () {
+    var box = form.querySelector('.cents-choices'); box.hidden = !box.hidden; this.setAttribute('aria-expanded', String(!box.hidden));
+  });
+  form.querySelector('[data-cents-redraw]').addEventListener('click', function () { cents.avoid = cents.who; cents.who = []; refresh(); });
+  form.querySelector('[data-cents-asso]').addEventListener('click', function () {
+    cents.mode = list.dataset.rounding === 'asso' ? '' : 'asso'; refresh();
+  });
+  form.querySelector('[data-cents-people]').addEventListener('click', function () {
+    cents.mode = list.dataset.rounding === 'asso' ? 'participants' : ''; cents.who = []; refresh();
+  });
   function on(r) { return r.querySelector('input[data-who]').checked; }
   function isFixed(r) { return r.querySelector('[data-fixed]').value === '1'; }
   function setFixed(r, v) { r.querySelector('[data-fixed]').value = v ? '1' : ''; r.classList.toggle('is-fixed', v); }
   function weight(r) { return parseFloat(r.querySelector('[data-weight]').value.replace(',', '.')) || 1; }
-  // recalcule les montants des personnes non fixées, comme le calcul : chaque part au centime le plus proche ;
-  // l'écart éventuel (quelques centimes) se règle sur le total de chacun, selon le réglage du voyage
+  // recalcule les montants des personnes non fixées, comme le calcul : chaque part au centime inférieur, et les
+  // centimes restants payés par des participants tirés au sort (équitablement) ou par l'asso
   function refresh() {
     var t = total(), act = rows().filter(on), fx = act.filter(isFixed), free = act.filter(function (r) { return !isFixed(r); });
     rows().forEach(function (r) {
@@ -310,20 +357,29 @@ document.getElementById('add-payer').addEventListener('click', function () {
     });
     var fixedSum = fx.reduce(function (s, r) { return s + euros(r.querySelector('.who-amount').value); }, 0);
     var rest = t - fixedSum, tw = free.reduce(function (s, r) { return s + weight(r); }, 0);
-    var gap = 0;
+    var left = 0, winners = [];
     if (t && free.length && rest >= 0) {
       var raw = free.map(function (r) { return rest * weight(r) / tw; });
-      var base = raw.map(function (v) { return Math.floor(v + 0.5 + 1e-9); });
-      gap = rest - base.reduce(function (a, b) { return a + b; }, 0);
+      var base = raw.map(function (v) { return Math.floor(v + 1e-9); });
+      left = rest - base.reduce(function (a, b) { return a + b; }, 0);
+      var elig = free.filter(function (r, i) { return raw[i] - base[i] > 1e-9; }).map(pidOf);
+      if (left && centsEffective() === 'participants') {
+        var need = Math.min(left, elig.length);
+        var keep = cents.who.length === need && cents.who.every(function (p) { return elig.indexOf(p) >= 0; });
+        if (!keep) cents.who = draw(elig, need, cents.avoid); cents.avoid = [];
+        winners = cents.who;
+        free.forEach(function (r, i) { if (winners.indexOf(pidOf(r)) >= 0) base[i] += 1; });
+      } else if (!left) { cents.who = []; }
       free.forEach(function (r, i) { r.querySelector('.who-amount').value = input(base[i]); });
     } else {
       free.forEach(function (r) { r.querySelector('.who-amount').value = ''; });
     }
+    showCents(left, winners);
     // message
     status.className = 'split-status';
     if (!act.length) { status.textContent = ''; return true; }
     if (!fx.length) {
-      status.textContent = t ? totalTxt(t) + ' réparti' + (act.length > 1 ? ' entre ' + act.length + ' personnes' : ' sur 1 personne') + '.' + gapTxt(gap) : '';
+      status.textContent = t ? totalTxt(t) + ' réparti' + (act.length > 1 ? ' entre ' + act.length + ' personnes' : ' sur 1 personne') + '.' : '';
       return true;
     }
     if (!t) { status.className += ' warn'; status.textContent = 'Indique d’abord le montant de la dépense.'; return false; }
@@ -332,7 +388,7 @@ document.getElementById('add-payer').addEventListener('click', function () {
     status.className += ' ok';
     status.textContent = '🔒 ' + fx.length + ' montant' + (fx.length > 1 ? 's fixés' : ' fixé') + ' (' + fmt(fixedSum) + ')'
       + (free.length ? ' · le reste, ' + fmt(rest) + ', est réparti entre ' + (free.length > 1 ? 'les ' + free.length + ' autres.' : 'l’autre personne.') : ' · le compte est bon.')
-      + gapTxt(gap);
+      ;
     return true;
   }
   list.addEventListener('input', function (ev) {

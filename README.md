@@ -116,13 +116,18 @@ Après chaque action, le message de confirmation propose **↶ Défaire** (pour 
 - **Voyage sans asso** : sur la page 🏛️, « Qui tient la caisse ? » → un participant (ex. Paul). Partout, « l'asso » devient « la caisse (Paul) » ; on verse l'argent à Paul ; son propre compte se règle avec la caisse qu'il tient (rien à se verser). Côté IA : `"voyage": {"caisse": "Paul"}`.
 - **Argent reçu et rendu** : 💶 = mouvement saisi ici (modifiable / supprimable sur la ligne) ; 🧾 = paiement qui vient d'une dépense (« Modifier la dépense »).
 - **🏛️ L'asso** : le compte de l'asso pour le voyage (entrées / sorties réelles, ce qu'il reste à encaisser et à rendre, ce que le voyage lui coûte ou rapporte une fois tout réglé, ce qu'elle prend à sa charge). On peut lui donner un nom (commun à tous les voyages), accepté aussi comme payeur dans le JSON de l'IA. Section « Compte de l'asso » dans le PDF.
-- Chaque ligne (part d'une personne sur une dépense) est affichée **au centime le plus proche** ; le **total** de chacun est arrondi **une seule fois, au centime supérieur** (ligne « Arrondi » visible). 1 522,29 € ÷ 11 donne bien 138,39 €, comme la calculette ; les centimes éventuellement en trop reviennent à l'asso.
+- **Chaque dépense tombe juste au centime** : chaque part est arrondie au centime inférieur, et les centimes qui
+  restent (189,22 € ÷ 11 = 17,2018… → 0,02 €) sont payés par des participants **tirés au sort, chacun son tour**
+  (personne ne paie plus d'un centime de plus qu'un autre), ou par l'asso. Réglage du voyage (page de l'asso),
+  et choix possible dépense par dépense (« Pour qui ? » → Changer). Le tirage est enregistré avec la dépense : il
+  ne change que si on modifie cette dépense ou qu'on demande un nouveau tirage. Le total de chacun est la somme
+  de ses lignes ; 1 522,29 € de transport à 11 donnent bien 138,39 € chacun.
 - Un **montant fixé** 🔒 dans une dépense ne bouge plus, même si le montant de la dépense change : le reste est
   toujours réparti entre les autres personnes cochées. Une remise (fiche du participant) est compensée par l'asso
   ou par les autres : le total reste juste. (Les anciens « ajustements » sont convertis automatiquement.)
 - Une réduction plus grande que la part de la personne déclenche une alerte.
 - Reste à payer = sa part − ses versements − ses avances + ce que l'asso lui a remboursé.
-- Contrôle permanent : parts des participants + prises en charge asso − arrondis = coût du voyage.
+- Contrôle permanent : parts des participants + prises en charge asso = coût du voyage, au centime.
 - **Famille** : chaque membre a sa part, mais la famille règle ses comptes **ensemble** (un seul « reste »,
   une personne qui paie pour la famille). Les versements de la famille sont enregistrés à son nom.
 - **Accompagnant** : vient au voyage mais ne plonge pas. Dans « Pour qui ? », les boutons « Plongeurs seulement » /

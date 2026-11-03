@@ -24,9 +24,10 @@ def start(ops, **extra):
 
 def test_fixe_on_expense(ops):
     tid, sh, r = start(ops, depenses=[{"libelle": "Gîte", "reel": "400", "pour": "tous", "fixe": {"D": "60"}}])
-    assert sh == {"A": 113.34, "B": 113.34, "C": 113.34, "D": 60.0}       # (400 − 60) / 3 = 113,333… → 113,34
+    # (400 − 60) / 3 = 113,333… : 113,33 chacun, et le centime restant pour l'un des trois (tiré au sort)
+    assert sh["D"] == 60.0 and sorted([sh["A"], sh["B"], sh["C"]]) == [113.33, 113.33, 113.34]
     assert any("montant fixé : D 60,00 €" in a.replace("\u202f", " ").replace("\xa0", " ") for a in r["actions"])
-    # mise à jour : la dépense passe à 460 € ; D reste à 60, les autres 400 / 3 = 133,34 ; puis D libéré
+    # mise à jour : la dépense passe à 460 € ; D reste à 60, les autres 400 / 3 = 133,33 (+1 c) ; puis D libéré
     r = ops.import_trip({"voyage_id": tid, "depenses_a_modifier": [{"depense": "Gîte", "reel": "460"}]},
                         voyage=tid, verifier_id=tid)
     assert {p["nom"]: p["sa_part"] for p in r["apercu"]["participants"]}["D"] == 60.0
@@ -94,8 +95,10 @@ def test_asso_name_refund_date_and_supplement_default(ops):
     assert mv[0]["date"] == "2026-05-10" and mv[0]["montant"] == 100.0
     adj = r["apercu"]["ajustements"][0]
     assert (adj["valeur"], adj["compense_par"]) == (30.0, "others")
-    # Gîte 400 € entre A, B, C (D désisté sans rien garder) : 133,33… ; A +30, B et C −15 → 163,34 / 118,34
-    assert sh == {"A": 163.34, "B": 118.34, "C": 118.34, "D": 0.0}
+    # Gîte 400 € entre A, B, C (D désisté sans rien garder) : 133,33 chacun + 1 centime pour l'un d'eux ;
+    # A +30, B et C −15 → 163,33 / 118,33 / 118,33, l'un des trois avec 1 centime de plus
+    assert sh["D"] == 0.0 and round(sh["A"] + sh["B"] + sh["C"], 2) == 400.0
+    assert sorted([round(sh["A"] - 163.33, 2), round(sh["B"] - 118.33, 2), round(sh["C"] - 118.33, 2)]) == [0, 0, 0.01]
     # un autre nom alors que l'asso en a déjà un : pas appliqué, signalé
     r = ops.import_trip({"voyage_id": tid, "voyage": {"asso": "Autre club"}}, voyage=tid, verifier_id=tid)
     assert any("s'appelle déjà « Club Subaqua »" in n for n in r["a_verifier"])

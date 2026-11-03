@@ -45,9 +45,11 @@ def test_old_data_converted_once_with_identical_shares(tmp_path):
     con.commit()
     con.close()
     # Gîte : A 60, les 3 autres (400 − 60) / 3 = 113,333… ; Plongées : 400 / 400 / 396
-    # A : 60 + 400 = 460 ; B : 113,34 (arrondi supérieur) + 400 = 513,34 ; C : 113,34 + 396 ; D : 113,34
+    # A : 60 + 400 = 460 ; B, C, D : 113,33 chacun sur le gîte, + 1 centime pour l'un d'eux (tiré au sort)
     shares, r = _shares(d, tid)                        # ouvrir la base lance la conversion
-    assert shares == {"A": 46000, "B": 51334, "C": 50934, "D": 11334} and r.is_balanced()
+    assert shares["A"] == 46000 and r.is_balanced()
+    assert sorted([shares["B"] - 40000, shares["C"] - 39600, shares["D"]]) == [11333, 11333, 11334]
+    assert sum(shares.values()) == 40000 + 119600       # chaque dépense tombe juste
     con = sqlite3.connect(db)
     assert con.execute("SELECT COUNT(*) FROM adjustments").fetchone()[0] == 0
     fx = dict(con.execute("SELECT participant_id, fixed FROM expense_shares WHERE expense_id=? AND fixed IS NOT NULL",

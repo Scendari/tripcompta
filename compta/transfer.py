@@ -40,6 +40,20 @@ def _row(obj) -> dict:
     return out
 
 
+def _expense_rows(t: M.Trip, expenses) -> list:
+    """Les dépenses, avec le tirage des centimes d'arrondi tel que le calcul l'utilise (même s'il n'est pas
+    encore enregistré) : le voyage importé donne exactement les mêmes montants."""
+    r = S.compute_trip(t)
+    rows = []
+    for x in expenses:
+        row = _row(x)
+        inf = r.cent_info.get(x.id)
+        if inf and inf["winners"]:
+            row["cents_who"] = ",".join(map(str, inf["winners"]))
+        rows.append(row)
+    return rows
+
+
 def trip_data(t: M.Trip) -> dict:
     expenses = list(t.expenses)
     return dict(
@@ -47,7 +61,7 @@ def trip_data(t: M.Trip) -> dict:
         participants=[_row(x) for x in t.participants],
         familles=[_row(x) for x in t.families],
         categories=[_row(x) for x in t.categories],
-        depenses=[_row(x) for x in expenses],
+        depenses=_expense_rows(t, expenses),
         parts=[_row(x) for e in expenses for x in e.shares],
         paiements=[_row(x) for e in expenses for x in e.payments],
         ajustements=[_row(x) for x in t.adjustments],
@@ -177,7 +191,8 @@ def import_trip(s, v: dict, z: zipfile.ZipFile, receipts_dir: Path) -> M.Trip:
         C[row["id"]] = c.id
     for row in v.get("depenses") or []:
         e = _new(M.Expense, row, trip_id=t.id, category_id=C.get(row.get("category_id")),
-                 payer_id=P.get(row.get("payer_id")), refund_to_id=P.get(row.get("refund_to_id")))
+                 payer_id=P.get(row.get("payer_id")), refund_to_id=P.get(row.get("refund_to_id")),
+                 cents_who=_ids(row.get("cents_who"), P))
         s.add(e)
         s.flush()
         E_[row["id"]] = e.id

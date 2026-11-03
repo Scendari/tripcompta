@@ -122,9 +122,9 @@ def test_browser_fixed_amount_live(trip):
             m = lambda n: pg.input_value(f"input[name=m_{P[n]}]")
             assert [m(n) for n in ("Anne", "Bob", "Chloé", "Dan")] == ["250,00"] * 4          # parts égales, visibles
             pg.uncheck(f"input[name=inc_{P['Dan']}]")
-            # comme le calcul : chaque part au centime le plus proche ; l'écart se règle sur le total de chacun
-            assert [m(n) for n in ("Anne", "Bob", "Chloé")] == ["333,33", "333,33", "333,33"]
-            assert "l’écart de 0,01 € se règle sur le total de chacun" in pg.inner_text("#split-status").replace("\u202f", " ")
+            # comme le calcul : 333,33 chacun, et le centime restant pour une personne tirée au sort
+            assert sorted(m(n) for n in ("Anne", "Bob", "Chloé")) == ["333,33", "333,33", "333,34"]
+            assert "0,01 € payé par" in pg.inner_text("[data-cents-text]").replace("\u202f", " ")
             assert pg.locator(f"input[name=m_{P['Dan']}]").is_disabled()
             # je tape 400 pour Anne : fixé 🔒, le reste (600) se répartit tout seul
             pg.fill(f"input[name=m_{P['Anne']}]", "400")

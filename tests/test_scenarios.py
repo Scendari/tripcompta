@@ -328,8 +328,9 @@ def test_late_participant_and_rename(app):
     o.P = {p.name: p.id for p in o.trip().participants}
     o._s.close()
     r = o.result()
-    assert r.share(o.P["Chloé"], o.eid("Gîte")) == 3333            # ajoutée au gîte (tout le monde) : 100 / 3
-    assert r.people[o.P["Chloé"]].share == 3334                    # total arrondi au centime supérieur
+    gite = [r.share(o.P[n], o.eid("Gîte")) for n in ("Anne", "Bob", "Chloé")]
+    assert sorted(gite) == [3333, 3333, 3334]                      # ajoutée au gîte (tout le monde) : 100 / 3, tombe juste
+    assert r.people[o.P["Chloé"]].share == r.share(o.P["Chloé"], o.eid("Gîte"))
     assert r.share(o.P["Chloé"], o.eid("Plongée")) == 0            # pas à la plongée d'Anne
     o.post(f"/participants/{o.P['Chloé']}", {"name": "Chloé M.", "phone": "0600000000"})
     assert "Chloé M." in o.get("/") and "Chloé M." in o.get("/repartition")

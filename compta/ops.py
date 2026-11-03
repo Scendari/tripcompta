@@ -813,6 +813,8 @@ class Ops:
             if tid is not None:
                 s.expire_all()
                 t = s.get(M.Trip, tid)
+                if S.store_draws(t):                  # centimes d'arrondi : tirage des dépenses nouvelles ou changées
+                    s.flush()
                 after = balances(t)
                 result["changements"] = _diff(before, after)
                 r = S.compute_trip(t)

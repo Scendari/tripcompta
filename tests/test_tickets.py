@@ -262,13 +262,15 @@ def test_browser_file_preview(env, tmp_path):
 
 
 def test_preview_one_line(env):
-    """Aperçu (parts égales) : une seule ligne, « 33,34 € chacun (100,00 € ÷ 3 personnes) »."""
+    """Aperçu (parts égales) : une seule ligne, « 33,33 € chacun (100,00 € ÷ 3 personnes) — + 1 centime pour
+    l'un d'eux (tiré au sort) »."""
     app, ops, tid, c = env
     ops.import_trip({"voyage_id": tid, "participants": ["Chloé"]}, voyage=tid, verifier_id=tid)
     p = {x["nom"]: x["id"] for x in ops.trip(tid)["participants"]}
     html = c.post(f"/v/{tid}/depenses/apercu", data={"actual": "60 + 40", "split": "egal",
                                                     **{f"inc_{i}": "1" for i in p.values()}}).text
     txt = re.sub(r"<[^>]+>", "", html).replace(" ", " ").replace("\xa0", " ")
-    assert "33,34 € chacun" in txt and "100,00 € ÷ 3 personnes" in txt and "<table" not in html
+    assert "33,33 € chacun" in txt and "100,00 € ÷ 3 personnes" in txt and "<table" not in html
+    assert "+ 1 centime pour l'un d'eux (tiré au sort)" in txt.replace("&#39;", "'")
     form = c.get(f"/v/{tid}/depenses/nouvelle").text
     assert 'id="split-status"' in form                # la part de chacun s'affiche directement dans « Pour qui ? »
