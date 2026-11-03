@@ -101,3 +101,44 @@ def test_page_without_planned_amounts_explains(tmp_path):
     assert "Aucune dépense n" in page and "0 sur 2" in page and "personne ne s" in page
     empty = TestClient(app).get(f"/v/{ops.create_trip('vide')['voyage_id']}/en-images").text
     assert "Ajoute des participants et des dépenses" in empty
+
+
+def test_amounts_written_on_bars(v):
+    """« Ce que paie chacun » : le montant de chaque morceau est écrit sur la barre quand il y tient ;
+    sinon il est masqué (la bulle au survol le donne toujours). Jamais de débordement, en grand comme sur téléphone."""
+    import threading
+    import time
+
+    import uvicorn
+    from playwright.sync_api import sync_playwright
+    from tests.conftest import _free_port
+    app, tid, V = v
+    port = _free_port()
+    srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
+    th = threading.Thread(target=srv.run, daemon=True)
+    th.start()
+    while not srv.started:
+        time.sleep(0.05)
+    try:
+        with sync_playwright() as p:
+            b = p.chromium.launch()
+            for width in (1400, 390):
+                pg = b.new_page(viewport={"width": width, "height": 900})
+                pg.goto(f"http://127.0.0.1:{port}/v/{tid}/en-images")
+                nums = pg.locator(".seg-num")
+                texts = [t.replace(" ", " ").replace("\xa0", " ") for t in nums.all_inner_texts()]
+                tips = pg.eval_on_selector_all(".seg-num", "els => els.map(e => e.parentElement.dataset.tip)")
+                assert texts and all(t.split(" : ")[-1].replace(" ", " ").replace("\xa0", " ") == x
+                                     for t, x in zip(tips, texts))          # le même montant que la bulle
+                # chaque montant visible tient dans son morceau de barre
+                ok = pg.evaluate("""() => [...document.querySelectorAll('.seg-num:not(.hide)')].every(n => {
+                    const r = document.createRange(); r.selectNodeContents(n);
+                    return r.getBoundingClientRect().width <= n.parentElement.clientWidth - 8; })""")
+                assert ok and pg.evaluate("document.documentElement.scrollWidth") <= width + 1
+                if width == 1400:
+                    assert pg.locator(".seg-num:not(.hide)").count() == nums.count()   # en grand : tous lisibles
+                pg.close()
+            b.close()
+    finally:
+        srv.should_exit = True
+        th.join(5)
