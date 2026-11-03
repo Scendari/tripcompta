@@ -108,6 +108,25 @@ def test_browser_group_button_checks_exactly_its_members(env):
             pg.click(".only-btn:has-text('Minibus')")
             checked = pg.eval_on_selector_all("input[data-who]:checked", "els => els.map(e => +e.dataset.pid)")
             assert sorted(checked) == sorted([P["Anne"], P["Chloé"]])
+            # en modifiant une dépense déjà « pour le Minibus » : le bouton est allumé dès l'ouverture
+            pg.fill("#label", "Essence minibus")
+            pg.fill("#actual", "40")
+            pg.locator("form button[type=submit], form button:not([type])").filter(has_text="Enregistrer").first.click()
+            pg.wait_for_load_state()
+            eid = ops.trip(tid)["depenses"][-1]["id"]
+            pg.goto(f"http://127.0.0.1:{port}/v/{tid}/depenses/{eid}/modifier")
+            assert pg.locator(".only-btn.on").all_inner_texts() == ["Minibus"]
+            assert "Seulement pour : Minibus (2 pers.)" in pg.inner_text("[data-only-hint]")
+            # une case changée à la main : ce n'est plus le Minibus, le bouton s'éteint
+            others = [x for x in P.values() if x not in (P["Anne"], P["Chloé"])]
+            pg.check(f"input[data-who][data-pid='{others[0]}']")
+            assert pg.locator(".only-btn.on").count() == 0
+            pg.uncheck(f"input[data-who][data-pid='{others[0]}']")              # et revient s'il le redevient
+            assert pg.locator(".only-btn.on").all_inner_texts() == ["Minibus"]
+            # une dépense pour tout le monde : « Tout le monde », pas un groupe
+            pg.goto(f"http://127.0.0.1:{port}/v/{tid}/depenses/nouvelle")
+            pg.click(".only-btn:has-text('Tout le monde')")
+            assert pg.locator(".only-btn.on").all_inner_texts() == ["Tout le monde"]
             pg.goto(f"http://127.0.0.1:{port}/v/{tid}/participants")
             m = b.new_page(viewport={"width": 390, "height": 800})
             m.goto(f"http://127.0.0.1:{port}/v/{tid}/participants")
