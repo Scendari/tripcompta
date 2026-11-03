@@ -277,8 +277,11 @@ def test_expenses_who_tooltip(tmp_path):
         {"libelle": "Bateau", "reel": "100", "paye_par": "asso", "parts": {"Anne": 3, "Bob": 1}}]})["voyage_id"]
     app = create_app(tmp_path / "d")
     page = clean(TestClient(app).get(f"/v/{tid}/depenses").text)
+    # d'abord qui paie combien, puis, après un trait, qui n'est pas concerné
     assert re.search(r'class="tip"[^>]*>3 pers\.<span class="tip-box" role="tooltip"><b>Pour qui</b>'
-                     r'<span>Sauf : Denis</span><span>Anne : 10,00 €</span>', page)
+                     r'<span>Anne : 10,00 €</span><span>Bob : 10,00 €</span><span>Chloé : 10,00 €</span>'
+                     r'<span class="tip-sep" role="separator"></span><span>Pas concernés : Denis</span></span>', page)
+    assert "Sauf" not in page
     assert "<span>Anne : 75,00 €</span><span>Bob : 25,00 €</span>" in page
 
 

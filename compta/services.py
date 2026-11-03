@@ -406,7 +406,8 @@ def is_estimated(e: M.Expense) -> bool:
 
 
 def who_detail(trip: M.Trip, e: M.Expense, result: E.Result) -> list:
-    """Bulle « Pour qui » : qui est exclu (s'il y en a peu), puis la part de chacun sur cette dépense."""
+    """Bulle « Pour qui » : le groupe ou la famille, la part de chacun, puis (après un trait « --- ») qui n'est
+    pas concerné, s'il y en a peu."""
     ids = {s_.participant_id for s_ in e.shares}
     people = sorted((p for p in trip.participants if p.id in ids), key=lambda p: E.sort_key(p.name))
     out = []
@@ -420,10 +421,10 @@ def who_detail(trip: M.Trip, e: M.Expense, result: E.Result) -> list:
         elif f:
             out.append(f"Famille {f.name}")
     others = [p.name for p in sorted(trip.participants, key=lambda p: E.sort_key(p.name)) if p.id not in ids]
-    if others and len(others) <= len(people):
-        out.append("Sauf : " + ", ".join(others))
     for p in people:
         out.append(f"{p.name} : {E.fmt(result.share(p.id, e.id))}")
+    if others and len(others) <= len(people):
+        out += ["---", "Pas concernés : " + ", ".join(others)]
     return out
 
 
