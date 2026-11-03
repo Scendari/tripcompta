@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}À propos · Trip Compta{% endblock %}
+{% block page %}
+<div class="page-head"><div class="grow">
+  <h1>À propos</h1>
+  <p class="muted">La version de Trip Compta installée sur cet ordinateur, et ses mises à jour.</p>
+</div><a class="btn ghost small" href="/">← Mes voyages</a></div>
+
+<div class="card about-card">
+  <span class="label-like">Version installée</span>
+  <p class="about-version">Trip Compta {{ info.label }}</p>
+  {% if info.dev %}
+  <p class="small muted" style="margin:.2rem 0 0"><span class="pill grey">Version de développement</span>
+    Elle ne se met pas à jour toute seule : elle suit le code source.</p>
+  {% endif %}
+</div>
+
+{% if available %}
+<div class="card about-card update-card" id="installer">
+  <h2 style="margin-top:0">🎁 Nouvelle version : {{ available.version }}</h2>
+  {% if available.date %}<p class="small muted" style="margin-top:-.3rem">Publiée le {{ available.date|date }}</p>{% endif %}
+  {% if available.notes %}
+  <div id="nouveautes"><span class="label-like">Les nouveautés</span>
+    <div class="release-notes">{{ available.notes }}</div></div>
+  {% endif %}
+  {% if installable %}
+  <form method="post" action="/maj/installer" class="about-actions" data-confirm="Installer Trip Compta {{ available.version }} ? L'application va se fermer puis se relancer toute seule (environ une minute). Tes données ne sont pas touchées, et une copie de sécurité est faite avant.">
+    <button class="btn">Mettre à jour maintenant</button>
+    <span class="hint">Une copie de tes données est faite avant. L'application se relance toute seule.</span>
+  </form>
+  {% else %}
+  <p class="warn-box small">{{ not_installable }}</p>
+  <p><a class="btn ghost" href="{{ page }}" target="_blank" rel="noopener">Télécharger la nouvelle version</a>
+    <a class="btn link small" href="{{ help }}" target="_blank" rel="noopener">Comment l'installer ?</a></p>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="card about-card">
+  <h3 style="margin-top:0">Mises à jour</h3>
+  <p class="small muted" style="margin-top:0">
+    {% if checked %}Dernière vérification : le {{ checked }}.
+    {% if latest and not available and not info.dev %} Tu as la dernière version.{% endif %}
+    {% if latest and info.dev %} Dernière version publiée : {{ latest.version }}.{% endif %}
+    {% else %}Pas encore vérifié.{% endif %}</p>
+  <div class="about-actions">
+    <form method="post" action="/reglages/verifier-maj" class="inline"><button class="btn ghost small">🔄 Vérifier maintenant</button></form>
+    <form method="post" action="/reglages/maj-auto" class="inline auto-form">
+      <input type="hidden" name="auto" value="{{ '0' if info.auto else '1' }}">
+      <label class="check"><input type="checkbox" {{ 'checked' if info.auto }} {{ 'disabled' if info.dev }} onchange="this.form.submit()"> Vérifier automatiquement (une fois par jour)</label>
+    </form>
+  </div>
+  <p class="hint">La vérification demande seulement à GitHub, le site où Trip Compta est publié, quelle est la dernière version. Aucune de tes données n'est envoyée.</p>
+</div>
+{% endblock %}

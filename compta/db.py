@@ -15,6 +15,32 @@ from .models import Base
 
 UNDO_KEEP = 30
 BACKUP_KEEP = 10
+VERSION_KEY = "app_version"
+
+
+class NewerDatabaseError(Exception):
+    """La base a été ouverte par une version plus récente de Trip Compta : une version plus ancienne ne doit pas
+    y toucher (sa structure a pu changer)."""
+
+    def __init__(self, stored: str, current: str, path: Path):
+        self.stored, self.current, self.path = stored, current, path
+        super().__init__(f"Ces données ont été utilisées par Trip Compta {stored}, plus récente que cette version "
+                         f"({current}).")
+
+
+def stored_version(path: Path) -> str | None:
+    """La version de Trip Compta qui a ouvert cette base en dernier (lecture seule, sans rien créer)."""
+    if not path.exists():
+        return None
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            row = con.execute("SELECT value FROM settings WHERE key=?", (VERSION_KEY,)).fetchone()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return None
+    return row[0] if row else None
 
 
 def default_data_dir() -> Path:
@@ -23,8 +49,14 @@ def default_data_dir() -> Path:
 
 
 class Database:
-    def __init__(self, data_dir: Path | str | None = None):
+    def __init__(self, data_dir: Path | str | None = None, app_version: str | None = None):
+        from . import version as V
         self.dir = Path(data_dir) if data_dir else default_data_dir()
+        self.app_version = app_version or V.build_info()["version"]
+        # AVANT toute écriture : une version plus ancienne refuse une base passée par une version plus récente
+        stored = stored_version(self.dir / "compta.db")
+        if stored and V.base(stored) and V.base(self.app_version) and V.base(stored) > V.base(self.app_version):
+            raise NewerDatabaseError(stored, self.app_version, self.dir)
         self.dir.mkdir(parents=True, exist_ok=True)
         self.receipts_dir = self.dir / "justificatifs"
         self.backups_dir = self.dir / "sauvegardes"
@@ -42,7 +74,13 @@ class Database:
 
         Base.metadata.create_all(self.engine)
         self._migrate()
+        self._remember_version()
         self.Session = sessionmaker(self.engine, expire_on_commit=False)
+
+    def _remember_version(self):
+        with self.engine.begin() as c:
+            c.exec_driver_sql("INSERT INTO settings (key, value) VALUES (?, ?) "
+                              "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (VERSION_KEY, self.app_version))
 
     # Colonnes ajoutées après la première version : on les crée dans les bases existantes.
     MIGRATIONS = {

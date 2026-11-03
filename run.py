@@ -56,17 +56,22 @@ def main():
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
     app = create_app(a.data_dir, restart=restart)
-    if a.demo:
+    if a.demo and app.state.db is not None:
         from compta.demo import seed_demo, seed_family_demo
         seed_family_demo(app.state.db, replace=False)
         seed_demo(app.state.db, replace=False)
 
     port = free_port(a.port)
+    app.state.port = port                    # pour relancer au même endroit après une mise à jour
+    app.state.argv = sys.argv[1:]
     url = f"http://127.0.0.1:{port}/"
     print("=" * 60)
     print(" Trip Compta")
     print(f" Ouvre ton navigateur sur : {url}")
-    print(f" Données : {app.state.db.dir}")
+    if app.state.db is not None:
+        print(f" Données : {app.state.db.dir}")
+    else:
+        print(" ⚠️  Ces données viennent d'une version plus récente : installe-la (voir le navigateur).")
     print(" Pour arrêter : ferme cette fenêtre (ou Ctrl+C)")
     print("=" * 60)
     if not a.no_browser and not os.environ.get("TRIPCOMPTA_RESTARTED"):
