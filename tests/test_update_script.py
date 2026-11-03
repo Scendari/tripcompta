@@ -116,7 +116,8 @@ def test_replace_and_relaunch(setup):
     new = work / "nouvelle" / "Trip Compta"
     make_app(new, "1.1.0")
     r = run_script(target, new, exe, port, "1.1.0", work, extra=["--data-dir", str(tmp / "mes données")])
-    assert r.duration < 20                                                  # l'attente de la fermeture marche
+    # l'attente de la fermeture marche (sans aller jusqu'à l'arrêt forcé, au bout d'une minute)
+    assert "arrêt forcé" not in (work / "maj.log").read_text(encoding="utf-8-sig", errors="replace")
     assert r.returncode == 0, r.stdout + r.stderr + (work / "maj.log").read_text(encoding="utf-8", errors="replace")
     assert (target / "VERSION.txt").read_text() == "1.1.0"                 # remplacée au même endroit
     assert ping(port) == "1.1.0"
