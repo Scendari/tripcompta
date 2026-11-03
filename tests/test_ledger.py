@@ -235,7 +235,7 @@ def test_cents_drawn_everywhere(tmp_path):
     m = clean(c.get(f"/v/{tid}/repartition").text)
     assert "3,33 €" in m and "3,34 €" in m and "Arrondis (" not in m
     tip = clean(c.get(f"/v/{tid}/depenses").text)
-    assert f"{names[winner]} : 3,34 € (+1 c tiré au sort)" in tip
+    assert f"<span>{names[winner]} : 3,34 €</span>" in tip and "tiré au sort" not in tip
 
 
 def test_subtotals_match_a_calculator(tmp_path):
