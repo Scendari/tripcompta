@@ -277,11 +277,18 @@ document.getElementById('add-payer').addEventListener('click', function () {
   function euros(v) { v = (v || '').replace(/\s|€/g, '').replace(',', '.'); var n = parseFloat(v); return isNaN(n) ? 0 : Math.round(n * 100); }
   function fmt(c) { return (c / 100).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '\u202f') + ' €'; }
   function input(c) { return (c / 100).toFixed(2).replace('.', ','); }
-  function total() {
+  function gross() {
     var a = form.querySelector('#actual'), p = form.querySelector('#planned');
     var t = 0; String(a.value || '').split('+').forEach(function (x) { t += euros(x); });
     if (t) return t; String(p.value || '').split('+').forEach(function (x) { t += euros(x); }); return t;
   }
+  // remboursement (annulation, avoir…) : seul ce qui reste est partagé
+  function refunded() {
+    var on = form.querySelector('input[name="has_refund"]'), r = form.querySelector('#refund');
+    return on && on.checked && r ? Math.min(euros(r.value), gross()) : 0;
+  }
+  function total() { return gross() - refunded(); }
+  function totalTxt(t) { var r = refunded(); return r ? fmt(t) + ' (' + fmt(gross()) + ' − ' + fmt(r) + ' remboursés)' : fmt(t); }
   function rows() { return Array.prototype.slice.call(list.querySelectorAll('.who')); }
   function on(r) { return r.querySelector('input[data-who]').checked; }
   function isFixed(r) { return r.querySelector('[data-fixed]').value === '1'; }
@@ -309,11 +316,11 @@ document.getElementById('add-payer').addEventListener('click', function () {
     status.className = 'split-status';
     if (!act.length) { status.textContent = ''; return true; }
     if (!fx.length) {
-      status.textContent = t ? fmt(t) + ' réparti' + (act.length > 1 ? ' entre ' + act.length + ' personnes' : ' sur 1 personne') + '.' : '';
+      status.textContent = t ? totalTxt(t) + ' réparti' + (act.length > 1 ? ' entre ' + act.length + ' personnes' : ' sur 1 personne') + '.' : '';
       return true;
     }
     if (!t) { status.className += ' warn'; status.textContent = 'Indique d’abord le montant de la dépense.'; return false; }
-    if (rest < 0) { status.className += ' warn'; status.textContent = 'Les montants fixés font ' + fmt(fixedSum) + ', plus que la dépense (' + fmt(t) + ').'; return false; }
+    if (rest < 0) { status.className += ' warn'; status.textContent = 'Les montants fixés font ' + fmt(fixedSum) + ', plus que ' + (refunded() ? 'le coût à partager (' + totalTxt(t) + ').' : 'la dépense (' + fmt(t) + ').'); return false; }
     if (!free.length && rest > 0) { status.className += ' warn'; status.textContent = 'Il reste ' + fmt(rest) + ' : tous les montants sont fixés. Libère au moins une personne (🔒×) ou corrige les montants.'; return false; }
     status.className += ' ok';
     status.textContent = '🔒 ' + fx.length + ' montant' + (fx.length > 1 ? 's fixés' : ' fixé') + ' (' + fmt(fixedSum) + ')'
@@ -333,7 +340,8 @@ document.getElementById('add-payer').addEventListener('click', function () {
   // les boutons « Seulement pour » cochent / décochent par programme
   list.addEventListener('who-changed', refresh);
   document.querySelectorAll('[data-who-chips] button').forEach(function (b) { b.addEventListener('click', function () { setTimeout(refresh, 0); }); });
-  ['#actual', '#planned'].forEach(function (sel) { form.querySelector(sel).addEventListener('input', refresh); });
+  ['#actual', '#planned', '#refund'].forEach(function (sel) { var x = form.querySelector(sel); if (x) x.addEventListener('input', refresh); });
+  var hasRefund = form.querySelector('input[name="has_refund"]'); if (hasRefund) hasRefund.addEventListener('change', refresh);
   form.addEventListener('ticketsChanged', refresh);
   form.addEventListener('submit', function (ev) { if (!refresh()) { ev.preventDefault(); status.scrollIntoView({block: 'center'}); } });
   refresh();

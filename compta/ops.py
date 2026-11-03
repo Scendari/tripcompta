@@ -668,7 +668,7 @@ def do_fix_share(s, t, participant, depense, montant, in_cents: bool = False) ->
     if val is not None and val < 0:
         raise OpsError("Un montant fixé doit être positif.")
     sh.fixed = val
-    total = e.best_known() or 0
+    total = max(0, (e.best_known() or 0) - (e.refund or 0))     # coût partagé : remboursement déduit
     fixed = [x.fixed for x in e.shares if x.fixed is not None]
     if fixed and not total:
         raise OpsError(f"« {e.label} » n'a pas encore de montant : impossible d'y fixer la part de {p.name}.")
