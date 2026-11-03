@@ -65,8 +65,9 @@ def _safe(fn):
     return wrapper
 
 
-def build_server(data_dir: Optional[str] = None):
-    db = Database(data_dir)
+def build_server(data_dir: Optional[str] = None, home: Optional[str] = None):
+    """home : dossier synchronisé (voir cloud.py) quand data_dir est la copie de travail de cet ordinateur."""
+    db = Database(data_dir, home=home)
     ops = Ops(db)
     mcp = _Server(name="tripcompta", instructions=INSTRUCTIONS)
 
@@ -235,8 +236,9 @@ def build_server(data_dir: Optional[str] = None):
 def main():
     ap = argparse.ArgumentParser(description="Serveur MCP de Trip Compta (stdio)")
     ap.add_argument("--data-dir", default=os.environ.get("COMPTA_DATA_DIR"))
+    ap.add_argument("--home", help="Dossier synchronisé (justificatifs), si --data-dir est la copie de travail")
     a = ap.parse_args()
-    build_server(a.data_dir).run("stdio")
+    build_server(a.data_dir, a.home).run("stdio")
 
 
 if __name__ == "__main__":
