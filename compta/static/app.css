@@ -563,6 +563,8 @@ h2.sec-sep { border-top: 1px solid var(--border); padding-top: 1.1rem; margin-to
 .adv-block.doit { border-left-color: var(--amber); }
 .adv-block.du .settle-head .num { color: var(--ocean, #2f6fa3); }
 .adv-block.doit .settle-head .num { color: var(--amber); }
+.adv-block.rendu { border-left-color: var(--teal); }
+.adv-block.rendu .settle-head .num { color: var(--teal-strong); }
 .adv-table tr.adv-sub td { border-top: 1px solid var(--border); background: var(--bg-2); }
 .cat-chip.on { justify-content: space-between; }
 .cat-list li:not(.cat-with-subs) .cat-chip { justify-content: flex-start; gap: .6rem; }

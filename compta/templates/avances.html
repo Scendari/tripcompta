@@ -2,9 +2,9 @@
 {% from "_macros.html" import people_tabs %}
 {% block content %}
 <div class="page-head"><div class="grow"><h1>Participants</h1>
-<p class="muted">Ce que des participants ont payé eux-mêmes pour le groupe, ou reçu à la place de {{ asso_name }}, sans passer par sa caisse.</p></div></div>
+<p class="muted">Ce que des participants ont payé eux-mêmes pour le groupe, ce qu'ils ont reçu à la place de {{ asso_name }}, et ce que {{ asso_name }} leur a déjà rendu.</p></div></div>
 {{ people_tabs(trip, 'avances') }}
-{% if not advances %}<div class="card empty"><p>Personne n'a avancé d'argent pour le groupe : toutes les dépenses ont été payées par {{ asso_name }}.</p></div>{% endif %}
+{% if not advances and not refunds %}<div class="card empty"><p>Personne n'a avancé d'argent pour le groupe : toutes les dépenses ont été payées par {{ asso_name }}.</p></div>{% endif %}
 {% set paid_rows = advances|rejectattr('income')|sort(attribute='name')|list %}
 {% set recv_rows = advances|selectattr('income')|sort(attribute='name')|list %}
 {% for title, explain, rows, cls in [('Payé par des participants (avances)', "déduit de ce que doit la personne", paid_rows, 'du'), ('Reçu par des participants pour ' ~ asso_name, "ajouté à ce que doit la personne (à reverser à " ~ asso_name ~ ")", recv_rows, 'doit')] if rows %}
@@ -29,4 +29,27 @@
   </table>
 </div>
 {% endfor %}
+{% if refunds %}
+{% set rf = refunds|sort(attribute='name')|list %}
+<div class="card table-wrap adv-block rendu">
+  <div class="settle-head"><b>Déjà remboursé par {{ asso_name }}</b> <span class="muted small">argent sorti de sa caisse et rendu à la personne (ajouté à ce qu'elle doit, puisqu'elle l'a reçu)</span><span class="grow"></span><b class="num">{{ rf|sum(attribute='amount')|money }}</b></div>
+  <table class="adv-table">
+    <thead><tr><th>Qui</th><th>Date</th><th>Motif</th><th class="num">Montant</th><th><span class="sr-only">Actions</span></th></tr></thead>
+    <tbody>
+    {% for name, items in rf|groupby('name') %}
+      {% for a in items|sort(attribute='date') %}
+      <tr>
+        <td>{% if loop.first %}<b>{{ name }}</b>{% endif %}</td>
+        <td class="date-col small">{{ a.date|date if a.date else '' }}</td>
+        <td>{{ a.label }}</td>
+        <td class="num">{{ a.amount|money }}</td>
+        <td class="row-actions"><a class="btn link small" href="/v/{{ trip.id }}/argent/mouvements#edit-m{{ a.mid }}" title="Ce remboursement est un mouvement de la caisse : il se change dans « Argent reçu et rendu ».">Modifier</a></td>
+      </tr>
+      {% endfor %}
+      {% if items|length > 1 %}<tr class="adv-sub"><td></td><td></td><td class="muted small">Total {{ name }}</td><td class="num"><b>{{ items|sum(attribute='amount')|money }}</b></td><td></td></tr>{% endif %}
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
 {% endblock %}

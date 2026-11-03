@@ -772,7 +772,10 @@ def create_app(data_dir=None, restart=None, updater=None) -> FastAPI:
     def people_advances(tid: int, request: Request, s: Session = Depends(get_s)):
         """Ce que des participants ont payé eux-mêmes (avances) ou reçu à la place de l'asso."""
         t = trip_or_404(s, tid)
-        return render(request, "avances.html", trip=t, advances=S.advances(t))
+        refunds = [dict(date=m.date, label=m.note or "Remboursement", mid=m.id, pid=m.participant_id,
+                        name=m.participant.name if m.participant else "?", amount=m.amount)
+                   for m in t.movements if m.kind == "remboursement"]
+        return render(request, "avances.html", trip=t, advances=S.advances(t), refunds=refunds)
 
     @app.get("/v/{tid}/participants/organisation", response_class=HTMLResponse)
     def organisation(tid: int, request: Request, s: Session = Depends(get_s)):
