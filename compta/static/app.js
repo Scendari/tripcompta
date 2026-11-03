@@ -175,6 +175,12 @@
     if (!row.hidden) { const f = row.querySelector("input[name=amount]"); if (f) f.focus(); }
   });
 
+  // Lien direct vers un panneau repliable (…/asso#arrondi) : on l'ouvre
+  if (location.hash) {
+    const d = document.getElementById(location.hash.slice(1));
+    if (d && d.tagName === "DETAILS") { d.open = true; d.scrollIntoView({block: "center"}); }
+  }
+
   // Lien direct vers une ligne de modification (…#edit-m12) : on l'ouvre
   if (/^#edit-/.test(location.hash)) {
     const row = document.querySelector(location.hash);

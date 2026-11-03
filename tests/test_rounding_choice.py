@@ -116,3 +116,52 @@ def test_expense_preview_follows_choice(trip):
     assert "0,02 € pour" in norm(c.post(f"/v/{tid}/depenses/apercu", data=form).text)
     c.post(f"/v/{tid}/asso/arrondi", data={"rounding": "asso"})
     assert "0,01 € pris en charge par" in norm(c.post(f"/v/{tid}/depenses/apercu", data=form).text)
+
+
+def test_form_shows_choice_and_preview_follows_it(trip):
+    """Dans le formulaire : la ligne « Centimes d'arrondi … — changer », et l'aperçu qui suit le choix."""
+    import threading
+    import time
+
+    import uvicorn
+    from playwright.sync_api import sync_playwright
+    from tests.conftest import _free_port
+    app, c, tid, ops = trip
+    port = _free_port()
+    srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
+    th = threading.Thread(target=srv.run, daemon=True)
+    th.start()
+    while not srv.started:
+        time.sleep(0.05)
+    url = f"http://127.0.0.1:{port}"
+    try:
+        with sync_playwright() as p:
+            b = p.chromium.launch()
+            pg = b.new_page()
+            errors = []
+            pg.on("pageerror", lambda e: errors.append(str(e)))
+
+            def preview():
+                pg.goto(f"{url}/v/{tid}/depenses/nouvelle")
+                pg.fill("#actual", "10")
+                pg.locator("[data-who-chips] button", has_text="Tout le monde").click()
+                vals = pg.eval_on_selector_all(".who-amount", "els => els.map(e => e.value).filter(v => v)")
+                return vals, norm(pg.inner_text("#split-status")), norm(pg.inner_text(".rounding-note"))
+
+            vals, status, note = preview()
+            assert sorted(vals) == ["3,33", "3,33", "3,34"] and status == "10,00 € réparti entre 3 personnes."
+            assert note.startswith("Centimes d'arrondi : payés par les participants — changer")
+            # le lien ouvre le réglage sur la page de l'asso
+            pg.click(".rounding-note a")
+            assert pg.url.endswith("/asso#arrondi") and pg.locator("#arrondi").get_attribute("open") is not None
+            pg.check("input[name=rounding][value=asso]")
+            pg.locator("#arrondi").get_by_role("button", name="Enregistrer").click()
+            vals, status, note = preview()
+            assert vals == ["3,33", "3,33", "3,33"]                       # personne ne paie plus que sa part
+            assert status.startswith("10,00 € réparti entre 3 personnes. 0,01 € d’arrondi pris en charge par")
+            assert note.startswith("Centimes d'arrondi : pris en charge par")
+            assert errors == []
+            b.close()
+    finally:
+        srv.should_exit = True
+        th.join(5)

@@ -142,7 +142,7 @@
         <span class="only-btns">{% for x in who_groups %}<button type="button" class="only-btn" data-only="{{ x.ids|join(',') }}" aria-pressed="false" title="{{ x.names }}">{{ x.label }}</button>{% endfor %}</span></div>{% endif %}
       <p class="hint" style="margin:.2rem 0 .4rem" data-only-hint>Clique un ou plusieurs boutons : seules leurs personnes sont cochées. Tu peux ensuite ajuster au cas par cas ci-dessous.</p>
     </div>
-    <div class="who-list">
+    <div class="who-list" data-rounding="{{ trip.rounding or 'participants' }}" data-caisse="{{ asso_name }}">
       {% for p in trip.participants %}{% set fx = p.id in fixed %}
       <div class="who{{ ' is-fixed' if fx }}">
         <label><input type="checkbox" data-who data-pid="{{ p.id }}" data-companion="{{ 1 if p.companion else 0 }}" name="inc_{{ p.id }}" value="1" {{ 'checked' if p.id in weights }}> {{ p.name }}{% if p.companion %} <span class="hint">(acc.)</span>{% endif %}</label>
@@ -156,6 +156,7 @@
       {% endfor %}
     </div>
     <div id="split-status" class="split-status" aria-live="polite"></div>
+    <p class="hint rounding-note">Centimes d'arrondi : {{ ('pris en charge par ' ~ asso_name) if trip.rounding == 'asso' else 'payés par les participants' }} — <a href="/v/{{ trip.id }}/asso#arrondi">changer</a> <span class="muted">(pour tout le voyage)</span></p>
   </fieldset>
 
   <fieldset class="step">
@@ -303,10 +304,12 @@ document.getElementById('add-payer').addEventListener('click', function () {
     });
     var fixedSum = fx.reduce(function (s, r) { return s + euros(r.querySelector('.who-amount').value); }, 0);
     var rest = t - fixedSum, tw = free.reduce(function (s, r) { return s + weight(r); }, 0);
+    var assoCents = 0;
     if (t && free.length && rest >= 0) {
       var raw = free.map(function (r) { return rest * weight(r) / tw; }), base = raw.map(Math.floor);
       var left = rest - base.reduce(function (a, b) { return a + b; }, 0);
-      raw.map(function (v, i) { return [v - base[i], i]; }).sort(function (a, b) { return b[0] - a[0] || a[1] - b[1]; })
+      if (list.dataset.rounding === 'asso') assoCents = left;     // l'asso prend les centimes : personne ne paie plus que sa part
+      else raw.map(function (v, i) { return [v - base[i], i]; }).sort(function (a, b) { return b[0] - a[0] || a[1] - b[1]; })
          .slice(0, left).forEach(function (x) { base[x[1]] += 1; });
       free.forEach(function (r, i) { r.querySelector('.who-amount').value = input(base[i]); });
     } else {
@@ -316,7 +319,8 @@ document.getElementById('add-payer').addEventListener('click', function () {
     status.className = 'split-status';
     if (!act.length) { status.textContent = ''; return true; }
     if (!fx.length) {
-      status.textContent = t ? totalTxt(t) + ' réparti' + (act.length > 1 ? ' entre ' + act.length + ' personnes' : ' sur 1 personne') + '.' : '';
+      status.textContent = t ? totalTxt(t) + ' réparti' + (act.length > 1 ? ' entre ' + act.length + ' personnes' : ' sur 1 personne') + '.'
+        + (assoCents ? ' ' + fmt(assoCents) + ' d’arrondi pris en charge par ' + list.dataset.caisse + '.' : '') : '';
       return true;
     }
     if (!t) { status.className += ' warn'; status.textContent = 'Indique d’abord le montant de la dépense.'; return false; }
@@ -324,7 +328,8 @@ document.getElementById('add-payer').addEventListener('click', function () {
     if (!free.length && rest > 0) { status.className += ' warn'; status.textContent = 'Il reste ' + fmt(rest) + ' : tous les montants sont fixés. Libère au moins une personne (🔒×) ou corrige les montants.'; return false; }
     status.className += ' ok';
     status.textContent = '🔒 ' + fx.length + ' montant' + (fx.length > 1 ? 's fixés' : ' fixé') + ' (' + fmt(fixedSum) + ')'
-      + (free.length ? ' · le reste, ' + fmt(rest) + ', est réparti entre ' + (free.length > 1 ? 'les ' + free.length + ' autres.' : 'l’autre personne.') : ' · le compte est bon.');
+      + (free.length ? ' · le reste, ' + fmt(rest) + ', est réparti entre ' + (free.length > 1 ? 'les ' + free.length + ' autres.' : 'l’autre personne.') : ' · le compte est bon.')
+      + (assoCents ? ' ' + fmt(assoCents) + ' d’arrondi pris en charge par ' + list.dataset.caisse + '.' : '');
     return true;
   }
   list.addEventListener('input', function (ev) {
