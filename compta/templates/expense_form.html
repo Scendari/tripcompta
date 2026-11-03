@@ -291,11 +291,17 @@ document.getElementById('add-payer').addEventListener('click', function () {
   function total() { return gross() - refunded(); }
   function totalTxt(t) { var r = refunded(); return r ? fmt(t) + ' (' + fmt(gross()) + ' − ' + fmt(r) + ' remboursés)' : fmt(t); }
   function rows() { return Array.prototype.slice.call(list.querySelectorAll('.who')); }
+  function gapTxt(g) {
+    if (!g) return '';
+    return ' Chaque part est arrondie au centime : l’écart de ' + fmt(Math.abs(g)) + ' se règle sur le total de chacun ('
+      + (list.dataset.rounding === 'asso' ? 'pris en charge par ' + list.dataset.caisse : 'payé par les participants') + ').';
+  }
   function on(r) { return r.querySelector('input[data-who]').checked; }
   function isFixed(r) { return r.querySelector('[data-fixed]').value === '1'; }
   function setFixed(r, v) { r.querySelector('[data-fixed]').value = v ? '1' : ''; r.classList.toggle('is-fixed', v); }
   function weight(r) { return parseFloat(r.querySelector('[data-weight]').value.replace(',', '.')) || 1; }
-  // recalcule les montants des personnes non fixées (plus forts restes : la somme tombe juste)
+  // recalcule les montants des personnes non fixées, comme le calcul : chaque part au centime le plus proche ;
+  // l'écart éventuel (quelques centimes) se règle sur le total de chacun, selon le réglage du voyage
   function refresh() {
     var t = total(), act = rows().filter(on), fx = act.filter(isFixed), free = act.filter(function (r) { return !isFixed(r); });
     rows().forEach(function (r) {
@@ -304,13 +310,11 @@ document.getElementById('add-payer').addEventListener('click', function () {
     });
     var fixedSum = fx.reduce(function (s, r) { return s + euros(r.querySelector('.who-amount').value); }, 0);
     var rest = t - fixedSum, tw = free.reduce(function (s, r) { return s + weight(r); }, 0);
-    var assoCents = 0;
+    var gap = 0;
     if (t && free.length && rest >= 0) {
-      var raw = free.map(function (r) { return rest * weight(r) / tw; }), base = raw.map(Math.floor);
-      var left = rest - base.reduce(function (a, b) { return a + b; }, 0);
-      if (list.dataset.rounding === 'asso') assoCents = left;     // l'asso prend les centimes : personne ne paie plus que sa part
-      else raw.map(function (v, i) { return [v - base[i], i]; }).sort(function (a, b) { return b[0] - a[0] || a[1] - b[1]; })
-         .slice(0, left).forEach(function (x) { base[x[1]] += 1; });
+      var raw = free.map(function (r) { return rest * weight(r) / tw; });
+      var base = raw.map(function (v) { return Math.floor(v + 0.5 + 1e-9); });
+      gap = rest - base.reduce(function (a, b) { return a + b; }, 0);
       free.forEach(function (r, i) { r.querySelector('.who-amount').value = input(base[i]); });
     } else {
       free.forEach(function (r) { r.querySelector('.who-amount').value = ''; });
@@ -319,8 +323,7 @@ document.getElementById('add-payer').addEventListener('click', function () {
     status.className = 'split-status';
     if (!act.length) { status.textContent = ''; return true; }
     if (!fx.length) {
-      status.textContent = t ? totalTxt(t) + ' réparti' + (act.length > 1 ? ' entre ' + act.length + ' personnes' : ' sur 1 personne') + '.'
-        + (assoCents ? ' ' + fmt(assoCents) + ' d’arrondi pris en charge par ' + list.dataset.caisse + '.' : '') : '';
+      status.textContent = t ? totalTxt(t) + ' réparti' + (act.length > 1 ? ' entre ' + act.length + ' personnes' : ' sur 1 personne') + '.' + gapTxt(gap) : '';
       return true;
     }
     if (!t) { status.className += ' warn'; status.textContent = 'Indique d’abord le montant de la dépense.'; return false; }
@@ -329,7 +332,7 @@ document.getElementById('add-payer').addEventListener('click', function () {
     status.className += ' ok';
     status.textContent = '🔒 ' + fx.length + ' montant' + (fx.length > 1 ? 's fixés' : ' fixé') + ' (' + fmt(fixedSum) + ')'
       + (free.length ? ' · le reste, ' + fmt(rest) + ', est réparti entre ' + (free.length > 1 ? 'les ' + free.length + ' autres.' : 'l’autre personne.') : ' · le compte est bon.')
-      + (assoCents ? ' ' + fmt(assoCents) + ' d’arrondi pris en charge par ' + list.dataset.caisse + '.' : '');
+      + gapTxt(gap);
     return true;
   }
   list.addEventListener('input', function (ev) {

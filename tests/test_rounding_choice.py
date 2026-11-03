@@ -149,7 +149,10 @@ def test_form_shows_choice_and_preview_follows_it(trip):
                 return vals, norm(pg.inner_text("#split-status")), norm(pg.inner_text(".rounding-note"))
 
             vals, status, note = preview()
-            assert sorted(vals) == ["3,33", "3,33", "3,34"] and status == "10,00 € réparti entre 3 personnes."
+            # comme le calcul (bulle, Qui paie quoi) : 3,33 chacun ; l'écart se règle sur le total de chacun
+            assert vals == ["3,33", "3,33", "3,33"]
+            assert status == ("10,00 € réparti entre 3 personnes. Chaque part est arrondie au centime : l’écart de "
+                              "0,01 € se règle sur le total de chacun (payé par les participants).")
             assert note.startswith("Centimes d'arrondi : payés par les participants — changer")
             # le lien ouvre le réglage sur la page de l'asso
             pg.click(".rounding-note a")
@@ -158,9 +161,44 @@ def test_form_shows_choice_and_preview_follows_it(trip):
             pg.locator("#arrondi").get_by_role("button", name="Enregistrer").click()
             vals, status, note = preview()
             assert vals == ["3,33", "3,33", "3,33"]                       # personne ne paie plus que sa part
-            assert status.startswith("10,00 € réparti entre 3 personnes. 0,01 € d’arrondi pris en charge par")
+            assert "l’écart de 0,01 € se règle sur le total de chacun (pris en charge par" in status
             assert note.startswith("Centimes d'arrondi : pris en charge par")
             assert errors == []
+            b.close()
+    finally:
+        srv.should_exit = True
+        th.join(5)
+
+
+def test_form_preview_matches_tooltip(trip):
+    """189,22 € pour 11 : le formulaire et la bulle « Pour qui » montrent les mêmes 17,20 €."""
+    import threading
+    import time
+
+    import uvicorn
+    from playwright.sync_api import sync_playwright
+    from tests.conftest import _free_port
+    app, c, tid, ops = trip
+    ops.add_participants(tid, [f"P{i}" for i in range(4, 12)])
+    ops.import_trip({"voyage_id": tid, "depenses": [{"libelle": "Essence", "reel": "189,22", "pour": "tous"}]},
+                    voyage=tid, verifier_id=tid)
+    eid = next(d["id"] for d in ops.trip(tid)["depenses"] if d["libelle"] == "Essence")
+    tip = norm(c.get(f"/v/{tid}/depenses").text)
+    assert tip.count(": 17,20 €</span>") == 11 and ": 17,21 €" not in tip
+    port = _free_port()
+    srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
+    th = threading.Thread(target=srv.run, daemon=True)
+    th.start()
+    while not srv.started:
+        time.sleep(0.05)
+    try:
+        with sync_playwright() as p:
+            b = p.chromium.launch()
+            pg = b.new_page()
+            pg.goto(f"http://127.0.0.1:{port}/v/{tid}/depenses/{eid}/modifier")
+            vals = pg.eval_on_selector_all(".who-amount", "els => els.map(e => e.value).filter(v => v)")
+            assert vals == ["17,20"] * 11
+            assert "l’écart de 0,02 € se règle sur le total de chacun" in norm(pg.inner_text("#split-status"))
             b.close()
     finally:
         srv.should_exit = True
