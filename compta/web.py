@@ -836,7 +836,11 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
     def settings_page(request: Request):
         """Réglages : où sont les voyages, mot de passe, version et mises à jour — l'état de chacun d'un coup d'œil."""
         checked = upd.checked_at()
+        with db.Session() as s_:
+            demo = s_.query(M.Trip).filter(M.Trip.is_demo.is_(True)).first()
+            demo_trip = {"id": demo.id, "name": demo.name} if demo else None
         return render(request, "settings.html", data_dir=db.home, source=data_source, shared=sync is not None,
+                      demo_trip=demo_trip,
                       protected=sync is not None and sync.protected,
                       remembered=bool(sync is not None and sync.vault is not None and K.recall(sync.vault.id)),
                       info=upd, available=upd.available(), latest=upd.latest(),
@@ -1526,7 +1530,8 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
     # ------------------------------------------------------------------ voyages
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request, s: Session = Depends(get_s)):
-        trips = s.query(M.Trip).order_by(M.Trip.created.desc(), M.Trip.id.desc()).all()   # le plus récent d'abord
+        trips = s.query(M.Trip).order_by(M.Trip.is_demo, M.Trip.created.desc(), M.Trip.id.desc()).all()   # récents
+        # d'abord ; le voyage d'exemple en dernier
         cards = []
         for t in trips:
             r = S.compute_trip(t, mode_of(request))
@@ -1578,6 +1583,43 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             except OSError:
                 pass
         return back("/", f"Voyage « {t.name} » supprimé (tu peux encore annuler)")
+
+    # ------------------------------------------------------------------ voyage d'exemple (Hendaye 2026 – démo)
+    @app.post("/exemple/ouvrir")
+    def example_open(s: Session = Depends(get_s)):
+        from . import transfer as TR
+        t = s.query(M.Trip).filter(M.Trip.is_demo.is_(True)).first()
+        if t is not None:
+            return back(f"/v/{t.id}", "Le voyage d'exemple est déjà là")
+        db.snapshot("ouverture du voyage d'exemple")
+        t = TR.import_example(s, db.receipts_dir)
+        s.commit()
+        return back(f"/v/{t.id}", "Voici un voyage d'exemple, entièrement fictif : explore-le et modifie-le librement.")
+
+    def _demo_or_404(s, tid):
+        t = trip_or_404(s, tid)
+        if not t.is_demo:
+            raise HTTPException(404, "Ce n'est pas le voyage d'exemple")
+        return t
+
+    @app.post("/v/{tid}/exemple/retirer")
+    def example_remove(tid: int, s: Session = Depends(get_s)):
+        t = _demo_or_404(s, tid)
+        db.snapshot("retrait du voyage d'exemple")
+        _delete_trip(s, t)
+        s.commit()
+        return back("/", "Voyage d'exemple retiré. Tu pourras le rouvrir depuis ⚙️ Réglages.")
+
+    @app.post("/v/{tid}/exemple/recommencer")
+    def example_reset(tid: int, s: Session = Depends(get_s)):
+        from . import transfer as TR
+        t = _demo_or_404(s, tid)
+        db.snapshot("voyage d'exemple remis à neuf")
+        _delete_trip(s, t)
+        s.flush()
+        t = TR.import_example(s, db.receipts_dir)
+        s.commit()
+        return back(f"/v/{t.id}", "Voyage d'exemple remis à neuf.")
 
     def _delete_trip(s, t):
         for e in t.expenses:

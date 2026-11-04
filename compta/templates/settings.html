@@ -32,6 +32,24 @@
     <span class="setting-go">{{ 'Gérer' if protected else 'Protéger' }} ›</span>
   </a>
 
+  {% if demo_trip %}
+  <a class="card setting" href="/v/{{ demo_trip.id }}">
+    <span class="setting-ico" aria-hidden="true">🧭</span>
+    <span class="setting-body"><b>Voyage d'exemple</b>
+      <span class="setting-state">Ouvert : « {{ demo_trip.name }} »</span>
+      <span class="setting-hint">Un voyage fictif pour voir comment tout fonctionne. Il se retire depuis le voyage lui-même.</span></span>
+    <span class="setting-go">Voir ›</span>
+  </a>
+  {% else %}
+  <form class="card setting" method="post" action="/exemple/ouvrir" style="margin:0">
+    <span class="setting-ico" aria-hidden="true">🧭</span>
+    <span class="setting-body"><b>Voyage d'exemple</b>
+      <span class="setting-state">Hendaye 2026, entièrement fictif</span>
+      <span class="setting-hint">Pour voir comment tout fonctionne sur un voyage complet (participants, dépenses, justificatifs).</span></span>
+    <button class="setting-go linkish">Ouvrir ›</button>
+  </form>
+  {% endif %}
+
   <a class="card setting" href="/reglages/a-propos">
     <span class="setting-ico" aria-hidden="true">🔄</span>
     <span class="setting-body">

@@ -89,6 +89,11 @@
       {% if undo_token %}<form method="post" action="/annuler" class="inline"><input type="hidden" name="d" value="{{ undo_token }}"><button class="btn small ghost" title="Défaire : {{ undo_label }}">↶ Défaire</button></form>{% endif %}
       {% if redo_token %}<form method="post" action="/retablir" class="inline"><input type="hidden" name="r" value="{{ redo_token }}"><button class="btn small ghost">↷ Rétablir</button></form>{% endif %}
     </div>{% endif %}
+    {% if trip.is_demo %}<div class="demo-banner" role="note"><span>🧭 <b>Voyage d'exemple</b>, entièrement fictif : essaie librement, rien ne compte pour de vrai.</span>
+      <span class="row" style="gap:.4rem">
+        <form method="post" action="/v/{{ trip.id }}/exemple/recommencer" class="inline" data-confirm="Remettre l'exemple à neuf ? Tes essais dans ce voyage seront effacés."><button class="btn small ghost">↺ Recommencer l'exemple</button></form>
+        <form method="post" action="/v/{{ trip.id }}/exemple/retirer" class="inline" data-confirm="Retirer le voyage d'exemple ? Tu pourras le rouvrir depuis Réglages."><button class="btn small ghost">Retirer l'exemple</button></form>
+      </span></div>{% endif %}
     {% block content %}{% endblock %}
   </main>
 </div>
