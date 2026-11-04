@@ -7,6 +7,7 @@ import io
 import os
 import mimetypes
 import re
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -812,6 +813,9 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
     @app.post("/reglages/parcourir")
     def data_dir_browse():
         """Fenêtre « choisir un dossier » du système ; renvoie le chemin choisi (ou rien si annulé)."""
+        f = getattr(app.state, "fenetres", None)
+        if f is not None and sys.platform == "win32":    # dans la fenêtre : le choix de dossier moderne, devant elle
+            return {"path": f.pick_folder()}
         return {"path": C.pick_folder()}
 
     def _restart_page(request, message):

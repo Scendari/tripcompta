@@ -101,6 +101,16 @@ class Fenetres:
         cur = w.get_current_url() if w else None
         webbrowser.open(cur if cur and self.is_ours(cur) else self.base)
 
+    def pick_folder(self):
+        """Choix d'un dossier devant la fenêtre (Windows : le sélecteur moderne de l'Explorateur). None si annulé."""
+        import webview
+        from pathlib import Path
+        w = self.current()
+        if w is None:
+            return None
+        r = w.create_file_dialog(webview.FileDialog.FOLDER, directory=str(Path.home()))
+        return str(r[0]).rstrip("/\\") if r else None
+
     def find(self):
         w = self.current()
         if w:
