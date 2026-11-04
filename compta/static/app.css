@@ -1161,3 +1161,36 @@ body.sea-page .home-page { padding-bottom: 1.5rem; }
 body.sea-page > .page-scroll { -webkit-mask-image: linear-gradient(#000 calc(100% - 28px), transparent); mask-image: linear-gradient(#000 calc(100% - 28px), transparent); }
 button.card.setting { font: inherit; text-align: left; width: 100%; cursor: pointer; }
 .card.setting[hidden] { display: none; }
+
+/* ---------- surprises de la mer, 3e série (méduse, averse et arc-en-ciel, fou de Bassan, kayak, voilier, pieuvre, canard, étoile filante, aileron) ---------- */
+:root { --jelly: rgba(200,110,185,.7); --jelly-2: rgba(200,110,185,.5);
+  --rain: rgba(70,110,140,.65); --gannet: #fff; --gannet-tip: #2f3d47; --gannet-head: #f3d98a; --kayak: #f2b630; --kayak-2: #d99c1f;
+  --paddler: #1f5f99; --skin: #f0c9a0; --far-sail: rgba(60,90,110,.35); --octo: #c9675e; --octo-2: #a8504a; --duck: #ffd23f; --duck-beak: #f08a24;
+  --star: #e3a52a; --fin: #5d7d90; }
+:root[data-theme="dark"] { --jelly: rgba(214,140,200,.45); --jelly-2: rgba(214,140,200,.25);
+  --rain: rgba(170,210,232,.5); --gannet: #dfe8ee; --gannet-tip: #e8f1f8; --gannet-head: #c9b26f; --kayak: #d9a83a; --kayak-2: #a8781a;
+  --paddler: #2f6ea8; --skin: #c9a585; --far-sail: rgba(150,200,225,.22); --octo: #a85650; --octo-2: #87423d; --duck: #e0b830; --duck-beak: #c9741e;
+  --star: #fff6c8; --fin: #3d5868; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --jelly: rgba(214,140,200,.45); --jelly-2: rgba(214,140,200,.25);
+  --rain: rgba(170,210,232,.5); --gannet: #dfe8ee; --gannet-tip: #e8f1f8; --gannet-head: #c9b26f; --kayak: #d9a83a; --kayak-2: #a8781a;
+  --paddler: #2f6ea8; --skin: #c9a585; --far-sail: rgba(150,200,225,.22); --octo: #a85650; --octo-2: #87423d; --duck: #e0b830; --duck-beak: #c9741e;
+  --star: #fff6c8; --fin: #3d5868; }
+}
+.jelly { position: absolute; width: 34px; bottom: 8px; z-index: 1; opacity: .9; }
+.rainbow { position: absolute; width: 300px; bottom: 34px; opacity: 0; z-index: 0; filter: blur(.6px);
+  -webkit-mask: linear-gradient(to top, transparent 0, #000 40%); mask: linear-gradient(to top, transparent 0, #000 40%); }
+.rain { position: absolute; left: 0; right: 0; bottom: 30px; height: 100px; opacity: 0; z-index: 0; overflow: hidden; }
+.rain i { position: absolute; top: -16px; width: 2px; height: 13px; border-radius: 2px; background: var(--rain); transform: rotate(12deg); }
+.ripple { position: absolute; width: 20px; height: 6px; border: 1.6px solid var(--rain); border-radius: 50%; opacity: 0; }
+.gannet { width: 40px; bottom: 98px; }
+.kayak { width: 64px; bottom: 16px; }
+.kayak .paddle { transform-box: view-box; transform-origin: 32px 12px; animation: paddle 1.1s ease-in-out infinite alternate; }
+@keyframes paddle { from { transform: rotate(-28deg); } to { transform: rotate(28deg); } }
+.sailboat { width: 46px; bottom: 82px; }
+.octopus { width: 76px; bottom: -48px; }
+.octopus .arm { transform-box: fill-box; transform-origin: 50% 100%; }
+.duck { width: 30px; bottom: 26px; }
+.duck .bobd { transform-box: fill-box; transform-origin: 50% 80%; animation: bob 2s ease-in-out infinite alternate; }
+.star { width: 120px; bottom: 140px; }
+.fin { width: 26px; bottom: 30px; }

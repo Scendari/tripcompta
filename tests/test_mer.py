@@ -14,9 +14,12 @@ from compta.web import create_app
 pw = pytest.importorskip("playwright.sync_api")
 
 EGGS = ["whale", "dolphins", "gull", "bottle", "lighthouse", "flyingfish", "turtle", "school", "regatta", "coin",
-        "diver", "sunset", "perch", "party"]
-CLEAR = ("document.querySelectorAll('#sea-life > *, #sea-under > *, .harbour > .sea-mirror, .harbour > .school, "
-         ".harbour > .sunset').forEach(function (n) { n.remove(); })")
+        "diver", "sunset", "perch", "party", "jellyfish", "rainbow", "gannet", "kayak", "sailboat", "octopus", "duck",
+        "star", "shark"]
+HARBOUR_EGGS = ".harbour > .sea-mirror, .harbour > .school, .harbour > .sunset, .harbour > .jelly, .harbour > .rain, " \
+               ".harbour > .ripple, .harbour > .rainbow"
+CLEAR = ("document.querySelectorAll('#sea-life > *, #sea-under > *, " + HARBOUR_EGGS + "')"
+         ".forEach(function (n) { n.remove(); })")
 
 
 def serve(app):
@@ -82,8 +85,8 @@ def test_every_surprise_plays_both_ways(tmp_path, browser):
                 pg.evaluate(CLEAR)
                 assert pg.evaluate(f"window.tcMer.play('{egg}', {str(mirror).lower()})") is True, egg
                 pg.wait_for_timeout(120)
-                drawn = pg.evaluate("document.querySelectorAll('#sea-life *, #sea-under *, .harbour > .school, "
-                                    ".harbour > .sunset, .harbour > .sea-mirror *').length")
+                drawn = pg.evaluate("document.querySelectorAll('#sea-life *, #sea-under *, " + HARBOUR_EGGS +
+                                    ", .harbour > .sea-mirror *').length")
                 assert drawn > 0 or egg == "party", egg                  # les confettis arrivent après 2,6 s
         assert errors == []
     finally:

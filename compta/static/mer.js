@@ -128,6 +128,84 @@
       setTimeout(() => g.classList.remove("perch"), 7200);
       done([g], 11200);
     },
+    // méduse : ondule sous la surface en montant doucement
+    jellyfish() {
+      const j = document.getElementById("t-jelly").content.firstElementChild.cloneNode(true);
+      j.style.left = (Math.random() < .5 ? rnd(22, 34) : rnd(58, 70)) + "vw"; harbour.appendChild(j);
+      j.animate([{ transform: "translateY(10px) scaleY(1)", opacity: 0 }, { opacity: .9, offset: .1 }, { transform: "translateY(-4px) scaleY(.82)", offset: .25 },
+        { transform: "translateY(-14px) scaleY(1)", offset: .45 }, { transform: "translateY(-22px) scaleY(.82)", offset: .65 },
+        { transform: "translateY(-30px) scaleY(1)", opacity: .9, offset: .88 }, { transform: "translateY(-34px)", opacity: 0 }], { duration: 9000, easing: "ease-in-out", fill: "forwards" });
+      done([j], 9200);
+    },
+    // petite averse (gouttes qui tombent, ronds sur l'eau), puis un arc-en-ciel pâle au loin
+    rainbow() {
+      const rain = Object.assign(document.createElement("div"), { className: "rain" }), nodes = [rain];
+      harbour.appendChild(rain);
+      for (let i = 0; i < 70; i++) {
+        const d = document.createElement("i"); d.style.left = rnd(0, 100) + "%"; rain.appendChild(d);
+        d.animate([{ transform: "translate(0, 0) rotate(12deg)" }, { transform: "translate(-22px, 116px) rotate(12deg)" }],
+          { duration: rnd(550, 800), delay: rnd(0, 900), iterations: 6, easing: "linear" });
+      }
+      for (let i = 0; i < 18; i++) {
+        const r = Object.assign(document.createElement("div"), { className: "ripple" });
+        r.style.left = rnd(4, 96) + "%"; r.style.bottom = rnd(6, 60) + "px"; harbour.appendChild(r); nodes.push(r);
+        r.animate([{ transform: "scale(.3)", opacity: 0 }, { opacity: .8, offset: .2 }, { transform: "scale(1.6)", opacity: 0 }],
+          { duration: 900, delay: rnd(300, 4200), iterations: 2, fill: "both" });
+      }
+      rain.animate([{ opacity: 0 }, { opacity: 1, offset: .12 }, { opacity: 1, offset: .75 }, { opacity: 0 }], { duration: 5200, fill: "forwards" });
+      const bow = document.getElementById("t-rainbow").content.firstElementChild.cloneNode(true);
+      bow.style.left = (Math.random() < .5 ? rnd(14, 24) : rnd(48, 58)) + "vw"; harbour.appendChild(bow); nodes.push(bow);
+      bow.animate([{ opacity: 0 }, { opacity: 0, offset: .3 }, { opacity: 1, offset: .5 }, { opacity: 1, offset: .82 }, { opacity: 0 }],
+        { duration: 15000, fill: "forwards" });
+      done(nodes, 15200);
+    },
+    // fou de Bassan : passe, replie ses ailes et plonge en piqué
+    gannet() {
+      const x = rnd(20, 60), g = spawn("t-gannet", { left: x + "vw" }), sp = spawn("t-splash", { left: `calc(${x}vw + 150px)`, "--dl": "3.1s" });
+      g.animate([{ transform: "translate(-160px, 0) rotate(0)" }, { transform: "translate(80px, -6px) rotate(0)", offset: .5 },
+        { transform: "translate(120px, 0) rotate(60deg)", offset: .62 }, { transform: "translate(150px, 70px) rotate(80deg) scaleX(.6)", opacity: 1, offset: .9 },
+        { transform: "translate(152px, 78px) rotate(80deg) scaleX(.6)", opacity: 0 }], { duration: 3500, easing: "ease-in", fill: "forwards" });
+      done([g, sp], 4400);
+    },
+    // kayakiste : traverse en pagayant
+    kayak() { const k = spawn("t-kayak");
+      k.animate([{ transform: "translateX(-80px)" }, { transform: "translateX(calc(100vw + 80px))" }], { duration: 24000, easing: "linear", fill: "forwards" });
+      done([k], 24200); },
+    // voilier au loin, sur l'horizon
+    sailboat() { const v = spawn("t-sailboat");
+      v.animate([{ transform: "translateX(-60px)", opacity: 0 }, { opacity: 1, offset: .08 }, { opacity: 1, offset: .92 },
+        { transform: "translateX(calc(100vw + 60px))", opacity: 0 }], { duration: 30000, easing: "linear", fill: "forwards" });
+      done([v], 30200); },
+    // pieuvre : sort la tête, ses bras sortent de l'eau autour d'elle et ondulent (un fait coucou), replonge
+    octopus() {
+      const o = spawn("t-octopus", { left: (Math.random() < .5 ? rnd(20, 30) : rnd(56, 66)) + "vw" }, under);
+      o.animate([{ transform: "translateY(0)" }, { transform: "translateY(-38px)", offset: .2 }, { transform: "translateY(-38px)", offset: .8 },
+        { transform: "translateY(4px)" }], { duration: 7000, easing: "ease-in-out", fill: "forwards" });
+      o.querySelectorAll(".arm").forEach((a, i) => {
+        const wave = i === 1 ? [0, -34, 18, -34, 18, 0] : [0, 10, -8, 10, -8, 0];
+        a.animate(wave.map((d, k) => ({ transform: `rotate(${d}deg)`, offset: k ? .25 + k * .1 : 0 })).concat([{ transform: "rotate(0)", offset: 1 }]),
+          { duration: 7000, delay: i * 120, fill: "both" });
+      });
+      done([o], 7200);
+    },
+    // canard en plastique : dérive tranquillement
+    duck() { const d = spawn("t-duck");
+      d.animate([{ transform: "translateX(-40px)" }, { transform: "translateX(calc(100vw + 40px))" }], { duration: 26000, easing: "linear", fill: "forwards" });
+      done([d], 26200); },
+    // étoile filante (la nuit)
+    star() { const s = spawn("t-star", { left: rnd(10, 50) + "vw" });
+      s.animate([{ transform: "translate(0, 0)", opacity: 0 }, { opacity: 1, offset: .12 }, { opacity: 1, offset: .7 },
+        { transform: "translate(320px, 60px)", opacity: 0 }], { duration: 2400, easing: "ease-out", fill: "forwards" });
+      done([s], 2600); },
+    // aileron de requin : tourne en rond… puis s'en va
+    shark() { const x = rnd(25, 60), f = spawn("t-fin", { left: x + "vw" }), k = [];
+      for (let i = 0; i <= 24; i++) { const a = i / 24 * Math.PI * 3;
+        k.push({ transform: `translate(${Math.sin(a) * 70}px, ${-Math.cos(a) * 10}px) scaleX(${Math.cos(a) >= 0 ? 1 : -1})`, offset: i / 24 * .8 }); }
+      k.push({ transform: "translate(calc(100vw), 0)", offset: 1 });
+      k[0].opacity = 0; k[1].opacity = 1;
+      f.animate(k, { duration: 14000, easing: "linear", fill: "forwards" });
+      done([f], 14200); },
+
     // 10. tout est réglé : un cachalot souffle des confettis (très rare dans l'app)
     party() {
       const x = Math.random() < .5 ? rnd(20, 30) : rnd(57, 66), w = spawn("t-whale", { left: x + "vw" }, under), nodes = [w];
@@ -162,8 +240,9 @@
       Array.from(document.querySelectorAll(".home-panel")).some((p) => !p.hidden);
   }
   // surprises qui traversent : tantôt de gauche à droite, tantôt de droite à gauche (calque retourné en miroir)
-  const CROSSING = ["gull", "bottle", "school", "regatta", "flyingfish", "dolphins", "coin"];
-  const FACING = ["whale", "turtle"];             // sur place : regardent d'un côté ou de l'autre
+  const CROSSING = ["gull", "bottle", "school", "regatta", "flyingfish", "dolphins", "coin",
+    "kayak", "sailboat", "duck", "shark", "gannet", "star"];
+  const FACING = ["whale", "turtle", "octopus"];             // sur place : regardent d'un côté ou de l'autre
   function play(name, mirror) {
     if (busy || !EGGS[name]) return false;
     busy = true;
@@ -186,8 +265,11 @@
     const h = new Date().getHours(), recent = store.get("tc-mer-vues", []);
     const pool = [];
     const add = (n, w) => { if (recent[0] !== n) for (let i = 0; i < w; i++) pool.push(n); };
-    ["whale", "dolphins", "gull", "bottle", "flyingfish", "turtle", "school", "regatta", "coin", "diver"]
+    ["whale", "dolphins", "gull", "bottle", "flyingfish", "turtle", "school", "regatta", "coin", "diver",
+     "jellyfish", "gannet", "kayak", "sailboat", "octopus", "duck", "shark"]
       .forEach((n) => add(n, recent.slice(0, 3).includes(n) ? 1 : 3));
+    if (!dark()) add("rainbow", 2);                    // de jour
+    if (dark()) add("star", 3);                        // la nuit
     add("perch", 1);                                   // plus rare
     if (h >= 18 && h < 23) add("sunset", 3);           // le soir
     if (dark()) add("lighthouse", 3);                  // la nuit (thème sombre)
