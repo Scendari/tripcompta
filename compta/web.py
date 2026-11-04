@@ -316,7 +316,8 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
 
     @app.middleware("http")
     async def remember_snapshot(request, call_next):
-        token = snap_before.set(db.undo_token())
+        # (dernière action défaisable avant la requête, heure de début au format des sauvegardes d'annulation)
+        token = snap_before.set((db.undo_token(), dt.datetime.now().strftime("%Y%m%d-%H%M%S-%f")))
         try:
             return await call_next(request)
         finally:
@@ -511,7 +512,11 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             url, _, frag = url.partition("#")
             url += ("&" if "?" in url else "?") + "msg=" + quote(msg)
             now = db.undo_token()
-            if now and now != snap_before.get():          # cette requête a fait une action : on propose de la défaire
+            before, started = snap_before.get() or (None, "")
+            # « Défaire » seulement si CETTE requête a modifié les données (sauvegarde d'annulation créée pendant
+            # elle). Déverrouiller, verrouiller, mot de passe, « Prendre la main », changer de dossier… ne font
+            # qu'ouvrir d'autres données : la dernière action change, mais il n'y a rien à défaire.
+            if now and now != before and now >= started:
                 url += "&d=" + quote(now)
             if redo:
                 url += "&r=" + quote(redo)

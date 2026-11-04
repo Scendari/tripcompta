@@ -560,3 +560,23 @@ def test_ai_drafts_follow_the_unlocked_folder(env):
     local = app.state.sync.local
     assert list((local / "brouillons_ia").glob(f"voyage-{tid}-*")) and not (local / ".verrouille" / "brouillons_ia").exists()
     stop(app)
+
+
+def test_no_undo_button_after_unlocking(env):
+    """Déverrouiller (mot de passe ou clé de secours) ne modifie aucune donnée : pas de bouton « Défaire » (il aurait
+    défait la dernière vraie modification, faite avant le verrouillage). Une vraie modification le propose toujours."""
+    tmp, folder = env
+    tid, files, key = protect(env)
+    app = create_app()
+    cl = TestClient(app)
+    r = cl.post("/deverrouiller", data={"mot_de_passe": PASSWORD}, follow_redirects=False)
+    assert r.status_code == 303 and "msg=" in r.headers["location"] and "&d=" not in r.headers["location"]
+    page = cl.get(r.headers["location"]).text
+    assert "Voyages déverrouillés" in page and "/annuler" not in page
+    r = cl.post("/voyages", data={"name": "Vraie modification"}, follow_redirects=False)
+    assert "&d=" in r.headers["location"]                       # une vraie action : « Défaire » proposé
+    cl.post("/verrouiller")
+    r = cl.post("/deverrouiller/secours", data={"secours": key, "nouveau": "un autre mot de passe",
+                                                 "confirmation": "un autre mot de passe"}, follow_redirects=False)
+    assert "msg=" in r.headers["location"] and "&d=" not in r.headers["location"]
+    stop(app)
