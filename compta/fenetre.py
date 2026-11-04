@@ -215,6 +215,44 @@ def _mac_hooks(f: Fenetres, arreter):
                       signature=b"v@:@@@")])
 
 
+def _win_hooks(f: Fenetres):
+    """Windows (Edge WebView2) : un fichier de l'application (PDF, ZIP) va directement dans Téléchargements, comme
+    dans Edge (pywebview demanderait « Enregistrer sous… » à chaque fois) ; la bulle « Téléchargements » de WebView2
+    confirme et permet de l'ouvrir. Les liens target=_blank de l'application s'ouvrent dans une nouvelle fenêtre (les
+    autres dans le navigateur)."""
+    from webview.platforms import edgechromium as ec
+    orig_new = ec.EdgeChrome.on_new_window_request
+
+    def on_download_starting(self, sender, args):
+        from pathlib import Path
+        from webview import settings
+        if not settings["ALLOW_DOWNLOADS"]:
+            args.Cancel = True
+            return
+        # WebView2 a déjà choisi Téléchargements\<nom donné par le serveur>, sans écraser (« nom (1).pdf »)
+        d = os.environ.get("TRIPCOMPTA_TELECHARGEMENTS")         # essais : un dossier à part
+        if d:
+            import re
+            folder = Path(d)
+            folder.mkdir(parents=True, exist_ok=True)
+            name = re.sub(r" \(\d+\)(?=\.[^.]*$|$)", "", Path(str(args.ResultFilePath)).name) or "fichier"
+            target, stem, ext, i = folder / name, Path(name).stem, Path(name).suffix, 2
+            while target.exists():
+                target, i = folder / f"{stem} ({i}){ext}", i + 1
+            args.ResultFilePath = str(target)
+
+    def on_new_window_request(self, sender, args):
+        url = str(args.get_Uri())
+        if f.is_ours(url):
+            args.set_Handled(True)
+            f.new_later(url)
+            return
+        return orig_new(self, sender, args)
+
+    ec.EdgeChrome.on_download_starting = on_download_starting
+    ec.EdgeChrome.on_new_window_request = on_new_window_request
+
+
 def _mac_shortcuts():
     """Raccourcis du menu Fichier (pywebview n'en pose pas) : Cmd+N, Cmd+F."""
     import AppKit
@@ -257,6 +295,8 @@ def run(app, host: str, port: int, log_level: str = "warning", on_start=None) ->
         if DISCRETE:
             from webview.platforms import cocoa
             cocoa.BrowserView.app.setActivationPolicy_(2)     # « prohibited » : jamais au premier plan
+    elif sys.platform == "win32":
+        _win_hooks(f)
     f.new()
 
     def after_start():
@@ -268,3 +308,7 @@ def run(app, host: str, port: int, log_level: str = "warning", on_start=None) ->
     arreter()                                  # dernière fenêtre fermée : enregistre et rend la main
     server.should_exit = True
     th.join(timeout=5)
+    if sys.platform == "win32":                # tout est enregistré : ne pas attendre la fin de .NET / WebView2 (~5 s)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(0)

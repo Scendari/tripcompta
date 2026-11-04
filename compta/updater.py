@@ -182,7 +182,7 @@ class Updater:
         if loc is None:
             return False, "L'application ne tourne pas depuis une version installée."
         target, _ = loc
-        if "/AppTranslocation/" in str(target):  # Mac : app ouverte depuis Téléchargements, isolée par macOS
+        if "/AppTranslocation/" in target.as_posix():  # Mac : app ouverte depuis Téléchargements, isolée par macOS
             return False, ("Trip Compta tourne depuis le dossier où tu l'as téléchargée : macOS l'empêche de se "
                            "remplacer. Glisse-la dans le dossier Applications, puis relance-la.")
         if not os.access(target.parent, os.W_OK):
