@@ -119,7 +119,8 @@ class Database:
                      "tickets": "TEXT NOT NULL DEFAULT ''", "cents_mode": "VARCHAR(20) NOT NULL DEFAULT ''",
                      "cents_who": "TEXT NOT NULL DEFAULT ''"},
         "expense_shares": {"fixed": "INTEGER"},
-        "trips": {"note": "TEXT NOT NULL DEFAULT ''", "cashier_id": "INTEGER", "asso_name": "VARCHAR(100) NOT NULL DEFAULT ''", "groups": "TEXT NOT NULL DEFAULT ''",
+        "trips": {"note": "TEXT NOT NULL DEFAULT ''", "cashier_id": "INTEGER", "asso_name": "VARCHAR(100) NOT NULL DEFAULT ''",
+                  "is_demo": "BOOLEAN NOT NULL DEFAULT 0", "groups": "TEXT NOT NULL DEFAULT ''",
                   "roles_conf": "TEXT NOT NULL DEFAULT ''",
                   "rounding": "VARCHAR(20) NOT NULL DEFAULT 'participants'"},
     }

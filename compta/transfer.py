@@ -293,6 +293,22 @@ def merge_settings(s, reglages: dict) -> list:
     return done
 
 
+EXAMPLE_FILE = Path(__file__).resolve().parent / "exemple" / "hendaye-2026-demo.zip"
+EXAMPLE_NAME = "Hendaye 2026 – démo"
+
+
+def import_example(s, receipts_dir: Path) -> M.Trip:
+    """Le voyage d'exemple (Hendaye 2026, entièrement fictif, avec ses justificatifs), marqué « démo ». Les réglages
+    de l'utilisateur ne sont pas touchés (pas de fusion des catégories de l'exemple)."""
+    data, z = read_zip(EXAMPLE_FILE.read_bytes())
+    v = data["voyages"][0]
+    v["voyage"] = dict(v["voyage"], name=EXAMPLE_NAME)
+    t = import_trip(s, v, z, receipts_dir)
+    t.is_demo = True
+    s.flush()
+    return t
+
+
 def import_zip(s, content: bytes, receipts_dir: Path) -> tuple[list, list]:
     data, z = read_zip(content)
     old_name = str((data.get("reglages") or {}).get(S.ASSO_NAME_KEY) or "").strip()[:100]

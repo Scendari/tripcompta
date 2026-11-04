@@ -66,6 +66,7 @@ def main():
         "--add-data", f"{ROOT / 'compta' / 'templates'}{sep}compta/templates",
         "--add-data", f"{ROOT / 'compta' / 'static'}{sep}compta/static",
         "--add-data", f"{ROOT / 'compta' / 'scripts'}{sep}compta/scripts",
+        "--add-data", f"{ROOT / 'compta' / 'exemple'}{sep}compta/exemple",
         "--collect-submodules", "uvicorn",
         "--collect-submodules", "mcp.server",
         "--collect-submodules", "mcp.shared",

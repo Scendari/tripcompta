@@ -32,7 +32,8 @@
 <div class="page-head home-head">
   <div class="grow">
     <h1>Mes voyages</h1>
-    <p class="muted">{{ cards|length }} voyage{{ 's' if cards|length > 1 }}. Clique sur un voyage pour l'ouvrir.</p>
+    {% set n_real = cards|rejectattr('0.is_demo')|list|length %}
+    <p class="muted">{% if n_real %}{{ n_real }} voyage{{ 's' if n_real > 1 }}{% if n_real < cards|length %} (et le voyage d'exemple){% endif %}{% else %}Le voyage d'exemple{% endif %}. Clique sur un voyage pour l'ouvrir.</p>
   </div>
   <div class="row home-actions">
     <button type="button" class="btn" data-toggle-row="#nouveau" aria-expanded="false" aria-controls="nouveau">+ Nouveau voyage</button>
@@ -65,7 +66,7 @@ homeButtons();
 <div class="trip-grid">
   {% for t, r in cards %}
   <a class="card trip-card" href="/v/{{ t.id }}">
-    <h3>{{ t.name }}</h3>
+    <h3>{{ t.name }}{% if t.is_demo %} <span class="pill grey demo-pill">Exemple</span>{% endif %}</h3>
     <div class="muted small">
       {% if t.start %}{{ t.start|date }}{% if t.end %} → {{ t.end|date }}{% endif %} · {% endif %}{{ t.participants|length }} participant{{ 's' if t.participants|length > 1 }}{% if t.place %} · {{ t.place }}{% endif %}
     </div>
@@ -88,6 +89,12 @@ homeButtons();
     <h1>Bienvenue 👋</h1>
     <p class="muted">Pas encore de voyage. Crée le premier : tu ajouteras ensuite les participants et les dépenses.</p>
   </div></div>
+  <form class="card home-form demo-card" method="post" action="/exemple/ouvrir">
+    <h2 class="home-h">🧭 Découvrir avec un voyage d'exemple</h2>
+    <p class="small muted" style="margin-top:0">Un voyage complet et <b>entièrement fictif</b> (Hendaye, 17 participants, dépenses et
+      justificatifs) pour voir comment tout fonctionne. Tu pourras le modifier librement, puis le retirer d'un clic.</p>
+    <div class="row home-btns"><button class="btn ghost">Ouvrir l'exemple Hendaye 2026</button></div>
+  </form>
   {{ new_trip_form(true) }}
   {{ import_form(true) }}
   <div class="card home-form" id="dossier-existant">
@@ -102,8 +109,10 @@ homeButtons();
 {% endblock %}
 {% block outside %}
 {{ harbour() }}
-{% set settled = cards and cards|selectattr('0.participants')|list|length == cards|length
-   and cards|rejectattr('1.to_collect')|list|length == cards|length and cards|rejectattr('1.to_refund')|list|length == cards|length %}
+{# « tout est réglé » : seulement les vrais voyages (pas l'exemple) #}
+{% set real = cards|rejectattr('0.is_demo')|list %}
+{% set settled = real and real|selectattr('0.participants')|list|length == real|length
+   and real|rejectattr('1.to_collect')|list|length == real|length and real|rejectattr('1.to_refund')|list|length == real|length %}
 {{ sea_life(settled) }}
 {% endblock %}
 {% block scripts %}<script src="/static/mer.js?v={{ STATIC_V }}"></script>{% endblock %}

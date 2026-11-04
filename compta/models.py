@@ -27,6 +27,7 @@ class Trip(Base):
     note: Mapped[str] = mapped_column(Text, default="")      # club, lieu de départ, infos utiles…
     cashier_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)   # participant qui tient la caisse (sinon l'asso)
     asso_name: Mapped[str] = mapped_column(String(100), default="")   # nom de l'asso / de la caisse pour ce voyage
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False)     # voyage d'exemple (Hendaye 2026 – démo)
     groups: Mapped[str] = mapped_column(Text, default="")    # JSON : [{"name": "Minibus", "members": [ids]}]
     roles_conf: Mapped[str] = mapped_column(Text, default="")  # JSON : {"perso": ["Moniteur"], "masques": ["dp"]}
     rounding: Mapped[str] = mapped_column(String(20), default="participants")   # centimes d'arrondi : participants | asso
