@@ -46,7 +46,9 @@ class InstanceLock:
     def __init__(self, data_dir: Path):
         import hashlib
         from compta import paths
-        key = hashlib.sha1(str(data_dir).encode("utf-8")).hexdigest()[:12]
+        # normcase : sous Windows, D:\Voyages et d:\voyages sont le même dossier (resolve() ne rétablit la casse que
+        # pour un dossier qui existe déjà)
+        key = hashlib.sha1(os.path.normcase(str(data_dir)).encode("utf-8")).hexdigest()[:12]
         folder = paths.config_file().parent
         folder.mkdir(parents=True, exist_ok=True)
         self.path = folder / f"instance-{key}.lock"
