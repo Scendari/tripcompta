@@ -73,17 +73,6 @@ def normalize_recovery(key: str) -> str:
     return "-".join(s[i:i + 4] for i in range(0, len(s), 4))
 
 
-def password_strength(pw: str) -> tuple[int, str]:
-    """(0 à 4, mot) : indication pour l'utilisateur (pas une règle de sécurité absolue)."""
-    pw = pw or ""
-    kinds = sum(bool(any(f(c) for c in pw)) for f in (str.islower, str.isupper, str.isdigit,
-                                                        lambda c: not c.isalnum()))
-    score = 0
-    if len(pw) >= MIN_PASSWORD:
-        score = 1 + (len(pw) >= 12) + (len(pw) >= 16) + (kinds >= 3)
-    return min(score, 4), ["trop court", "faible", "correct", "bon", "très bon"][min(score, 4)]
-
-
 class Vault:
     """La clé des voyages, déverrouillée : chiffre et déchiffre."""
 

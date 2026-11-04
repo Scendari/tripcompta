@@ -50,13 +50,6 @@ def sort_key(name: str) -> str:
     return unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()
 
 
-def fmt_frac(x: Fraction) -> str:
-    """Montant exact (fraction de centimes) pour les explications."""
-    if x.denominator == 1:
-        return fmt(int(x))
-    return "≈ " + fmt(round(x))
-
-
 def fmt_weight(w: Fraction) -> str:
     if w.denominator == 1:
         return str(w.numerator)
@@ -390,11 +383,6 @@ class Result:
 
 
 GLOBAL = "global"
-
-
-def nearest(x: Fraction) -> int:
-    """Centime le plus proche (0,5 vers le haut)."""
-    return math.floor(x + Fraction(1, 2))
 
 
 ROUND_PARTICIPANTS, ROUND_ASSO = "participants", "asso"
