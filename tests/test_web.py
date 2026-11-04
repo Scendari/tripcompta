@@ -253,3 +253,25 @@ def test_ping_identifies_the_app(tmp_path):
     from compta.web import create_app
     j = TestClient(create_app(tmp_path / "d")).get("/ping").json()
     assert j["app"] == "tripcompta" and len(j["boot"]) == 12
+
+
+def test_deleted_trip_number_reused_inherits_nothing(tmp_path):
+    """Un voyage supprimé libère son numéro, réutilisé par le suivant : celui-ci n'hérite de rien (brouillons IA,
+    réglages d'affichage du navigateur rangés aussi sous la date de création)."""
+    from compta.ops import Ops
+    app = create_app(tmp_path / "d")
+    ops = Ops(app.state.db)
+    cl = TestClient(app)
+    old = ops.create_trip("Ancien")["voyage_id"]
+    cl.post(f"/v/{old}/ia/brouillon/mise-a-jour", json={"texte": "Nom du voyage : Ancien\\nsecret de l'ancien"})
+    drafts = app.state.db.dir / "brouillons_ia"
+    assert list(drafts.glob(f"voyage-{old}-*"))
+    page_old = cl.get(f"/v/{old}/ia").text
+    cl.post(f"/v/{old}/supprimer")
+    assert not list(drafts.glob(f"voyage-{old}-*")) and list(drafts.glob(f"supprime-*-voyage-{old}-*"))
+    new = ops.create_trip("Nouveau")["voyage_id"]
+    assert new == old                                            # SQLite réutilise le numéro libéré
+    page_new = cl.get(f"/v/{new}/ia").text
+    assert "secret de l" not in page_new
+    key = lambda p: re.search(r'const KEY = "compta-ia-" \+ TRIP \+ "-(\d*)-"', p).group(1)
+    assert key(page_old) != key(page_new)                         # copie du navigateur : clé différente

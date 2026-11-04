@@ -31,7 +31,7 @@
 
 <script>
 (function () {
-  var KEY = 'compta-comptes-{{ trip.id }}';
+  var KEY = 'compta-comptes-{{ trip.id }}-{{ trip.created.strftime('%Y%m%d%H%M%S%f') if trip.created else '' }}';   // numéro + création : unique
   var boxes = Array.prototype.slice.call(document.querySelectorAll('.people-filter input'));
   var fromUrl = {{ 'true' if from_url else 'false' }};
   if (!fromUrl) {      // pas de choix dans l'adresse : reprendre le dernier choix

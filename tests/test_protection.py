@@ -547,3 +547,16 @@ def test_many_pdf_thumbnails_at_once(env):
         srv.should_exit = True
         th.join(5)
         app.state.db.engine.dispose()
+
+
+def test_ai_drafts_follow_the_unlocked_folder(env):
+    """App démarrée verrouillée : après déverrouillage, les brouillons IA vont dans la vraie copie de travail."""
+    tmp, folder = env
+    tid, files, key = protect(env)
+    app = create_app()
+    cl = TestClient(app)
+    cl.post("/deverrouiller", data={"mot_de_passe": PASSWORD})
+    cl.post(f"/v/{tid}/ia/brouillon/mise-a-jour", json={"texte": "Nom du voyage : Sortie test\\nUne note"})
+    local = app.state.sync.local
+    assert list((local / "brouillons_ia").glob(f"voyage-{tid}-*")) and not (local / ".verrouille" / "brouillons_ia").exists()
+    stop(app)
