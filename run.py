@@ -47,8 +47,11 @@ class InstanceLock:
         import hashlib
         from compta import paths
         # normcase : sous Windows, D:\Voyages et d:\voyages sont le même dossier (resolve() ne rétablit la casse que
-        # pour un dossier qui existe déjà)
-        key = hashlib.sha1(os.path.normcase(str(data_dir)).encode("utf-8")).hexdigest()[:12]
+        # pour un dossier qui existe déjà) ; idem sur Mac (APFS ignore la casse par défaut)
+        name = os.path.normcase(str(data_dir))
+        if sys.platform == "darwin":
+            name = name.lower()
+        key = hashlib.sha1(name.encode("utf-8")).hexdigest()[:12]
         folder = paths.config_file().parent
         folder.mkdir(parents=True, exist_ok=True)
         self.path = folder / f"instance-{key}.lock"
