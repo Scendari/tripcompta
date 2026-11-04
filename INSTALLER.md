@@ -108,7 +108,11 @@ Dropbox), puis relancer Trip Compta.
 - **Un seul à la fois** peut modifier les voyages. Sur l'autre, ils s'ouvrent en **lecture seule**, avec le nom de
   l'ordinateur qui a la main, et se mettent à jour quand tu reviens sur l'app.
 - Quand tu as fini : **⏻ Arrêter**. L'autre ordinateur reprend la main tout seul.
-- Ordinateur resté allumé ou planté : au bout de 3 minutes, l'autre peut **Prendre la main**.
+- Ordinateur resté allumé, planté, ou pas le temps d'attendre : **Prendre la main** dans le bandeau « Lecture
+  seule ». L'autre passe en lecture seule (le temps que ton cloud le prévienne). Préviens d'abord la personne si
+  elle est en train de saisir : sinon tu devras choisir entre deux versions (rien n'est perdu).
+- Sur un même ordinateur, Trip Compta ne s'ouvre qu'une fois : cliquer de nouveau sur l'icône montre celle qui
+  est déjà ouverte.
 - Si ton cloud a gardé deux versions (« copie en conflit »), Trip Compta te le dit et te laisse choisir ; rien
   n'est effacé.
 
