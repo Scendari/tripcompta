@@ -798,3 +798,72 @@ def test_failed_publish_is_retried(cloud_env, monkeypatch):
     monkeypatch.setattr(C, "atomic_copy", real)
     assert a.state.sync.publish() == "ok" and trip_names(shared / C.DB) == ["Saisie importante"]
     stop(a)
+
+
+def test_closing_the_tab_hands_over(cloud_env):
+    """Personne ne clique sur « Arrêter » : quand plus aucun onglet n'est ouvert depuis 2 minutes, l'app rend la
+    main ; l'autre ordinateur la prend tout seul. Un onglet rouvert la reprend si elle est libre, sinon s'ouvre en
+    lecture seule. Rien n'est perdu au passage."""
+    tmp, shared = cloud_env
+    a = make(tmp, shared, "PC du club", 101)
+    b = make(tmp, shared, "Mac de Stef", 202)
+    ca, cb = TestClient(a), TestClient(b)
+    Ops(a.state.db).create_trip("Saisi par l'IA, pas encore envoyé")   # sera envoyé en rendant la main
+    assert not a.state.idle_check()                              # un onglet vient d'être vu : rien
+    assert b.state.sync.readonly
+    # les « /ping » d'autres programmes (lancement, outils) ne comptent pas comme un onglet ouvert
+    ca.get("/ping")
+    assert a.state.idle_check(now=time.time() + C.IDLE_AFTER + 1)
+    assert a.state.sync.idle and not (shared / C.LOCK).exists()
+    assert trip_names(shared / C.DB) == ["Saisi par l'IA, pas encore envoyé"]
+    b.state.sync.beat()                                          # le Mac prend la main tout seul
+    assert not b.state.sync.readonly
+    page = cb.get("/").text
+    assert "Saisi par l" in page and "Lecture seule" not in page
+    cb.post("/voyages", data={"name": "Saisi sur le Mac"})
+    a.state.sync.beat()                                          # le PC, sans onglet, ne reprend rien tout seul
+    assert a.state.sync.idle
+    page = ca.get("/").text                                      # onglet rouvert sur le PC : le Mac a la main
+    assert "Lecture seule" in page and "« Mac de Stef »" in page and "Saisi sur le Mac" in page
+    assert not a.state.sync.idle and a.state.sync.readonly
+    # le Mac est fermé (onglet) à son tour : le PC reprend la main dès son prochain onglet
+    assert b.state.idle_check(now=time.time() + C.IDLE_AFTER + 1)
+    a.state.sync.beat()
+    assert not a.state.sync.readonly
+    ca.post("/voyages", data={"name": "Saisi sur le PC"})
+    assert trip_names(shared / C.DB) == sorted(["Saisi par l'IA, pas encore envoyé", "Saisi sur le Mac",
+                                                "Saisi sur le PC"])
+    # un onglet qui interroge l'app (/ping?vu=1) la garde éveillée
+    a.state.last_seen = 0
+    ca.get("/ping", params={"vu": "1"})
+    assert not a.state.idle_check()
+    stop(a)
+    stop(b)
+
+
+def test_open_tab_keeps_the_hand(cloud_env):
+    """Dans un vrai navigateur : un onglet ouvert, sans aucun clic, signale sa présence (toutes les 4 s)."""
+    import uvicorn
+    from playwright.sync_api import sync_playwright
+    from tests.conftest import _free_port
+    tmp, shared = cloud_env
+    a = make(tmp, shared, "PC du club", 101)
+    port = _free_port()
+    srv = uvicorn.Server(uvicorn.Config(a, host="127.0.0.1", port=port, log_level="error"))
+    th = threading.Thread(target=srv.run, daemon=True)
+    th.start()
+    while not srv.started:
+        time.sleep(0.05)
+    try:
+        with sync_playwright() as p:
+            br = p.chromium.launch()
+            pg = br.new_page()
+            pg.goto(f"http://127.0.0.1:{port}/")
+            a.state.last_seen = 0                                # comme si plus personne n'était là…
+            pg.wait_for_timeout(6000)                            # …mais l'onglet est ouvert
+            assert time.time() - a.state.last_seen < 6 and not a.state.idle_check()
+            br.close()
+    finally:
+        srv.should_exit = True
+        th.join(5)
+        stop(a)

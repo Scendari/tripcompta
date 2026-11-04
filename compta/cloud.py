@@ -43,6 +43,7 @@ STATE = "synchro.json"                  # dans la copie de travail : ce qu'on sa
 READONLY_FLAG = "LECTURE-SEULE"         # dans la copie de travail : l'IA (autre processus) ne doit pas écrire
 BEAT = 30                               # secondes entre deux battements du verrou
 STALE = 180                             # verrou sans battement depuis 3 min : ordinateur éteint ou planté
+IDLE_AFTER = 120                        # aucun onglet ouvert depuis 2 min : on rend la main aux autres ordinateurs
 INBOX_TYPES = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".gif", ".pdf"}
 
 # copies en conflit créées par les services : « compta (conflicted copy 2026-…).db », « compta (copie en
@@ -209,6 +210,7 @@ class CloudSync:
         self._thread = None
         self.on_pulled = None                    # rappel : la copie de travail a été remplacée (rouvrir la base)
         self.vault = None                        # clé des voyages déverrouillée (dossier protégé, voir crypto.py)
+        self.idle = False                        # main rendue faute d'onglet ouvert (reprise au prochain onglet)
         self.before_wipe = None                  # rappel : refermer la base avant d'effacer la copie (Windows)
 
     # ------------------------------------------------------------------ chemins
@@ -373,6 +375,8 @@ class CloudSync:
     def beat(self) -> None:
         """Battement : rafraîchit notre verrou. Si un autre ordinateur a pris la main entre-temps : lecture seule."""
         with self.lock_mutex:
+            if self.idle:                            # main rendue (aucun onglet) : on ne la reprend pas tout seul
+                return
             lk = self.read_lock()
             if self.readonly:
                 if lk is None:                       # libéré proprement : on reprend la main tout seul
@@ -392,6 +396,31 @@ class CloudSync:
                 self._write_lock(since=(lk or {}).get("depuis"))
             except OSError:
                 pass
+
+    def go_idle(self) -> bool:
+        """Plus aucun onglet ouvert : on enregistre, puis on rend la main (le verrou est libéré) pour que l'autre
+        ordinateur puisse modifier sans rien faire. Renvoie True si la main a été rendue."""
+        with self.lock_mutex:
+            if self.idle or self.readonly or self.problem or self.locked:
+                return False
+            if self.local_dirty():
+                self.publish()
+            self.release()
+            self.idle = True
+            self.readonly = True
+            self.owner = None
+            self._flag_readonly(True)
+            return True
+
+    def wake(self) -> None:
+        """Un onglet est de nouveau ouvert : on reprend la main si personne ne l'a prise entre-temps (sinon : lecture
+        seule, avec le nom de l'ordinateur qui l'a)."""
+        with self.lock_mutex:
+            if not self.idle:
+                return
+            self.idle = False
+            if self.acquire():
+                self.pull()
 
     def release(self) -> None:
         with self.lock_mutex:
