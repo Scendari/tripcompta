@@ -1,0 +1,25 @@
+{# Bateaux en papier (repris du site promo, même dessin et mêmes couleurs que l'icône de l'application).
+   boat(symbole, classes) : un bateau ; harbour() : la bande de mer animée du bas de « Mes voyages ». #}
+{% macro boat(symbol, cls="") -%}
+<svg class="pb {{ cls }}" viewBox="0 0 220 160" aria-hidden="true" focusable="false">
+  <path class="hull-l" d="M10 90h200l-40 52H50z"/><path class="hull-r" d="M110 90h100l-40 52h-60z"/>
+  <path class="sail-l" d="M110 6L52 90h58z"/><path class="sail-r" d="M110 6l58 84h-58z"/>
+  <path class="wake-l" d="M14 146c30 9 62 11 96 11s66-2 96-11"/><path class="wake-s" d="M2 140c6 3 12 4 18 4M218 140c-6 3-12 4-18 4"/>
+  <text class="sym" x="110" y="134" text-anchor="middle">{{ symbol }}</text>
+</svg>
+{%- endmacro %}
+
+{% macro harbour() -%}
+<div class="harbour" aria-hidden="true">
+  <div class="water">
+    <svg class="ripples" viewBox="0 0 600 120" preserveAspectRatio="none" focusable="false">
+      <g class="rip light">
+        <path d="M40 26q8-6 16 0t16 0"/><path d="M150 14q7-5 14 0t14 0"/><path d="M300 34q8-6 16 0t16 0 16 0"/>
+        <path d="M455 18q7-5 14 0t14 0"/><path d="M520 56q8-6 16 0t16 0"/><path d="M95 70q7-5 14 0t14 0"/>
+        <path d="M230 88q8-6 16 0t16 0"/><path d="M395 76q7-5 14 0t14 0 14 0"/><path d="M560 100q7-5 14 0t14 0"/>
+      </g>
+    </svg>
+  </div>
+  {{ boat("€", "pb-white drift b1") }}{{ boat("+", "pb-sun drift b2") }}{{ boat("=", "pb-blue drift b3") }}
+</div>
+{%- endmacro %}

@@ -55,7 +55,12 @@ pip install -r requirements-dev.txt
 python build_tools/build.py
 ```
 
-Sur **Mac**, cela produit `dist/TripCompta.app` ; sur Windows ou Linux, la même commande lancée **sur ce
+**Sa propre fenêtre** : l'application fabriquée (Mac, Windows) s'ouvre dans sa fenêtre (pywebview : WebKit sur Mac,
+WebView2 sous Windows), avec Cmd/Ctrl+N (nouvelle fenêtre), Cmd/Ctrl+F (rechercher) et « Fichier → Ouvrir dans le
+navigateur » ; fermer la dernière fenêtre ou Cmd+Q l'arrête proprement. Depuis le code source, sous Linux, ou avec
+`--navigateur` : dans le navigateur (`python run.py --fenetre` pour essayer la fenêtre depuis le code source).
+
+Sur **Mac**, cela produit `dist.noindex/TripCompta.app` (dossier que Spotlight et le Launchpad ignorent) ; sur Windows ou Linux, la même commande lancée **sur ce
 système** produit `dist/TripCompta/` (PyInstaller ne fabrique que pour le système où il tourne). Une application
 fabriquée ainsi est une **version de développement** (« 1.0.0-dev (commit) ») : elle ne se met jamais à jour
 toute seule. Les versions publiées sont fabriquées par GitHub (voir « Publier une version »).
@@ -94,8 +99,8 @@ les brouillons IA. L'app travaille sur une copie et, après chaque modification,
 **d'un seul coup** (jamais de fichier à moitié écrit).
 
 - **Un seul ordinateur à la fois** peut modifier : les autres ouvrent les voyages en **lecture seule** (« ouverts
-  sur « PC du club » depuis 14 h 02 ») et se mettent à jour quand on revient sur l'app. Fermer l'onglet suffit : sans onglet ouvert depuis 2 minutes, l'app
-  rend la main (« ⏻ Arrêter » aussi) ; sinon, **Prendre la main** à tout moment (l'autre passe en lecture seule dès que le cloud lui apporte le
+  sur « PC du club » depuis 14 h 02 ») et se mettent à jour quand on revient sur l'app. Fermer la fenêtre suffit (l'app fabriquée s'ouvre dans sa
+  propre fenêtre ; dans un navigateur : sans onglet ouvert depuis 2 minutes, l'app rend la main) (« ⏻ Arrêter » aussi) ; sinon, **Prendre la main** à tout moment (l'autre passe en lecture seule dès que le cloud lui apporte le
   verrou ; une saisie faite là-bas entre-temps donne une copie en conflit à trancher, rien n'est perdu). Sur un
   même ordinateur, une seule Trip Compta à la fois : relancer l'icône montre celle qui est ouverte.
 - **Fichier retiré de l'ordinateur par le cloud** (disque plein, « Libérer de l'espace »…) : Trip Compta le signale

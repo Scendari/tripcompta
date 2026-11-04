@@ -167,7 +167,7 @@ def import_trip(s, v: dict, z: zipfile.ZipFile, receipts_dir: Path) -> M.Trip:
         name = base
         while name in names:
             name, i = f"{base} {i}", i + 1
-    t = _new(M.Trip, tv, name=name, cashier_id=None, groups="")
+    t = _new(M.Trip, tv, name=name, cashier_id=None, groups="", created=M.now())   # importé = créé ici, maintenant
     s.add(t)
     s.flush()
     P, F, C, E_, R, A = {}, {}, {}, {}, {}, {}

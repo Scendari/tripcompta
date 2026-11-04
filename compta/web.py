@@ -122,11 +122,23 @@ templates.env.filters["caisse"] = lambda t: _label(S.caisse_label(t))   # nom de
 def newer_data_app(err: NewerDatabaseError, updater) -> FastAPI:
     """La base a été ouverte par une version plus récente : on n'y touche pas, on explique quoi faire."""
     from . import updater as U
+    from . import version as V
     app = FastAPI(title="Trip Compta", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.db = None
+    app.state.port = None                 # donnés par run.py (pour relancer après une mise à jour)
+    app.state.argv = []
     app.state.updater = updater
+    app.state.arreter = lambda: None      # rien d'ouvert : rien à enregistrer
     app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
     boot = uuid.uuid4().hex[:12]
+
+    @app.post("/fenetre/{action}")
+    def window_action(action: str):
+        f = getattr(app.state, "fenetres", None)
+        if f is None or action not in ("nouvelle", "montrer"):
+            return JSONResponse({"ok": False}, status_code=404)
+        f.new_later() if action == "nouvelle" else f.show()
+        return {"ok": True}
 
     @app.get("/ping")
     def ping():
@@ -140,12 +152,57 @@ def newer_data_app(err: NewerDatabaseError, updater) -> FastAPI:
                             "<body style='font-family:system-ui;text-align:center;padding:4rem'>"
                             "<h1>Trip Compta est arrêté.</h1><p>Tu peux fermer cet onglet.</p></body>")
 
+    checked = []
+
+    def fitting():
+        """La version publiée, si elle sait ouvrir ces données (au moins aussi récente qu'elles)."""
+        if not checked and not updater.dev and not os.environ.get("TRIPCOMPTA_NO_UPDATE_CHECK"):
+            checked.append(updater.check(force=True))     # une seule fois : la page reste rapide ensuite
+        a = updater.available()
+        return a if a and V.base(a["version"]) and V.base(a["version"]) >= V.base(err.stored) else None
+
+    def page(request, name, code=200, **ctx):
+        return templates.TemplateResponse(request, name, dict(
+            request=request, err=err, page=U.RELEASES_PAGE, help=U.INSTALL_HELP, trip=None, msg=None,
+            asso_name="", app_version=updater.label, update_banner=None, STATIC_V=templates.env.globals["STATIC_V"],
+            **ctx), status_code=code)
+
+    @app.post("/maj/installer")
+    def update_install(request: Request):
+        """Mettre à jour directement depuis cet écran : les données ne sont pas ouvertes, rien à sauvegarder."""
+        a = fitting()
+        ok, _why = updater.installable()
+        if a and ok and not (updater.job and updater.job["step"] != "erreur"):
+            import threading
+            updater.job = dict(step="sauvegarde", percent=0, error=None, version=a["version"])
+            port = app.state.port or request.url.port or 8765
+
+            def quit_now():
+                import time as _t
+                _t.sleep(1.5)                     # laisser la page d'attente voir « redémarrage »
+                os._exit(0)
+            threading.Thread(target=updater.run_install, daemon=True, kwargs=dict(
+                db=None, port=port, app_args=U.clean_args(app.state.argv), quit_app=quit_now)).start()
+        return RedirectResponse("/maj/en-cours" if updater.job else "/", status_code=303)
+
+    @app.get("/maj/en-cours", response_class=HTMLResponse)
+    def update_progress(request: Request):
+        if not updater.job:
+            return RedirectResponse("/", status_code=303)
+        return page(request, "update.html", version=updater.job.get("version"), back="/")
+
+    @app.get("/maj/etat")
+    def update_state():
+        j = dict(updater.job or {})
+        if j.get("step") == "erreur":
+            updater.job = None                    # on pourra réessayer
+        return j or {"step": "aucune"}
+
     @app.get("/{rest:path}", response_class=HTMLResponse)
     def explain(request: Request, rest: str = ""):
-        return templates.TemplateResponse(request, "newer_data.html", dict(
-            request=request, err=err, page=U.RELEASES_PAGE, help=U.INSTALL_HELP, trip=None, msg=None,
-            asso_name="", app_version=updater.label, update_banner=None, STATIC_V=templates.env.globals["STATIC_V"]),
-            status_code=409)
+        a = fitting()
+        ok, why = updater.installable() if a else (False, "")
+        return page(request, "newer_data.html", 409, available=a, installable=ok, why=why)
     return app
 
 
@@ -329,8 +386,10 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             db.after_replace()
             check_newer()
 
-    READ_OK = ("/reglages", "/maj/", "/quitter", "/apercu-fichier", "/deverrouiller", "/verrouiller", "/protection")
-    LOCKED_OK = ("/static", "/ping", "/deverrouiller", "/quitter", "/maj/", "/reglages/a-propos", "/favicon")
+    READ_OK = ("/reglages", "/maj/", "/quitter", "/apercu-fichier", "/deverrouiller", "/verrouiller", "/protection",
+               "/fenetre/")
+    LOCKED_OK = ("/static", "/ping", "/deverrouiller", "/quitter", "/maj/", "/reglages/a-propos", "/favicon",
+                 "/fenetre/")
 
     def readonly_message() -> str:
         if sync.problem:
@@ -626,14 +685,44 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             upd.job = None                         # on pourra réessayer
         return j or {"step": "aucune"}
 
-    @app.post("/quitter", response_class=HTMLResponse)
-    def quit_app():
-        import os
-        import threading
+    stopped = []
+
+    def arreter():
+        """Arrêt propre, sans quitter le programme : enregistre et rend la main aux autres ordinateurs. Utilisé par
+        « ⏻ Arrêter » et par la fenêtre (dernière fenêtre fermée, Cmd+Q, « Quitter » du Dock, extinction)."""
+        if stopped:
+            return
+        stopped.append(1)
         if sync is not None:
             if not sync.readonly and not sync.problem:
                 sync.publish()
             sync.stop()                                  # libère le verrou : un autre ordinateur peut prendre la main
+        db.engine.dispose()
+    app.state.arreter = arreter
+
+    @app.post("/fenetre/nouvelle")
+    def new_window():
+        """Raccourci Cmd/Ctrl+N dans la fenêtre de l'application (Windows : pas de menu à raccourcis)."""
+        f = getattr(app.state, "fenetres", None)
+        if f is None:
+            return JSONResponse({"ok": False}, status_code=404)
+        f.new_later()
+        return {"ok": True}
+
+    @app.post("/fenetre/montrer")
+    def show_window():
+        """Trip Compta relancé alors qu'il tourne déjà (Windows) : ramener sa fenêtre au premier plan."""
+        f = getattr(app.state, "fenetres", None)
+        if f is None:
+            return JSONResponse({"ok": False}, status_code=404)
+        f.show()
+        return {"ok": True}
+
+    @app.post("/quitter", response_class=HTMLResponse)
+    def quit_app():
+        import os
+        import threading
+        arreter()
         threading.Timer(0.5, lambda: os._exit(0)).start()
         return HTMLResponse("<!doctype html><meta charset=utf-8><title>Trip Compta</title>"
                             "<body style='font-family:system-ui;text-align:center;padding:4rem'>"
@@ -1361,7 +1450,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
     # ------------------------------------------------------------------ voyages
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request, s: Session = Depends(get_s)):
-        trips = s.query(M.Trip).order_by(M.Trip.start.desc().nullslast(), M.Trip.id.desc()).all()
+        trips = s.query(M.Trip).order_by(M.Trip.created.desc(), M.Trip.id.desc()).all()   # le plus récent d'abord
         cards = []
         for t in trips:
             r = S.compute_trip(t, mode_of(request))

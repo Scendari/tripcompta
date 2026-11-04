@@ -8,6 +8,7 @@ __pycache__/
 # Application construite (PyInstaller)
 build/
 dist/
+dist.noindex/
 *.spec
 
 # Données : jamais dans le dépôt (elles vivent dans ~/Documents/TripCompta)

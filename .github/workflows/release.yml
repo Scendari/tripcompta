@@ -86,6 +86,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pyinstaller pytest httpx
+      - name: "Sa propre fenêtre (Mac, Windows) : pywebview, et sous Windows pythonnet + WebView2"
+        if: runner.os != 'Linux'
+        shell: bash
+        run: |
+          python -c "import webview; from compta import fenetre; assert fenetre.available(); print('pywebview', webview.__name__, 'OK')"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            python -c "import clr; print('pythonnet OK')"
+            reg query "HKLM\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" //v pv || echo "WebView2 : non trouvé dans le registre (normalement fourni par Windows 10/11)"
+          fi
       - name: Tester le script de mise à jour sur ce système
         run: python -m pytest -q tests/test_update_script.py
       - name: Fabriquer l'application

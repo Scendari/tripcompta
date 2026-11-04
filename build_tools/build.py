@@ -54,6 +54,9 @@ def main():
                           f"DEV = {dev!r}\n", encoding="utf-8")
     print(f"Fabrication de Trip Compta {version}" + (f" ({commit})" if commit else "") +
           (" — version de développement" if dev else ""))
+    # Mac, hors GitHub : « dist.noindex », que Spotlight n'indexe pas (sinon la version de développement apparaît
+    # dans le Launchpad à côté de l'app installée, avec la même icône et le même nom)
+    dist = ROOT / ("dist.noindex" if sys.platform == "darwin" and not os.environ.get("CI") else "dist")
     sep = ";" if os.name == "nt" else ":"
     args = [
         str(ROOT / "run.py"),
@@ -73,8 +76,9 @@ def main():
         "--collect-submodules", "keyring.backends",      # trousseau du système (protection par mot de passe)
         "--copy-metadata", "keyring",
         "--hidden-import", "compta.mcp_server",
+        "--hidden-import", "compta.fenetre",
         "--hidden-import", "compta._build",
-        "--distpath", str(ROOT / "dist"),
+        "--distpath", str(dist),
         "--workpath", str(ROOT / "build"),
         "--specpath", str(ROOT / "build"),
     ]
@@ -82,16 +86,18 @@ def main():
     if sys.platform == "darwin":
         args += ["--windowed", "--osx-bundle-identifier", "org.asso.comptavoyages",
                  "--icon", str(icons / "TripCompta.icns")]
+    elif sys.platform == "win32":
+        # Trip Compta s'ouvre dans sa propre fenêtre (pywebview + WebView2) : plus de console noire
+        args += ["--windowed", "--icon", str(icons / "TripCompta.ico"),
+                 "--collect-submodules", "webview.platforms", "--hidden-import", "clr"]
     else:
-        args += ["--console"]   # une fenêtre affiche l'adresse ; la fermer arrête l'application
-        if sys.platform == "win32":
-            args += ["--icon", str(icons / "TripCompta.ico")]
+        args += ["--console"]   # Linux : une fenêtre affiche l'adresse ; la fermer arrête l'application
     try:
         PyInstaller.__main__.run(args)
     finally:
         BUILD_FILE.unlink(missing_ok=True)      # le code source reste en « version de développement »
     if sys.platform == "darwin":
-        plist = ROOT / "dist" / "TripCompta.app" / "Contents" / "Info.plist"
+        plist = dist / "TripCompta.app" / "Contents" / "Info.plist"
         if plist.exists():                       # numéro visible dans « Lire les informations » du Finder
             import plistlib
             with open(plist, "rb") as f:
@@ -105,7 +111,7 @@ def main():
             # Info.plist modifié : refaire la signature « ad hoc » (sinon macOS refuse d'ouvrir l'app)
             subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(plist.parent.parent)],
                            capture_output=True)
-    print(f"\nTerminé : Trip Compta {version}, voir le dossier dist/")
+    print(f"\nTerminé : Trip Compta {version}, voir le dossier {dist.name}/")
 
 
 if __name__ == "__main__":

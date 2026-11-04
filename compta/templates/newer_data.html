@@ -5,9 +5,18 @@
   <h1 style="margin-top:0">⚠️ Cette version de Trip Compta est trop ancienne pour tes données</h1>
   <p>Tes données ont déjà été ouvertes avec <b>Trip Compta {{ err.stored }}</b>. Cette application est la version
     <b>{{ err.current }}</b>, plus ancienne : pour ne rien abîmer, elle ne les ouvre pas. <b>Rien n'a été modifié.</b></p>
+  {% if available and installable %}
+  <p>🎁 <b>Trip Compta {{ available.version }}</b> est disponible : elle sait ouvrir tes données. Un clic suffit,
+    elle s'installe à la place de celle-ci et redémarre toute seule (environ une minute).</p>
+  <form method="post" action="/maj/installer"><button class="btn">Mettre à jour vers la {{ available.version }}</button>
+    <a class="btn link small" href="{{ page }}" target="_blank" rel="noopener">Voir les nouveautés</a></form>
+  {% else %}
+  {% if available and why %}<p class="flash warn">🎁 Trip Compta {{ available.version }} est disponible, mais la mise à jour
+    automatique n'est pas possible ici : {{ why }}</p>{% endif %}
   <p>Que faire : installe la dernière version de Trip Compta, puis relance-la.</p>
   <p><a class="btn" href="{{ page }}" target="_blank" rel="noopener">Télécharger la dernière version</a>
     <a class="btn link small" href="{{ help }}" target="_blank" rel="noopener">Comment l'installer ?</a></p>
+  {% endif %}
   <p class="small muted">Dossier des données : <span class="break">{{ err.path }}</span></p>
 </div>
 {% endblock %}

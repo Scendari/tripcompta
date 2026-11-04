@@ -10,9 +10,9 @@
     <li data-step="preparation">Préparation</li>
     <li data-step="redemarrage">Redémarrage de Trip Compta</li>
   </ol>
-  <p class="muted small" id="maj-note">Ne ferme pas cet onglet : il se recharge tout seul à la fin (environ une minute).</p>
+  <p class="muted small" id="maj-note">Ne ferme pas cette page : Trip Compta redémarre tout seul à la fin (environ une minute).</p>
   <div class="flash err hidden" role="alert" id="maj-err"></div>
-  <p class="hidden" id="maj-back"><a class="btn ghost" href="/reglages/a-propos">← Retour</a></p>
+  <p class="hidden" id="maj-back"><a class="btn ghost" href="{{ back or '/reglages/a-propos' }}">← Retour</a></p>
 </div>
 <script>
 (function () {
