@@ -19,7 +19,7 @@
   {# où sont les voyages, en discret (le détail au survol ; les vrais problèmes ont leur bandeau) #}
   {% set where = ('💻 Rangé sur ' if cloud.local else '☁️ Rangé dans ') ~ cloud.service
        ~ (' · protégé par mot de passe' if cloud.protected else '')
-       ~ (' · enregistré à ' ~ cloud.saved if cloud.saved and not cloud.readonly and not cloud.locked else '')
+       ~ ((' · enregistré le ' if '/' in cloud.saved else ' · enregistré à ') ~ cloud.saved if cloud.saved and not cloud.locked else '')
        ~ (' · lecture seule' if cloud.readonly else '') %}
   <a class="cloud-chip" href="/reglages/donnees" title="{{ where }}" aria-label="{{ where }}">
     {% if cloud.local %}<span aria-hidden="true">💻</span>{% else %}<svg class="ico-cloud" viewBox="0 0 24 24" width="1.15em" height="1.15em" aria-hidden="true"><path d="M7 18h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.6 9.2 4.5 4.5 0 0 0 7 18z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg>{% endif %}<span class="lbl">{% if cloud.readonly %}lecture seule{% elif cloud.saved and not cloud.locked %}{{ cloud.saved }}{% else %}{{ cloud.service }}{% endif %}</span></a>

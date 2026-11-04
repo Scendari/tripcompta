@@ -14,7 +14,7 @@
   <p class="small muted data-state">
     {% if cloud.problem %}⚠️ {{ cloud.problem }}
     {% elif cloud.readonly %}🔒 Lecture seule : ouverts sur « {{ cloud.owner or 'un autre ordinateur' }} »{% if cloud.since %} depuis {{ cloud.since }}{% endif %}.
-    {% elif cloud.saved %}✓ Enregistré dans le dossier à {{ cloud.saved }}.
+    {% elif cloud.saved %}✓ Enregistré dans le dossier {{ 'le' if '/' in cloud.saved else 'à' }} {{ cloud.saved }}.
     {% else %}✓ Prêt.{% endif %}</p>
   <p class="hint">Sur cet ordinateur restent seulement l'historique « Défaire / Rétablir », les sauvegardes automatiques et les brouillons de la page IA.</p>
   {% else %}
