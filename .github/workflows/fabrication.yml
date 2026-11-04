@@ -1,0 +1,52 @@
+# Fabrique l'application sur les trois systèmes et vérifie qu'elle démarre (y compris la protection par mot de
+# passe : chiffrement, redémarrage, déverrouillage), SANS rien publier. Les versions publiées : release.yml.
+name: Fabrication
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "build_tools/**"
+      - "requirements*.txt"
+      - "compta/crypto.py"
+      - "compta/cloud.py"
+      - ".github/workflows/fabrication.yml"
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.14"
+  TZ: Europe/Paris
+
+jobs:
+  build:
+    name: Fabriquer (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            exe: dist/Trip Compta.app/Contents/MacOS/Trip Compta
+          - os: windows-latest
+            exe: dist/Trip Compta/Trip Compta.exe
+          - os: ubuntu-22.04
+            exe: dist/Trip Compta/Trip Compta
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Installer
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
+      - name: Fabriquer l'application
+        run: python build_tools/build.py
+      - name: Vérifier qu'elle démarre (et la protection par mot de passe)
+        shell: bash
+        run: |
+          V="$(python -c 'from compta import __version__; print(__version__)')-dev"
+          python build_tools/smoke.py "${{ matrix.exe }}" "$V"

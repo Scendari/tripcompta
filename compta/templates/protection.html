@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block page %}
+<div class="page-head"><div class="grow">
+  <h1>🔒 Protéger mes voyages par un mot de passe</h1>
+</div><a class="btn ghost small" href="/reglages/donnees#protection">← Où ranger mes voyages</a></div>
+
+{% if step == 'erreur' %}
+<div class="card data-card"><div class="flash err" role="alert">{{ error }}</div>
+  <a class="btn ghost" href="/reglages/donnees#protection">← Retour</a></div>
+
+{% elif step == 'mot_de_passe' %}
+<div class="card data-card">
+  <h3 style="margin-top:0">Étape 1 sur 2 : ton mot de passe</h3>
+  <ul class="data-help">
+    <li>Ta base et tes justificatifs seront <b>chiffrés</b> dans le dossier : sans le mot de passe, ils sont illisibles, même pour ton service de cloud.</li>
+    <li>Trip Compta te le demandera à chaque ouverture (sauf si tu coches « Se souvenir sur cet ordinateur »).</li>
+    <li>À l'étape suivante, tu noteras une <b>clé de secours</b> : elle seule permet de retrouver tes voyages si tu oublies le mot de passe.</li>
+    <li><b>Si tu perds le mot de passe ET la clé de secours, tes voyages sont perdus pour toujours.</b> Personne ne peut les récupérer.</li>
+  </ul>
+  {% if error %}<div class="flash err" role="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="/protection/activer" data-pw-form>
+    <div class="field"><label for="p-pw">Mot de passe <span class="hint">(au moins 8 caractères ; une phrase facile à retenir est idéale)</span></label>
+      <input type="password" id="p-pw" name="mot_de_passe" autocomplete="new-password" required minlength="8" autofocus data-pw>
+      <div class="pw-meter" aria-live="polite"><span class="pw-bar"><i></i></span> <span class="pw-word small muted"></span></div></div>
+    <div class="field"><label for="p-again">Encore une fois</label>
+      <input type="password" id="p-again" name="confirmation" autocomplete="new-password" required minlength="8"></div>
+    {% if can_remember %}<label class="chk"><input type="checkbox" name="souvenir" value="1"> Se souvenir sur cet ordinateur <span class="hint">(rangé dans le trousseau du système)</span></label>{% endif %}
+    <div class="row" style="justify-content:flex-end;margin-top:.6rem"><button class="btn">Continuer</button></div>
+  </form>
+</div>
+
+{% elif step == 'secours' %}
+<div class="card data-card">
+  <h3 style="margin-top:0">{{ 'Ta nouvelle clé de secours' if renew else 'Étape 2 sur 2 : ta clé de secours' }}</h3>
+  <p>Note-la sur papier, ou imprime cette page, et range-la <b>ailleurs que sur cet ordinateur</b>. Elle ouvre tes voyages si tu oublies le mot de passe{{ ' ; l\'ancienne clé ne marchera plus' if renew }}.</p>
+  <p class="recovery-key mono" id="recovery">{{ recovery }}</p>
+  <div class="row" style="gap:.5rem"><button type="button" class="btn small ghost" onclick="window.print()">🖨️ Imprimer</button>
+    <button type="button" class="btn small ghost" data-copy="#recovery"><b>📋 Copier</b></button></div>
+  {% if error %}<div class="flash err" role="alert" style="margin-top:.8rem">{{ error }}</div>{% endif %}
+  <form method="post" action="{{ action }}" class="no-print" style="margin-top:1rem">
+    <div class="field"><label for="p-group">Pour vérifier que tu l'as bien notée : tape le <b>groupe n° {{ group + 1 }}</b> de ta clé <span class="hint">(4 caractères, en comptant les groupes depuis la gauche)</span></label>
+      <input type="text" id="p-group" name="groupe" maxlength="9" autocomplete="off" spellcheck="false" required class="mono" style="max-width:9rem"></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn">{{ 'Enregistrer la nouvelle clé' if renew else "J'ai noté ma clé : protéger mes voyages" }}</button></div>
+  </form>
+  {% if not renew %}<p class="hint">Trip Compta chiffre alors tout, vérifie que tout se relit, puis efface les fichiers en clair du dossier. Il redémarre ensuite et te demande le mot de passe.</p>{% endif %}
+</div>
+{% endif %}
+<script>
+(function () {
+  var pw = document.querySelector('[data-pw]'); if (!pw) return;
+  var bar = document.querySelector('.pw-bar i'), word = document.querySelector('.pw-word');
+  var WORDS = ['trop court', 'faible', 'correct', 'bon', 'très bon'];
+  pw.addEventListener('input', function () {
+    var v = pw.value, kinds = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter(function (r) { return r.test(v); }).length;
+    var s = v.length < 8 ? 0 : Math.min(4, 1 + (v.length >= 12) + (v.length >= 16) + (kinds >= 3));
+    bar.style.width = (v ? (s + 1) * 20 : 0) + '%'; bar.dataset.s = s; word.textContent = v ? WORDS[s] : '';
+  });
+})();
+</script>
+{% endblock %}

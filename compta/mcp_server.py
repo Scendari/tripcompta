@@ -55,9 +55,14 @@ Règles importantes :
 """
 
 
+_LOCK_FLAG = None        # copie de travail d'un dossier protégé : « VERROUILLE » tant que l'app est verrouillée
+
+
 def _safe(fn):
     @functools.wraps(fn)
     def wrapper(*a, **kw):
+        if _LOCK_FLAG is not None and _LOCK_FLAG.exists():
+            return {"erreur": LOCKED}
         try:
             return fn(*a, **kw)
         except OpsError as e:
@@ -65,8 +70,24 @@ def _safe(fn):
     return wrapper
 
 
+LOCKED = "Trip Compta est verrouillé (voyages protégés par un mot de passe) : ouvre l'application et saisis le " \
+         "mot de passe, puis réessaie."
+
+
 def build_server(data_dir: Optional[str] = None, home: Optional[str] = None):
     """home : dossier synchronisé (voir cloud.py) quand data_dir est la copie de travail de cet ordinateur."""
+    from pathlib import Path as _P
+    flag = _P(data_dir) / "VERROUILLE" if data_dir else None
+    if flag is not None and flag.exists():       # rien n'est créé : la base est chiffrée tant que c'est verrouillé
+        mcp = _Server(name="tripcompta", instructions=LOCKED)
+
+        @mcp.tool()
+        def etat() -> dict:
+            """État de Trip Compta."""
+            return {"erreur": LOCKED}
+        return mcp
+    global _LOCK_FLAG
+    _LOCK_FLAG = flag
     db = Database(data_dir, home=home)
     ops = Ops(db)
     mcp = _Server(name="tripcompta", instructions=INSTRUCTIONS)

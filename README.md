@@ -107,6 +107,26 @@ les brouillons IA. L'app travaille sur une copie et, après chaque modification,
   dans 📎 Justificatifs, coche-les et rattache-les aux dépenses (ils sont ensuite rangés dans `Rangés/`).
 - **Revenir sur cet ordinateur** : même page ; les voyages sont recopiés dans `Documents/TripCompta`.
 
+### Protéger ses voyages par un mot de passe (facultatif)
+
+Même page, **🔒 Protéger mes voyages…** : la base et les justificatifs du dossier sont **chiffrés** (AES-256-GCM ;
+clé des voyages enfermée par le mot de passe et par une clé de secours, via scrypt). Sans le mot de passe ni la
+clé de secours, personne ne peut les lire, même le service de cloud. Utile si le dossier est partagé, si
+l'ordinateur est partagé (club), ou pour les données personnelles des adhérents.
+
+- Dans le dossier : `voyages.chiffre`, `justificatifs/*.chiffre`, `cle.tripcompta`, `LISEZMOI.txt` (le verrou et
+  `Justificatifs à trier` restent en clair). Sur l'ordinateur, la copie de travail n'est en clair que pendant que
+  l'app est déverrouillée ; à l'arrêt (ou au démarrage suivant après un plantage) elle est effacée, et l'historique,
+  les sauvegardes et les brouillons IA sont chiffrés.
+- Au lancement : **🔒 Mot de passe de tes voyages** (ou rien, avec « Se souvenir sur cet ordinateur » : trousseau
+  du système). Bouton **🔒 Verrouiller** en haut. **Mot de passe oublié ?** → la clé de secours, puis un nouveau.
+- **Mot de passe ET clé de secours perdus = voyages perdus pour toujours.** Personne ne peut les récupérer.
+- Après l'activation, **vide la corbeille et les anciennes versions de ton cloud** (Google Drive les garde 30
+  jours) : elles contiennent encore les fichiers d'avant, lisibles.
+- Changer le mot de passe, nouvelle clé de secours, **Retirer la protection** : même page. Pour ranger les voyages
+  dans un autre dossier, retirer d'abord la protection (sinon une copie lisible serait créée).
+- PDF, mails et exports restent en clair (faits pour être envoyés). L'IA (MCP) ne lit les voyages que déverrouillés.
+
 ---
 
 ## Ce que fait l'application

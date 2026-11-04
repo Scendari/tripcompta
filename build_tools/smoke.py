@@ -18,13 +18,58 @@ def free_port():
         return s.getsockname()[1]
 
 
+def get(url, data=None):
+    import urllib.parse
+    req = urllib.request.Request(url, data=urllib.parse.urlencode(data).encode() if data is not None else None)
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return r.read().decode("utf-8"), r.geturl()
+
+
+def protection(base: str, docs: str) -> bool:
+    """Protection par mot de passe dans l'application fabriquée : chiffrement (cryptography), redémarrage,
+    déverrouillage ; rien de lisible dans le dossier."""
+    import re
+    pw = "essai du chiffrement"
+    get(base + "voyages", {"name": "Voyage secret essai"})
+    page, _ = get(base + "protection/activer", {"mot_de_passe": pw, "confirmation": pw})
+    key = re.search(r'id="recovery">([A-Z2-9-]+)<', page).group(1)
+    n = int(re.search(r"groupe n° (\d+)", page).group(1))
+    page, _ = get(base + "protection/confirmer", {"groupe": key.split("-")[n - 1]})
+    if "maintenant protégés" not in page:
+        print("Activation : ÉCHEC")
+        return False
+    folder = os.path.join(docs, "TripCompta")
+    blob = open(os.path.join(folder, "voyages.chiffre"), "rb").read()
+    clear = any(b"Voyage secret essai" in open(os.path.join(dp, f), "rb").read()
+                for dp, _, fs in os.walk(folder) for f in fs)
+    print(f"Chiffré : {len(blob)} octets ; texte lisible dans le dossier : {'OUI (ÉCHEC)' if clear else 'non'}")
+    for _ in range(60):                                  # l'application redémarre toute seule
+        time.sleep(1)
+        try:
+            page, url = get(base)
+            if url.endswith("/deverrouiller"):
+                break
+        except OSError:
+            pass
+    else:
+        print("Après redémarrage : pas d'écran de déverrouillage")
+        return False
+    print("Trousseau du système :", "oui" if "Se souvenir sur cet ordinateur" in page else "non (repli)")
+    page, url = get(base + "deverrouiller", {"mot_de_passe": pw})
+    ok = "Voyage secret essai" in page and not clear
+    print("Déverrouillage :", "ok" if ok else "ÉCHEC")
+    return ok
+
+
 def main(exe: str, expected: str) -> int:
     tmp = tempfile.mkdtemp(prefix="tripcompta-essai-")
     port = free_port()
-    env = dict(os.environ, TRIPCOMPTA_CONFIG=os.path.join(tmp, "reglages.json"), TRIPCOMPTA_NO_UPDATE_CHECK="1")
+    docs = os.path.join(tmp, "Documents")
+    env = dict(os.environ, TRIPCOMPTA_CONFIG=os.path.join(tmp, "reglages.json"), TRIPCOMPTA_NO_UPDATE_CHECK="1",
+               TRIPCOMPTA_DOCUMENTS=docs)
+    env.pop("TRIPCOMPTA_DATA_DIR", None)
     log = open(os.path.join(tmp, "sortie.log"), "w")
-    p = subprocess.Popen([exe, "--no-browser", "--port", str(port), "--data-dir", os.path.join(tmp, "donnees")],
-                         env=env, stdout=log, stderr=subprocess.STDOUT)
+    p = subprocess.Popen([exe, "--no-browser", "--port", str(port)], env=env, stdout=log, stderr=subprocess.STDOUT)
     try:
         for _ in range(180):
             if p.poll() is not None:
@@ -36,6 +81,8 @@ def main(exe: str, expected: str) -> int:
                     home = r.read().decode("utf-8")
                 ok = info.get("app") == "tripcompta" and info.get("version") == expected and "Trip Compta" in home
                 print(f"Réponse : {info} ; page d'accueil : {'ok' if 'Trip Compta' in home else 'INCORRECTE'}")
+                if ok:
+                    ok = protection(f"http://127.0.0.1:{port}/", docs)
                 return 0 if ok else 1
             except OSError:
                 time.sleep(1)

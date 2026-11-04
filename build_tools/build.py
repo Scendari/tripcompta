@@ -70,6 +70,8 @@ def main():
         "--collect-data", "fpdf",
         "--collect-all", "pypdfium2",
         "--collect-all", "pypdfium2_raw",
+        "--collect-submodules", "keyring.backends",      # trousseau du système (protection par mot de passe)
+        "--copy-metadata", "keyring",
         "--hidden-import", "compta.mcp_server",
         "--hidden-import", "compta._build",
         "--distpath", str(ROOT / "dist"),
