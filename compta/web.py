@@ -260,6 +260,9 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             return "Lecture seule : " + sync.problem
         o = sync.owner or {}
         since = _hm(o.get("depuis"))
+        if o.get("ordinateur") == sync.host:
+            return ("Lecture seule : Trip Compta est déjà ouvert sur cet ordinateur (une autre fenêtre ou une autre "
+                    "version). Utilise celle-là, ou ferme-la (⏻ Arrêter) pour pouvoir modifier ici.")
         txt = (f"Lecture seule : tes voyages sont ouverts sur « {o.get('ordinateur') or 'un autre ordinateur'} »"
                + (f" depuis {since}" if since else "") + ". Ferme Trip Compta là-bas pour pouvoir les modifier ici.")
         if o and sync.lock_is_stale(o):
@@ -342,6 +345,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         saved = max([x for x in (sync.published_at, sync.pulled_at) if x] or [0]) or None
         return dict(service=sync.service or "le dossier synchronisé", folder=str(sync.shared),
                     readonly=sync.readonly, problem=sync.problem, owner=o.get("ordinateur"),
+                    same_host=bool(o) and o.get("ordinateur") == sync.host,
                     since=_hm(o.get("depuis")), stale=bool(o) and sync.lock_is_stale(o), saved=_hm(saved),
                     conflicts=len(sync.conflicts()) if not sync.problem else 0,
                     inbox=len(sync.inbox()) if not sync.problem else 0)
@@ -684,12 +688,16 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         if sync is None or sync.problem:
             return back(ref, "Rien à faire : tes voyages ne sont pas ouverts ailleurs.")
         o = sync.read_lock()
-        if o and not sync._mine(o) and not sync.lock_is_stale(o):
-            return back(ref, f"« {o.get('ordinateur')} » utilise encore les voyages : ferme Trip Compta là-bas d'abord.")
+        if not o or sync._mine(o):
+            return back(ref, "Tu as déjà la main.")
+        # l'autre ordinateur passera en lecture seule à son prochain battement (dès que le cloud lui aura
+        # apporté notre verrou) ; s'il enregistre entre-temps, la copie en conflit sera signalée, rien n'est perdu
         sync.acquire(force=True)
         if sync.pull(before_replace=db.engine.dispose):       # la dernière version publiée par l'autre ordinateur
             db.after_replace()
-        return back(ref, "Tu as la main : tu peux de nouveau modifier tes voyages.")
+        who = o.get("ordinateur") or "l'autre ordinateur"
+        return back(ref, f"Tu as la main : tu peux modifier tes voyages. Sur « {who} », ils passent en lecture seule "
+                         f"(dans les minutes qui viennent, le temps que {sync.service or 'ton cloud'} le prévienne).")
 
     @app.post("/reglages/conflit")
     async def resolve_conflict(request: Request):

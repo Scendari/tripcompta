@@ -15,6 +15,25 @@ import time
 import webbrowser
 
 
+def running_instance(first: int = 8765, count: int = 50) -> str | None:
+    """Adresse d'une Trip Compta déjà ouverte sur cet ordinateur (ou None) : une seule à la fois, sinon la 2e
+    s'ouvrirait en lecture seule (verrou du dossier synchronisé) et on ne saurait plus laquelle utiliser."""
+    import json
+    import urllib.request
+    for port in range(first, first + count):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.05)
+            if s.connect_ex(("127.0.0.1", port)) != 0:
+                continue
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/ping", timeout=1) as r:
+                if json.load(r).get("app") in ("tripcompta", "compta-voyages"):
+                    return f"http://127.0.0.1:{port}/"
+        except Exception:
+            continue
+    return None
+
+
 def free_port(preferred: int) -> int:
     for port in [preferred] + list(range(preferred + 1, preferred + 50)):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -44,6 +63,16 @@ def main():
         from compta.mcp_server import build_server
         build_server(a.data_dir, a.home).run("stdio")
         return
+
+    # déjà ouverte sur cet ordinateur ? on montre celle-là au lieu d'en lancer une 2e (sauf dossier imposé : tests)
+    if (a.port == 8765 and not a.data_dir and not os.environ.get("TRIPCOMPTA_RESTARTED")
+            and not os.environ.get("TRIPCOMPTA_DATA_DIR")):
+        url = running_instance()
+        if url:
+            print(f"Trip Compta est déjà ouvert : {url}")
+            if not a.no_browser:
+                webbrowser.open(url)
+            return
 
     import uvicorn
     from compta.web import create_app

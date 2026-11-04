@@ -96,7 +96,7 @@ def test_two_computers_lock_readonly_takeover(cloud_env):
     assert trip_names(shared / C.DB) == ["Voyage A"]
     with pytest.raises(OpsError, match="lecture seule"):          # l'IA (autre processus) non plus
         Ops(b.state.db).create_trip("Par l'IA")
-    assert "Prendre la main" not in page                         # A est bien vivant : pas de prise de main
+    assert "Prendre la main" in page and "préviens-le d" in page.replace("&#39;", "'")   # A vivant : avec mise en garde
 
     # A ne bat plus depuis plus de 3 minutes : B peut prendre la main
     sb.clock = lambda: time.time() + C.STALE + 5
@@ -603,3 +603,74 @@ def test_older_version_refuses_shared_folder(cloud_env):
     assert r.status_code == 409 and "1.1.0" in html.unescape(r.text)
     assert (shared / C.DB).read_bytes() == before                # rien d'écrit
     assert not (shared / ".annuler").exists() and not (shared / "sauvegardes").exists()
+
+
+def test_same_computer_second_window_message(cloud_env):
+    """Deux exemplaires sur le MÊME ordinateur : le message le dit (pas « ouverts sur <mon propre Mac> »)."""
+    tmp, shared = cloud_env
+    a = make(tmp, shared, "MacBook de test", os.getppid())       # processus vivant, autre que celui-ci
+    b = make(tmp, shared, "MacBook de test", os.getpid())
+    assert not a.state.sync.readonly and b.state.sync.readonly
+    page = TestClient(b).get("/").text.replace("&#39;", "'")
+    assert "déjà ouvert sur cet ordinateur" in page and "ouverts sur « MacBook de test »" not in page
+    assert "Prendre la main" not in page
+    r = TestClient(b).post("/voyages", data={"name": "x"}, headers={"referer": "http://t/"}, follow_redirects=True)
+    assert "déjà ouvert sur cet ordinateur" in r.text.replace("&#39;", "'")
+    stop(a)
+    stop(b)
+
+
+def test_launching_twice_shows_the_running_one(monkeypatch):
+    """Cliquer sur l'icône alors que Trip Compta tourne déjà : l'onglet de celle qui tourne s'ouvre, aucune 2e
+    n'est lancée (sinon elle serait en lecture seule et on ne saurait plus laquelle utiliser)."""
+    import importlib
+    import uvicorn
+    from tests.conftest import _free_port
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    run = importlib.import_module("run")
+    port = _free_port()
+    srv = uvicorn.Server(uvicorn.Config(create_app(), host="127.0.0.1", port=port, log_level="error"))
+    th = threading.Thread(target=srv.run, daemon=True)
+    th.start()
+    while not srv.started:
+        time.sleep(0.05)
+    try:
+        assert run.running_instance(port, 1) == f"http://127.0.0.1:{port}/"
+        assert run.running_instance(_free_port(), 1) is None
+        opened, started = [], []
+        monkeypatch.setattr(run, "running_instance", lambda *a: f"http://127.0.0.1:{port}/")
+        monkeypatch.setattr(run.webbrowser, "open", opened.append)
+        monkeypatch.setattr("compta.web.create_app", lambda *a, **k: started.append(1))
+        monkeypatch.delenv("TRIPCOMPTA_DATA_DIR", raising=False)
+        monkeypatch.delenv("TRIPCOMPTA_RESTARTED", raising=False)
+        monkeypatch.setattr(sys, "argv", ["run.py"])
+        run.main()
+        assert opened == [f"http://127.0.0.1:{port}/"] and started == []
+    finally:
+        srv.should_exit = True
+        th.join(5)
+
+
+def test_take_over_while_other_is_alive(cloud_env):
+    """« Prendre la main » même si l'autre ordinateur est actif : on a la main, la dernière version publiée est
+    reprise, et l'autre passe en lecture seule à son battement suivant (sans rien écraser)."""
+    tmp, shared = cloud_env
+    a = make(tmp, shared, "PC-A", 101)
+    b = make(tmp, shared, "Mac-B", 202)
+    ca, cb = TestClient(a), TestClient(b)
+    ca.post("/voyages", data={"name": "Saisi sur A"})
+    r = cb.post("/reglages/prendre-la-main", headers={"referer": "http://t/"}, follow_redirects=True)
+    assert "Tu as la main" in r.text and "PC-A" in r.text and not b.state.sync.readonly
+    assert "Saisi sur A" in cb.get("/").text                     # la version de A a été reprise
+    cb.post("/voyages", data={"name": "Saisi sur B"})
+    a.state.sync.beat()                                          # A apprend qu'on a pris la main
+    assert a.state.sync.readonly
+    page = ca.get("/").text
+    assert "« Mac-B » a pris la main" in page and "Saisi sur B" in page
+    r = ca.post("/voyages", data={"name": "Trop tard"}, headers={"referer": "http://t/"}, follow_redirects=True)
+    assert "Lecture seule" in r.text
+    assert trip_names(shared / C.DB) == ["Saisi sur A", "Saisi sur B"]
+    r = cb.post("/reglages/prendre-la-main", headers={"referer": "http://t/"}, follow_redirects=True)
+    assert "Tu as déjà la main" in r.text
+    stop(a)
+    stop(b)
