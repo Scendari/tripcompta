@@ -117,7 +117,7 @@ def _free_port():
         return s.getsockname()[1]
 
 
-@pytest.mark.skipif(sys.platform != "darwin" or os.environ.get("CI") or not fenetre.available(),
+@pytest.mark.skipif(sys.platform != "darwin" or bool(os.environ.get("CI")) or not fenetre.available(),
                     reason="vraie fenêtre : Mac, hors GitHub")
 @pytest.mark.parametrize("end", ["fermer", "quitter"])
 def test_real_window_discreet(tmp_path, end):
@@ -210,7 +210,7 @@ print("2e lancement terminé sans ouvrir d'onglet")
 '''
 
 
-@pytest.mark.skipif(sys.platform != "darwin" or os.environ.get("CI") or not fenetre.available(),
+@pytest.mark.skipif(sys.platform != "darwin" or bool(os.environ.get("CI")) or not fenetre.available(),
                     reason="vraie fenêtre : Mac, hors GitHub")
 @pytest.mark.parametrize("systeme", ["mac", "windows"])
 def test_second_launch_brings_running_window_end_to_end(tmp_path, systeme):
