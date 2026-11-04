@@ -232,8 +232,8 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         atexit.register(sync.stop)
         if (cloud or {}).get("background", True):
             # battement du verrou + publication de ce qu'aurait écrit l'IA (autre processus) dans la copie de travail
-            sync.start(on_tick=lambda: (not sync.readonly and not sync.problem and sync.local_dirty()
-                                        and sync.publish()))
+            sync.start(on_tick=lambda: (idle_check(), not sync.readonly and not sync.problem
+                                        and sync.local_dirty() and sync.publish()))
 
     # « Défaire » est proposé dans le message qui suit une action, et ne vaut que pour CETTE action :
     # on note l'action défaisable au début de chaque requête pour savoir si la requête en a créé une.
@@ -260,6 +260,15 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             return await call_next(request)
         finally:
             snap_before.reset(token)
+
+    app.state.last_seen = time.time()            # dernier signe d'un onglet ouvert (page, ou /ping?vu=1 d'un onglet)
+
+    def idle_check(now=None) -> bool:
+        """Aucun onglet ouvert depuis C.IDLE_AFTER secondes : rendre la main aux autres ordinateurs."""
+        if sync is None or (now or time.time()) - app.state.last_seen < C.IDLE_AFTER:
+            return False
+        return sync.go_idle()
+    app.state.idle_check = idle_check
 
     def is_placeholder() -> bool:
         return db.dir == sync.local / ".verrouille"
@@ -341,6 +350,15 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         if sync is None:
             return await call_next(request)
         path = request.url.path
+        tab = (not path.startswith(("/static", "/ping", "/maj/etat", "/api"))
+               or (path == "/ping" and request.query_params.get("vu")))
+        if tab:                                  # un onglet est ouvert : on reprend la main si on l'avait rendue
+            app.state.last_seen = time.time()
+            if sync.idle:
+                try:
+                    sync.wake()
+                except Exception:
+                    pass
         if request.method == "GET" and not path.startswith(("/static", "/ping", "/maj/etat")):
             try:
                 cloud_refresh()

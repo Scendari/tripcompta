@@ -94,8 +94,8 @@ les brouillons IA. L'app travaille sur une copie et, après chaque modification,
 **d'un seul coup** (jamais de fichier à moitié écrit).
 
 - **Un seul ordinateur à la fois** peut modifier : les autres ouvrent les voyages en **lecture seule** (« ouverts
-  sur « PC du club » depuis 14 h 02 ») et se mettent à jour quand on revient sur l'app. **⏻ Arrêter** libère la
-  main ; sinon, **Prendre la main** à tout moment (l'autre passe en lecture seule dès que le cloud lui apporte le
+  sur « PC du club » depuis 14 h 02 ») et se mettent à jour quand on revient sur l'app. Fermer l'onglet suffit : sans onglet ouvert depuis 2 minutes, l'app
+  rend la main (« ⏻ Arrêter » aussi) ; sinon, **Prendre la main** à tout moment (l'autre passe en lecture seule dès que le cloud lui apporte le
   verrou ; une saisie faite là-bas entre-temps donne une copie en conflit à trancher, rien n'est perdu). Sur un
   même ordinateur, une seule Trip Compta à la fois : relancer l'icône montre celle qui est ouverte.
 - **Fichier retiré de l'ordinateur par le cloud** (disque plein, « Libérer de l'espace »…) : Trip Compta le signale
