@@ -126,3 +126,30 @@ def test_party_flag_when_everything_settled(tmp_path):
         s.add(t)
         s.commit()
     assert 'data-regle="1"' in TestClient(app).get("/").text           # personne ne doit rien, rien à rendre
+
+
+def test_home_buttons_hidden_while_a_form_is_open(tmp_path, browser):
+    """« + Nouveau voyage » ouvert : les boutons du haut disparaissent (on les prenait pour la validation),
+    et reviennent avec « Fermer »."""
+    app = create_app(tmp_path / "d")
+    seed_demo(app.state.db)
+    srv, th, url = serve(app)
+    try:
+        pg = browser.new_page(viewport={"width": 1280, "height": 700})
+        pg.goto(url)
+        shown = "document.querySelector('.home-actions').offsetParent !== null"
+        assert pg.evaluate(shown)
+        pg.click("text=+ Nouveau voyage")
+        pg.wait_for_timeout(100)
+        assert not pg.evaluate(shown) and pg.evaluate("document.activeElement.id") == "name"
+        pg.click("#nouveau >> text=Fermer")
+        pg.wait_for_timeout(100)
+        assert pg.evaluate(shown)
+        pg.click("text=Importer un voyage")
+        pg.wait_for_timeout(100)
+        assert not pg.evaluate(shown)
+        pg.goto(url + "?nouveau=1")
+        assert not pg.evaluate(shown)
+    finally:
+        srv.should_exit = True
+        th.join(5)

@@ -795,6 +795,7 @@ textarea.modele.modele-libre { min-height: 11rem; height: 14rem; }
 /* Accueil (révisé) : en-tête avec les deux actions, panneaux repliés, voyages en tuiles */
 .home-head { align-items: flex-end; }
 .home-actions { gap: .5rem; flex-wrap: wrap; }
+.home-actions[hidden] { display: none; }
 .home-panel { margin-bottom: 1.2rem; }
 .home-form.panel { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 0 1.2rem; align-items: start; }
 .home-form.panel .field > label, .home-form.panel .field > .label-like { min-height: 1.3rem; }
