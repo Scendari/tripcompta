@@ -1,6 +1,8 @@
-"""Lance Trip Compta et ouvre le navigateur.
+"""Lance Trip Compta : dans sa propre fenêtre (application fabriquée, Mac et Windows), sinon dans le navigateur.
 
-    python run.py                 # usage normal
+    python run.py                 # usage normal (depuis le code source : navigateur)
+    python run.py --fenetre       # dans sa propre fenêtre (essai depuis le code source)
+    python run.py --navigateur    # toujours dans le navigateur
     python run.py --demo          # ajoute aussi le voyage de démonstration
     python run.py --port 9000 --no-browser --data-dir ./donnees
 """
@@ -34,6 +36,34 @@ def running_instance(first: int = 8765, count: int = 50) -> str | None:
     return None
 
 
+def show_running_window(url: str) -> bool:
+    """Windows : un 2e lancement demande à Trip Compta déjà ouvert de remettre sa fenêtre devant (False si celui-ci
+    tourne dans le navigateur)."""
+    import urllib.request
+    try:
+        req = urllib.request.Request(url + "fenetre/montrer", data=b"", method="POST")
+        with urllib.request.urlopen(req, timeout=3) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def _quiet_streams():
+    """Application sans console (Windows, fenêtre) : pas de sortie standard ; on écrit dans un journal à côté des
+    réglages, sinon le serveur échouerait au premier message."""
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+    try:
+        from compta import paths
+        f = paths.config_file()
+        f.parent.mkdir(parents=True, exist_ok=True)
+        log = open(f.parent / "tripcompta.log", "a", encoding="utf-8", buffering=1)
+    except Exception:
+        log = open(os.devnull, "w")
+    sys.stdout = sys.stdout or log
+    sys.stderr = sys.stderr or log
+
+
 def free_port(preferred: int) -> int:
     for port in [preferred] + list(range(preferred + 1, preferred + 50)):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -56,6 +86,8 @@ def main():
     ap.add_argument("--data-dir", help="Dossier des données (défaut : Documents/TripCompta)")
     ap.add_argument("--demo", action="store_true", help="Ajoute le voyage de démonstration")
     ap.add_argument("--mcp", action="store_true", help="Démarre le serveur MCP (stdio) pour une IA")
+    ap.add_argument("--fenetre", action="store_true", help="Dans sa propre fenêtre (même depuis le code source)")
+    ap.add_argument("--navigateur", action="store_true", help="Dans le navigateur, même pour l'application fabriquée")
     ap.add_argument("--home", help=argparse.SUPPRESS)          # MCP : dossier synchronisé (voir compta/cloud.py)
     a = ap.parse_args()
 
@@ -64,12 +96,20 @@ def main():
         build_server(a.data_dir, a.home).run("stdio")
         return
 
+    _quiet_streams()
+    from compta import fenetre
+    restarted = bool(os.environ.get("TRIPCOMPTA_RESTARTED"))
+    # fenêtre : application fabriquée (Mac, Windows), sauf --navigateur. --no-browser (essais, serveur seul) n'ouvre
+    # rien, sauf après un redémarrage ou une mise à jour : l'ancienne fenêtre a disparu avec l'ancien programme.
+    window = fenetre.wanted(getattr(sys, "frozen", False), a.navigateur, a.fenetre) and (not a.no_browser or restarted)
+
     # déjà ouverte sur cet ordinateur ? on montre celle-là au lieu d'en lancer une 2e (sauf dossier imposé : tests)
-    if (a.port == 8765 and not a.data_dir and not os.environ.get("TRIPCOMPTA_RESTARTED")
-            and not os.environ.get("TRIPCOMPTA_DATA_DIR")):
+    if (a.port == 8765 and not a.data_dir and not restarted and not os.environ.get("TRIPCOMPTA_DATA_DIR")):
         url = running_instance()
         if url:
             print(f"Trip Compta est déjà ouvert : {url}")
+            if window and show_running_window(url):
+                return
             if not a.no_browser:
                 webbrowser.open(url)
             return
@@ -127,7 +167,10 @@ def main():
         print(" ⚠️  Ces données viennent d'une version plus récente : installe-la (voir le navigateur).")
     print(" Pour arrêter : ferme cette fenêtre (ou Ctrl+C)")
     print("=" * 60)
-    if not a.no_browser and not os.environ.get("TRIPCOMPTA_RESTARTED"):
+    if window:
+        fenetre.run(app, "127.0.0.1", port)
+        return
+    if not a.no_browser and not restarted:
         threading.Thread(target=lambda: (time.sleep(1.2), webbrowser.open(url)), daemon=True).start()
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 

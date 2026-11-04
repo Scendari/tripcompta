@@ -231,6 +231,13 @@
     d.remove();
     const done = a.closest("[data-send-row]");
     if (done) done.classList.add("sent");
+    if (window.pywebview) {   // dans sa propre fenêtre : dire où est le PDF (un navigateur l'affiche lui-même)
+      let t = document.querySelector(".toast");
+      if (!t) { t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status"); document.body.appendChild(t); }
+      t.textContent = "📄 PDF enregistré dans Téléchargements : joins-le au message.";
+      t.hidden = false;
+      clearTimeout(t._h); t._h = setTimeout(() => { t.hidden = true; }, 7000);
+    }
   });
 
   // Aperçu des fichiers choisis (photos et PDF) avant l'envoi, avec un × pour en retirer un
@@ -423,5 +430,55 @@
       const role = form.querySelector(`input[name=r_${k.companion ? "accompagnant" : "plongeur"}]`);
       if (role && !role.checked) { role.checked = true; role.dispatchEvent(new Event("change", { bubbles: true })); }
     });
+  });
+})();
+
+// Trip Compta dans sa propre fenêtre (pas un navigateur) : Cmd/Ctrl+F cherche dans la page, Cmd/Ctrl+N ouvre une
+// nouvelle fenêtre. Dans un navigateur, rien ne change (ses propres raccourcis restent).
+(function () {
+  function inWindow() { return !!window.pywebview; }
+  let bar = null, input = null, last = "";
+  function search(back) {
+    const q = input.value;
+    if (!q) return;
+    if (q !== last) { last = q; window.getSelection().removeAllRanges(); }
+    // le texte de la page (sans les champs de saisie : sinon on « trouverait » ce qu'on vient de taper)
+    const inPage = document.body.innerText.toLowerCase().includes(q.toLowerCase());
+    const found = inPage && window.find(q, false, back, true, false, false, false);
+    bar.classList.toggle("none", !found);
+    input.focus();
+  }
+  window.tcFind = function () {
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.className = "find-bar";
+      bar.setAttribute("role", "search");
+      bar.innerHTML = '<label class="sr-only" for="tc-find">Rechercher dans la page</label>' +
+        '<input id="tc-find" type="search" placeholder="Rechercher dans la page" autocomplete="off">' +
+        '<button type="button" class="iconbtn" data-dir="back" title="Précédent (Maj+Entrée)">↑</button>' +
+        '<button type="button" class="iconbtn" data-dir="next" title="Suivant (Entrée)">↓</button>' +
+        '<button type="button" class="iconbtn" data-close title="Fermer (Échap)">✕</button>' +
+        '<span class="find-none small">Introuvable</span>';
+      document.body.appendChild(bar);
+      input = bar.querySelector("input");
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); search(e.shiftKey); }
+        if (e.key === "Escape") { e.preventDefault(); bar.hidden = true; }
+      });
+      bar.querySelector("[data-dir=back]").addEventListener("click", () => search(true));
+      bar.querySelector("[data-dir=next]").addEventListener("click", () => search(false));
+      bar.querySelector("[data-close]").addEventListener("click", () => { bar.hidden = true; });
+    }
+    bar.hidden = false;
+    const sel = String(window.getSelection() || "").trim();
+    if (sel && sel.length < 80) input.value = sel;
+    input.focus();
+    input.select();
+  };
+  document.addEventListener("keydown", (e) => {
+    if (!inWindow() || !(e.metaKey || e.ctrlKey) || e.altKey) return;
+    const k = e.key.toLowerCase();
+    if (k === "f") { e.preventDefault(); window.tcFind(); }
+    if (k === "n") { e.preventDefault(); fetch("/fenetre/nouvelle", { method: "POST" }); }
   });
 })();

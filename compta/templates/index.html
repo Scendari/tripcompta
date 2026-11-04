@@ -1,5 +1,7 @@
 {% extends "base.html" %}
+{% from "_paperboat.html" import harbour %}
 {% block page %}
+<div class="home-page">
 {% macro new_trip_form(first=false, panel=false) -%}
 <form class="card home-form{{ ' panel' if panel }}" method="post" action="/voyages">
   <h2 class="home-h">{{ '✨ Créer ton premier voyage' if first else 'Nouveau voyage' }}</h2>
@@ -79,5 +81,6 @@ document.querySelectorAll('.home-actions [data-toggle-row]').forEach(function (b
   {{ import_form(true) }}
 </div>
 {% endif %}
-
+</div>
+{{ harbour() }}
 {% endblock %}

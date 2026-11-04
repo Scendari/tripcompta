@@ -477,3 +477,58 @@ def test_renamed_app_found_and_relaunched(tmp_path):
     (old / "Trip Compta").write_text("x")
     assert U.find_app(tmp_path / "o", Path("/opt/TripCompta")) == old
     assert U.new_exe_rel(old, "TripCompta") == "Trip Compta"
+
+
+def test_newer_database_page_offers_update(tmp_path, monkeypatch):
+    """Données ouvertes par une version plus récente : si la version publiée sait les ouvrir, un bouton met à
+    jour directement depuis cet écran (sans toucher aux données) ; sinon, le lien de téléchargement."""
+    d = tmp_path / "donnees"
+    Database(d, app_version="1.1.0")                        # publiée : 1.1.0 (FakeGitHub)
+    before = (d / "compta.db").read_bytes()
+    u = make(version="1.0.0")
+    monkeypatch.setattr(u, "installable", lambda: (True, ""))
+    started = []
+    monkeypatch.setattr(u, "run_install", lambda **kw: started.append(kw))
+    app = create_app(d, updater=u)
+    c = TestClient(app)
+    r = c.get("/")
+    assert r.status_code == 409 and "Mettre à jour vers la 1.1.0" in r.text and 'action="/maj/installer"' in r.text
+    r = c.post("/maj/installer", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/maj/en-cours"
+    import time
+    for _ in range(50):
+        if started:
+            break
+        time.sleep(0.02)
+    assert started and started[0]["db"] is None
+    assert "Mise à jour vers la version 1.1.0" in c.get("/maj/en-cours").text
+    assert c.get("/maj/etat").json()["step"] == "sauvegarde"
+    assert (d / "compta.db").read_bytes() == before         # rien touché
+    assert stored_version(d / "compta.db") == "1.1.0"
+
+
+def test_newer_database_page_published_too_old(tmp_path):
+    """Données ouvertes par une 2.0.0, publiée : 1.1.0 → la mise à jour n'aiderait pas : pas de bouton."""
+    d = tmp_path / "donnees"
+    Database(d, app_version="2.0.0")
+    c = TestClient(create_app(d, updater=make(version="1.0.0")))
+    r = c.get("/")
+    assert "Mettre à jour vers" not in r.text and "Télécharger la dernière version" in r.text
+    assert c.post("/maj/installer", follow_redirects=False).headers["location"] == "/"
+
+
+def test_newer_database_page_not_installable(tmp_path, monkeypatch):
+    """Mise à jour impossible (ex. Mac : app ouverte depuis Téléchargements) : on dit pourquoi, et le lien."""
+    d = tmp_path / "donnees"
+    Database(d, app_version="1.1.0")
+    u = make(version="1.0.0")
+    monkeypatch.setattr(U, "install_location", lambda *a, **k: (
+        Path("/private/var/folders/x/T/AppTranslocation/ABC/d/Trip Compta.app"), "Contents/MacOS/Trip Compta"))
+    monkeypatch.setattr(U, "asset_name", lambda *a, **k: "TripCompta-mac-arm64.zip")
+    r = TestClient(create_app(d, updater=u)).get("/")
+    assert "1.1.0 est disponible" in r.text and "Glisse-la dans le dossier Applications" in r.text
+    assert "Mettre à jour vers" not in r.text and "Télécharger la dernière version" in r.text
+
+
+def test_backup_skipped_without_database():
+    assert U.backup_database(None, "1.2.0") is None

@@ -48,6 +48,10 @@ Ces étapes 3 et 4 ne sont à faire **qu'une fois** : les mises à jour faites p
 Au premier lancement, macOS peut demander si Trip Compta peut accéder au dossier **Documents** : réponds
 **Autoriser** (c'est là que sont rangées tes données).
 
+Trip Compta s'ouvre dans **sa propre fenêtre** (comme une application ordinaire). **Cmd+N** ouvre une 2ᵉ fenêtre
+(par exemple deux voyages côte à côte), **Cmd+F** cherche dans la page, et le menu **Fichier → Ouvrir dans le
+navigateur** l'affiche dans ton navigateur si tu préfères. Pour l'arrêter : ferme la fenêtre, ou **Cmd+Q**.
+
 ---
 
 ## Windows
@@ -62,7 +66,8 @@ Au premier lancement, macOS peut demander si Trip Compta peut accéder au dossie
    **Exécuter quand même**. (Une seule fois.)
 5. Pour la retrouver facilement : clic droit sur **TripCompta.exe** → **Envoyer vers** → **Bureau (créer un raccourci)**.
 
-Une fenêtre noire s'ouvre avec le navigateur : c'est normal. **La fermer arrête l'application.**
+Trip Compta s'ouvre dans **sa propre fenêtre**. Pour l'arrêter, ferme simplement cette fenêtre : tout est enregistré.
+(Il utilise WebView2, le moteur d'Edge, déjà présent dans Windows 10 et 11.)
 
 ---
 
@@ -107,8 +112,8 @@ Dropbox), puis relancer Trip Compta.
 
 - **Un seul à la fois** peut modifier les voyages. Sur l'autre, ils s'ouvrent en **lecture seule**, avec le nom de
   l'ordinateur qui a la main, et se mettent à jour quand tu reviens sur l'app.
-- Quand tu as fini : **ferme simplement l'onglet**. Au bout de 2 minutes, Trip Compta rend la main et l'autre
-  ordinateur la reprend tout seul (rien n'est perdu : tout est enregistré à chaque modification).
+- Quand tu as fini : **ferme simplement la fenêtre de Trip Compta**. Il enregistre, rend la main, et l'autre
+  ordinateur la reprend tout seul (dans un navigateur : ferme l'onglet, Trip Compta rend la main au bout de 2 minutes) (rien n'est perdu : tout est enregistré à chaque modification).
 - Ordinateur resté allumé, planté, ou pas le temps d'attendre : **Prendre la main** dans le bandeau « Lecture
   seule ». L'autre passe en lecture seule (le temps que ton cloud le prévienne). Préviens d'abord la personne si
   elle est en train de saisir : sinon tu devras choisir entre deux versions (rien n'est perdu).

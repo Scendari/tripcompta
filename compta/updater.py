@@ -182,6 +182,9 @@ class Updater:
         if loc is None:
             return False, "L'application ne tourne pas depuis une version installée."
         target, _ = loc
+        if "/AppTranslocation/" in str(target):  # Mac : app ouverte depuis Téléchargements, isolée par macOS
+            return False, ("Trip Compta tourne depuis le dossier où tu l'as téléchargée : macOS l'empêche de se "
+                           "remplacer. Glisse-la dans le dossier Applications, puis relance-la.")
         if not os.access(target.parent, os.W_OK):
             return False, f"Trip Compta n'a pas le droit de se remplacer dans « {target.parent} »."
         return True, ""
@@ -275,7 +278,7 @@ def work_dir() -> Path:
 
 
 def backup_database(db, new_version: str) -> Path | None:
-    if not db.path.exists():
+    if db is None or not db.path.exists():       # None : données refusées (trop récentes), on n'y a pas touché
         return None
     safe = "".join(ch for ch in new_version if ch.isalnum() or ch in ".-")
     dst = db.backups_dir / f"avant-maj-{safe}.db"

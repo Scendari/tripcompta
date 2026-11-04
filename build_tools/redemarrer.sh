@@ -2,7 +2,7 @@
 # Arrête Trip Compta s'il tourne, puis le relance depuis le code source (mêmes données, même adresse).
 # Depuis le code source : pas de nouvelle demande d'accès au dossier Documents à chaque reconstruction de l'app.
 # L'onglet déjà ouvert se recharge tout seul ; un onglet n'est ouvert que si l'appli ne tournait pas.
-# Option --app : relancer l'application Mac reconstruite (dist/TripCompta.app) à la place.
+# Option --app : relancer l'application Mac reconstruite (dist.noindex/TripCompta.app) à la place.
 cd "$(dirname "$0")/.."
 was_running=0
 for port in {8765..8814}; do
@@ -23,7 +23,7 @@ done
 args=()
 [[ $was_running == 1 ]] && args+=(--no-browser)
 if [[ "$1" == "--app" ]]; then
-  open -n "dist/TripCompta.app" --args "${args[@]}"
+  open -n "dist.noindex/TripCompta.app"   # l'app ouvre sa propre fenêtre (l'ancienne a disparu avec elle)
 else
   mkdir -p "$HOME/Library/Logs"
   nohup .venv/bin/python run.py "${args[@]}" >> "$HOME/Library/Logs/tripcompta.log" 2>&1 &

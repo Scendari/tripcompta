@@ -275,3 +275,21 @@ def test_deleted_trip_number_reused_inherits_nothing(tmp_path):
     assert "secret de l" not in page_new
     key = lambda p: re.search(r'const KEY = "compta-ia-" \+ TRIP \+ "-(\d*)-"', p).group(1)
     assert key(page_old) != key(page_new)                         # copie du navigateur : clé différente
+
+
+def test_home_lists_trips_newest_first(tmp_path):
+    """« Mes voyages » : du plus récemment créé au plus ancien (pas selon les dates du voyage)."""
+    import datetime as dt
+    from fastapi.testclient import TestClient
+    from compta import models as M
+    from compta.web import create_app
+    app = create_app(tmp_path / "d")
+    with app.state.db.Session() as s:
+        for name, start, created in (("Ancien mais tard dans l'année", dt.date(2027, 12, 1), dt.datetime(2026, 1, 1)),
+                                     ("Le plus récent", dt.date(2026, 3, 1), dt.datetime(2026, 11, 4)),
+                                     ("Au milieu", None, dt.datetime(2026, 6, 1))):
+            s.add(M.Trip(name=name, start=start, created=created))
+        s.commit()
+    html = TestClient(app).get("/").text
+    pos = [html.index(n) for n in ("Le plus récent", "Au milieu", "Ancien mais tard dans l&#39;année")]
+    assert pos == sorted(pos)
