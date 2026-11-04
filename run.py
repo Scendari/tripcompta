@@ -15,6 +15,7 @@ import sys
 import threading
 import time
 import webbrowser
+from pathlib import Path
 
 
 def running_instance(first: int = 8765, count: int = 50) -> str | None:
@@ -34,6 +35,66 @@ def running_instance(first: int = 8765, count: int = 50) -> str | None:
         except Exception:
             continue
     return None
+
+
+# ---------------------------------------------------------------- une seule Trip Compta par dossier de voyages
+class InstanceLock:
+    """Verrou du système (flock / msvcrt) sur un dossier de voyages : une seule Trip Compta à la fois sur ces données,
+    sur cet ordinateur. Sans course entre deux lancements simultanés, et libéré tout seul si l'application plante.
+    À côté, un petit fichier dit où joindre celle qui tourne (pid, port)."""
+
+    def __init__(self, data_dir: Path):
+        import hashlib
+        from compta import paths
+        key = hashlib.sha1(str(data_dir).encode("utf-8")).hexdigest()[:12]
+        folder = paths.config_file().parent
+        folder.mkdir(parents=True, exist_ok=True)
+        self.path = folder / f"instance-{key}.lock"
+        self.info = folder / f"instance-{key}.json"
+        self.fh = None
+
+    def acquire(self, wait: float = 0) -> bool:
+        """Prend le verrou (en attendant au plus « wait » secondes : relance après un redémarrage)."""
+        end = time.time() + wait
+        while True:
+            fh = open(self.path, "a+")
+            try:
+                if sys.platform == "win32":
+                    import msvcrt
+                    fh.seek(0)
+                    msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self.fh = fh                       # gardé ouvert : le verrou dure autant que le programme
+                return True
+            except OSError:
+                fh.close()
+                if time.time() >= end:
+                    return False
+                time.sleep(0.2)
+
+    def publish(self, port: int):
+        import json
+        tmp = self.info.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"pid": os.getpid(), "port": port}), encoding="utf-8")
+        os.replace(tmp, self.info)
+
+    def running_url(self, timeout: float = 15) -> str | None:
+        """Adresse de la Trip Compta qui tient le verrou (elle peut être encore en train de démarrer)."""
+        import json
+        import urllib.request
+        end = time.time() + timeout
+        while time.time() < end:
+            try:
+                port = json.loads(self.info.read_text(encoding="utf-8"))["port"]
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/ping", timeout=1) as r:
+                    if json.load(r).get("app") == "tripcompta":
+                        return f"http://127.0.0.1:{port}/"
+            except Exception:
+                pass
+            time.sleep(0.25)
+        return None
 
 
 def show_running_window(url: str) -> bool:
@@ -103,7 +164,26 @@ def main():
     # rien, sauf après un redémarrage ou une mise à jour : l'ancienne fenêtre a disparu avec l'ancien programme.
     window = fenetre.wanted(getattr(sys, "frozen", False), a.navigateur, a.fenetre) and (not a.no_browser or restarted)
 
-    # déjà ouverte sur cet ordinateur ? on montre celle-là au lieu d'en lancer une 2e (sauf dossier imposé : tests)
+    # une seule Trip Compta par dossier de voyages : si elle tourne déjà, on montre celle-là et on s'arrête
+    from compta import paths as PATHS
+    try:
+        data_dir = Path(a.data_dir or os.environ.get("TRIPCOMPTA_DATA_DIR") or PATHS.default_data_dir()).expanduser().resolve()
+    except OSError:
+        data_dir = None
+    lock = InstanceLock(data_dir) if data_dir is not None else None
+    # après un redémarrage (mise à jour, changement de dossier…), l'ancienne n'a peut-être pas encore rendu la main
+    if lock is not None and not lock.acquire(wait=30 if (restarted or os.environ.get("TRIPCOMPTA_PORT_WAIT")) else 0):
+        url = lock.running_url()
+        if url:
+            print(f"Trip Compta est déjà ouvert : {url}")
+            if not (window and show_running_window(url)) and not a.no_browser:
+                webbrowser.open(url)
+        else:
+            print("Trip Compta est déjà en train de s'ouvrir sur ces voyages.")
+        return
+    main.lock = lock                           # garder le verrou jusqu'à la fin du programme
+
+    # une version plus ancienne (sans verrou) déjà ouverte sur le port habituel ? on montre celle-là
     if (a.port == 8765 and not a.data_dir and not restarted and not os.environ.get("TRIPCOMPTA_DATA_DIR")):
         url = running_instance()
         if url:
@@ -155,6 +235,8 @@ def main():
                 break
             time.sleep(0.25)
     port = free_port(a.port)
+    if lock is not None:
+        lock.publish(port)
     app.state.port = port                    # pour relancer au même endroit après une mise à jour
     app.state.argv = sys.argv[1:]
     url = f"http://127.0.0.1:{port}/"
