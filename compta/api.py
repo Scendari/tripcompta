@@ -64,6 +64,11 @@ class ExpensePatch(BaseModel):
     paye_par: Optional[Ref] = None
     pour: Optional[Union[str, list[Ref]]] = None
     parts: Optional[dict[str, Union[float, str]]] = None
+    note: Optional[str] = Field(None, description="Note de la dépense (remplace l'actuelle ; \"\" l'efface)")
+    sous_categorie: Optional[str] = None
+    sauf: Optional[list[Ref]] = Field(None, description="Personnes exclues (avec « pour »)")
+    rembourse: Amount = Field(None, description="Montant remboursé par le fournisseur (0 : plus de remboursement)")
+    rembourse_a: Optional[Ref] = Field(None, description="Qui a reçu ce remboursement (sinon l'asso)")
     simulation: bool = False
 
 
