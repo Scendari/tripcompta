@@ -880,6 +880,7 @@ def test_last_save_time_shown_right_after_launch(cloud_env):
     stop(a)
     b = make(tmp, shared, "PC-A", 102)                       # nouveau lancement : rien publié depuis
     assert b.state.sync.published_at is None
+    b.state.sync.pulled_at = _t.time() + 3600                # récupéré au lancement : ce n'est pas un enregistrement
     hm = _t.strftime("%H h %M", _t.localtime((shared / C.DB).stat().st_mtime)).lstrip("0")
     page = TestClient(b).get("/").text
     assert "enregistré à " in page and hm.replace(" h ", " h ") in page

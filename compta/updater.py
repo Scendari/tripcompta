@@ -304,14 +304,6 @@ def download_file(url: str, dest: Path, progress=None) -> str:
     return h.hexdigest()
 
 
-def sha256_of(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 16), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
 def parse_sums(text: str) -> dict:
     """Format de sha256sum : « <empreinte>  <nom> » (un « * » devant le nom en mode binaire)."""
     out = {}

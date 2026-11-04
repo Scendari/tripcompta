@@ -313,15 +313,6 @@ def new_trip_categories(s) -> list:
     return [M.Category(name=n, audience=a, position=i) for i, (n, a) in enumerate(default_category_list(s))]
 
 
-def save_default_categories(s, trip: M.Trip) -> None:
-    value = json.dumps([[c.name, audience_of(c)] for c in trip.categories], ensure_ascii=False)
-    row = s.get(M.Setting, DEFAULTS_KEY)
-    if row is None:
-        s.add(M.Setting(key=DEFAULTS_KEY, value=value))
-    else:
-        row.value = value
-
-
 def engine_inputs(trip: M.Trip) -> dict:
     cats = {c.id: c.name for c in trip.categories}
     return dict(
@@ -397,11 +388,6 @@ def everyone_expense(trip: M.Trip, expense: M.Expense) -> bool:
     ids = {p.id for p in trip.participants}
     shares = {s.participant_id: s.weight for s in expense.shares}
     return set(shares) == ids and all(w == 1 for w in shares.values())
-
-
-def is_activity(expense: M.Expense) -> bool:
-    """Dépense réservée aux plongeurs par défaut (selon sa catégorie)."""
-    return audience_of(expense.category) == DIVERS
 
 
 def audience_ids(trip: M.Trip, audience: str) -> set:
@@ -1032,11 +1018,6 @@ def delete_group(trip: M.Trip, name: str) -> None:
     key = E.sort_key(name).strip()
     trip.groups = json.dumps([dict(name=g["name"], members=g["ids"]) for g in trip_groups(trip)
                               if E.sort_key(g["name"]).strip() != key], ensure_ascii=False)
-
-
-def groups_of(trip: M.Trip, pid: int) -> list:
-    """Noms des groupes dont fait partie une personne."""
-    return [g["name"] for g in trip_groups(trip) if pid in g["ids"]]
 
 
 def set_person_groups(trip: M.Trip, pid: int, names) -> None:

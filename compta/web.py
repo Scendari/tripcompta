@@ -504,7 +504,9 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             on_disk = shared_file.stat().st_mtime if shared_file.exists() else None
         except OSError:
             on_disk = None
-        saved = max([x for x in (sync.published_at, sync.pulled_at, on_disk) if x] or [0]) or None
+        # (pas « pulled_at » : c'est l'heure où l'on a récupéré le fichier, au lancement par exemple, pas celle où il
+        # a été enregistré ; un fichier récupéré a gardé sa date, comptée dans on_disk)
+        saved = max([x for x in (sync.published_at, on_disk) if x] or [0]) or None
         return dict(service=sync.service or ("cet ordinateur" if not PATHS.looks_synced(sync.shared)
                                              else "le dossier synchronisé"), folder=str(sync.shared),
                     readonly=sync.readonly, problem=sync.problem, owner=o.get("ordinateur"),
