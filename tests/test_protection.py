@@ -182,6 +182,8 @@ def test_round_trip_activate_unlock_remove(env):
     assert "Mot de passe actuel incorrect" in r.text and K.is_protected(folder)
     r = cl.post("/protection/retirer", data={"actuel": PASSWORD})
     assert "protection est retirée" in r.text
+    assert app.state.sync.publish() == "inchangé"               # battement avant le redémarrage : rien à faire
+    assert not [p_ for p_ in folder.iterdir() if p_.name.startswith("compta (")]   # pas de fausse copie en conflit
     stop(app)
     assert not K.is_protected(folder) and (folder / C.DB).exists() and not (folder / K.DB_FILE).exists()
     assert not list((folder / C.RECEIPTS).glob(f"*{K.SUFFIX}"))
@@ -501,3 +503,44 @@ def test_no_clear_copy_elsewhere_while_protected(env):
         assert "retire d'abord la protection" in r.text.replace("&#39;", "'")
     assert not other.exists() and K.is_protected(folder) and no_clear_text(folder) == []
     stop(app)
+
+
+def test_many_pdf_thumbnails_at_once(env):
+    """Page Justificatifs avec un cache de vignettes vide (après chaque déverrouillage) : beaucoup de vignettes de
+    PDF demandées en même temps. La bibliothèque PDF ne le supporte pas : sans verrou, tout le processus plantait."""
+    import uvicorn
+    import urllib.request
+    from concurrent.futures import ThreadPoolExecutor
+    from fpdf import FPDF
+    from tests.conftest import _free_port
+    tmp, folder = env
+    app = create_app()
+    tid = seed(app)
+    files = []
+    for i in range(12):
+        d = FPDF()
+        d.add_page()
+        d.set_font("helvetica", size=40)
+        d.cell(0, 30, f"Facture {i}")
+        files.append(("files", (f"facture-{i}.pdf", bytes(d.output()), "application/pdf")))
+    TestClient(app).post(f"/v/{tid}/justificatifs", files=files)
+    port = _free_port()
+    srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
+    th = threading.Thread(target=srv.run, daemon=True)
+    th.start()
+    while not srv.started:
+        time.sleep(0.05)
+    try:
+        with app.state.db.Session() as s:
+            ids = [r.id for r in s.get(M.Trip, tid).receipts]
+
+        def thumb(rid):
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/v/{tid}/justificatifs/{rid}/vignette", timeout=30) as r:
+                return r.headers["content-type"], len(r.read())
+        with ThreadPoolExecutor(12) as ex:
+            got = list(ex.map(thumb, ids * 2))
+        assert all(ct == "image/jpeg" and n > 500 for ct, n in got)
+    finally:
+        srv.should_exit = True
+        th.join(5)
+        app.state.db.engine.dispose()

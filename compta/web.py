@@ -66,16 +66,25 @@ TRANSPARENT_PNG = bytes.fromhex(
     "1f15c4890000000d49444154789c6360000002000100e221bc330000000049454e44ae426082")
 
 
+import threading as _threading
+
+_PDFIUM = _threading.Lock()   # pypdfium2 n'accepte pas deux PDF à la fois : plusieurs vignettes en même temps
+                              # (page Justificatifs, cache vide) faisaient planter tout le processus
+
+
 def _thumbnail(data: bytes, is_pdf: bool, size: int = 240) -> bytes:
     """Miniature JPEG : la photo réduite (dans le bon sens), ou la 1re page d'un PDF."""
     import io
     from PIL import Image, ImageOps
     if is_pdf:
         import pypdfium2 as pdfium
-        doc = pdfium.PdfDocument(data)
-        page = doc[0]
-        im = page.render(scale=size / max(page.get_width(), page.get_height(), 1) * 1.5).to_pil()
-        doc.close()
+        with _PDFIUM:
+            doc = pdfium.PdfDocument(data)
+            try:
+                page = doc[0]
+                im = page.render(scale=size / max(page.get_width(), page.get_height(), 1) * 1.5).to_pil()
+            finally:
+                doc.close()
     else:
         im = ImageOps.exif_transpose(Image.open(io.BytesIO(data)))
     im = im.convert("RGB")
@@ -1047,7 +1056,10 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             p_.unlink(missing_ok=True)
         K.forget(vault_id)
         sync.vault = None
-        sync._save_state(shared=None, local=None)
+        # ce qu'on sait du dossier : exactement ce qui vient d'y être écrit (sinon le battement suivant croirait
+        # que le dossier a changé dans notre dos, et déposerait une fausse « copie en conflit »)
+        sync._save_state(shared=C.file_hash(F / C.DB), local=C.file_hash(db.path))
+        sync._seen_sig = sync._sig()
         return _restart_page(request, "La protection est retirée : tes voyages sont de nouveau des fichiers normaux.")
 
     @app.post("/reglages/conflit")
