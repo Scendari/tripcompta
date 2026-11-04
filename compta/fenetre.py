@@ -377,7 +377,14 @@ def run(app, host: str, port: int, log_level: str = "warning", on_start=None) ->
             on_start(f)
     # Mac : menu Fichier dans la barre du haut de l'écran. Windows : pywebview le mettrait DANS la fenêtre, sous le
     # titre (ça fait étranger) ; Ctrl+N / Ctrl+F marchent sans lui (app.js).
-    webview.start(after_start, private_mode=False, menu=[] if sys.platform == "win32" else _menu(f))
+    # Windows, essais : un dossier WebView2 à part. Deux WebView2 qui partagent le leur partagent aussi le navigateur
+    # (le 2e ignore alors son port de débogage) : l'essai rejoindrait le Trip Compta ouvert par l'utilisateur.
+    storage = None
+    if DISCRETE and sys.platform == "win32":
+        import tempfile
+        storage = tempfile.mkdtemp(prefix="tripcompta-webview2-")
+    webview.start(after_start, private_mode=False, storage_path=storage,
+                  menu=[] if sys.platform == "win32" else _menu(f))
     arreter()                                  # dernière fenêtre fermée : enregistre et rend la main
     server.should_exit = True
     th.join(timeout=5)
