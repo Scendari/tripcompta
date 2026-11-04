@@ -108,4 +108,6 @@ def test_imposed_folder_and_open(tmp_path, monkeypatch):
     r = c.post("/reglages/ouvrir-dossier", headers={"referer": "http://t/"}, follow_redirects=True)
     assert "Dossier ouvert" in r.text and opened and opened[0][-1] == str(tmp_path / "d")
     home = c.get("/").text
-    assert "Ouvrir le dossier" in home and 'href="/reglages/donnees"' in home
+    assert 'href="/reglages"' in home and "Tes données sont dans" not in home     # plus de long chemin en bas
+    reg = c.get("/reglages").text
+    assert "Où sont mes voyages" in reg and 'href="/reglages/donnees"' in reg and 'href="/reglages/protection"' in reg

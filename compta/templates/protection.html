@@ -2,11 +2,11 @@
 {% block page %}
 <div class="page-head"><div class="grow">
   <h1>🔒 Protéger mes voyages par un mot de passe</h1>
-</div><a class="btn ghost small" href="/reglages/donnees#protection">← Où ranger mes voyages</a></div>
+</div><a class="btn ghost small" href="/reglages/protection">← Mot de passe</a></div>
 
 {% if step == 'erreur' %}
 <div class="card data-card"><div class="flash err" role="alert">{{ error }}</div>
-  <a class="btn ghost" href="/reglages/donnees#protection">← Retour</a></div>
+  <a class="btn ghost" href="/reglages/protection">← Retour</a></div>
 
 {% elif step == 'mot_de_passe' %}
 <div class="card data-card">
