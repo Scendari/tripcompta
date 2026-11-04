@@ -601,7 +601,7 @@ def test_older_version_refuses_shared_folder(cloud_env):
     app = create_app(shared, updater=old)                        # l'ancienne app : directement sur le dossier
     r = TestClient(app).get("/")
     import html
-    assert r.status_code == 409 and "1.1.0" in html.unescape(r.text)
+    assert r.status_code == 409 and __version__ in html.unescape(r.text)
     assert (shared / C.DB).read_bytes() == before                # rien d'écrit
     assert not (shared / ".annuler").exists() and not (shared / "sauvegardes").exists()
 
