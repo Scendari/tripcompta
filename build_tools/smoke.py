@@ -75,7 +75,7 @@ def main(exe: str, expected: str) -> int:
                TRIPCOMPTA_DOCUMENTS=docs)
     env.pop("TRIPCOMPTA_DATA_DIR", None)
     log = open(os.path.join(tmp, "sortie.log"), "w")
-    p = subprocess.Popen([exe, "--no-browser", "--port", str(port)], env=env, stdout=log, stderr=subprocess.STDOUT)
+    p = subprocess.Popen([os.path.abspath(exe), "--no-browser", "--port", str(port)], env=env, stdout=log, stderr=subprocess.STDOUT)
     try:
         for _ in range(180):
             if p.poll() is not None:
