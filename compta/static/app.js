@@ -486,3 +486,14 @@
     if (k === "n") { e.preventDefault(); fetch("/fenetre/nouvelle", { method: "POST" }); }
   });
 })();
+
+// Hauteur réelle de l'en-tête (il peut passer sur deux lignes quand la fenêtre est étroite) : le menu du voyage,
+// fixe quand on fait défiler, se cale juste dessous, sans bande où l'on verrait le contenu passer.
+(function () {
+  const top = document.querySelector(".topbar");
+  if (!top) return;
+  const set = () => document.documentElement.style.setProperty("--topbar-h", top.getBoundingClientRect().height + "px");
+  set();
+  if (window.ResizeObserver) new ResizeObserver(set).observe(top);
+  else window.addEventListener("resize", set);
+})();
