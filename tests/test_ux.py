@@ -240,6 +240,8 @@ def test_first_time_user_only_clicks(server, browser):
     assert not page.locator("#name").is_visible()
     page.click("button:has-text('⤓ Importer un voyage')")
     assert page.locator("#fichier").is_visible()
+    pw.expect(page.locator("button:has-text('+ Nouveau voyage')")).to_be_hidden()   # formulaire ouvert : boutons masqués
+    page.click("#importer-panel >> text=Fermer")
     page.click("button:has-text('+ Nouveau voyage')")
     assert not page.locator("#fichier").is_visible()
     page.fill("#name", "Ma première sortie")
