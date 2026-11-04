@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block page %}
+<div class="unlock">
+  <div class="card unlock-card">
+    <h1>🔒 Mot de passe de tes voyages</h1>
+    <p class="muted">Tes voyages sont protégés : sans le mot de passe, personne ne peut les lire.</p>
+    {% if error %}<div class="flash err" role="alert">{{ error }}</div>{% endif %}
+    <form method="post" action="/deverrouiller" class="unlock-form">
+      <div class="field"><label for="u-pw">Mot de passe</label>
+        <input type="password" id="u-pw" name="mot_de_passe" autocomplete="current-password" required {{ 'autofocus' if not show_rec }}></div>
+      {% if can_remember %}<label class="chk"><input type="checkbox" name="souvenir" value="1"> Se souvenir sur cet ordinateur <span class="hint">(plus besoin de le taper ici)</span></label>{% endif %}
+      <button class="btn">Déverrouiller</button>
+    </form>
+    <details class="unlock-forgot" {{ 'open' if show_rec }}>
+      <summary>Mot de passe oublié ?</summary>
+      <p class="hint">Utilise ta <b>clé de secours</b> (8 groupes de 4 caractères, notée quand tu as protégé tes voyages), puis choisis un nouveau mot de passe.</p>
+      {% if error_rec %}<div class="flash err" role="alert">{{ error_rec }}</div>{% endif %}
+      <form method="post" action="/deverrouiller/secours">
+        <div class="field"><label for="u-rec">Clé de secours</label>
+          <input type="text" id="u-rec" name="secours" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" required class="mono"></div>
+        <div class="field"><label for="u-new">Nouveau mot de passe</label>
+          <input type="password" id="u-new" name="nouveau" autocomplete="new-password" required minlength="8"></div>
+        <div class="field"><label for="u-again">Encore une fois</label>
+          <input type="password" id="u-again" name="confirmation" autocomplete="new-password" required minlength="8"></div>
+        {% if can_remember %}<label class="chk"><input type="checkbox" name="souvenir" value="1"> Se souvenir sur cet ordinateur</label>{% endif %}
+        <button class="btn ghost">Ouvrir avec la clé de secours</button>
+      </form>
+    </details>
+    <p class="hint unlock-where">Dossier : <span class="break">{{ folder }}</span></p>
+  </div>
+</div>
+{% endblock %}

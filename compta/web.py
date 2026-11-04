@@ -177,18 +177,24 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             if stored and V.base(stored) and V.base(upd.version) and V.base(stored) > V.base(upd.version):
                 raise NewerDatabaseError(stored, upd.version, sync.shared)
             sync.open()
-            db = Database(sync.local, app_version=upd.version, home=sync.shared)
-            sync.publish()
+            if sync.locked:                      # protégé par un mot de passe : rien en clair tant que verrouillé
+                db = Database(sync.local / ".verrouille", app_version=upd.version, home=sync.shared,
+                              receipts_in_home=False)
+            else:
+                db = Database(sync.local, app_version=upd.version, home=sync.shared,
+                              receipts_in_home=not sync.protected)
+                sync.publish()
         else:
             db = Database(data_dir, app_version=upd.version)
     except NewerDatabaseError as err:
         if sync is not None:
             sync.release()
         return newer_data_app(err, upd)
-    db.daily_backup()
-    with db.Session() as s_:                     # centimes d'arrondi : un tirage pour les dépenses qui n'en ont pas
-        if any([S.store_draws(t_) for t_ in s_.query(M.Trip).all()]):
-            s_.commit()
+    if sync is None or not sync.locked:
+        db.daily_backup()
+        with db.Session() as s_:                 # centimes d'arrondi : un tirage pour les dépenses qui n'en ont pas
+            if any([S.store_draws(t_) for t_ in s_.query(M.Trip).all()]):
+                s_.commit()
     app = FastAPI(title="Trip Compta", docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json",
                   description="API JSON de Trip Compta : une IA peut lire et remplir les voyages. "
                               "Toutes les écritures acceptent \"simulation\": true.")
@@ -235,8 +241,52 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         finally:
             snap_before.reset(token)
 
+    def is_placeholder() -> bool:
+        return db.dir == sync.local / ".verrouille"
+
+    def open_unlocked():
+        """Après le déverrouillage : la vraie base (déchiffrée sur l'ordinateur) remplace la base vide d'attente."""
+        db.reopen(sync.local, receipts_in_home=False)
+        import shutil as _sh
+        _sh.rmtree(sync.local / ".verrouille", ignore_errors=True)
+        check_newer()
+        db.daily_backup()
+        with db.Session() as s_:
+            if any([S.store_draws(t_) for t_ in s_.query(M.Trip).all()]):
+                s_.commit()
+        if not sync.readonly:
+            sync.publish()
+
+    def to_locked():
+        """Verrouiller : base refermée, puis copie de travail effacée et historique chiffré (cloud.py)."""
+        db.engine.dispose()
+        if sync.vault is not None:
+            sync.lock()
+        else:                                    # protection apparue depuis un autre ordinateur
+            if sync.local_db.exists() and sync.local_dirty():
+                sync.keep_local_copy("pas-encore-envoyee")
+            sync.wipe_working_copy()
+            sync._flag_locked(True)
+            sync.release()
+        db.reopen(sync.local / ".verrouille", receipts_in_home=False)
+
+    def check_newer():
+        stored = stored_version(db.path)
+        if stored and V.base(stored) and V.base(upd.version) and V.base(stored) > V.base(upd.version):
+            sync.readonly = True
+            sync.problem = (f"Ces voyages ont été enregistrés par Trip Compta {stored}, plus récente que celle-ci : "
+                            f"mets à jour Trip Compta (ℹ️ À propos) pour pouvoir les modifier.")
+
     def cloud_refresh():
         """En revenant sur l'app : dossier revenu ? nouvelle version publiée par un autre ordinateur ?"""
+        if sync.protected and sync.vault is None:
+            if not is_placeholder():             # protection activée depuis un autre ordinateur
+                to_locked()
+            return
+        if not sync.protected and is_placeholder():  # protection retirée depuis un autre ordinateur
+            sync._flag_locked(False)
+            db.reopen(sync.local, receipts_in_home=True)
+            sync.acquire()
         if sync.problem:
             if sync.check_folder() is None:              # le dossier est revenu (cloud relancé, clé rebranchée)
                 sync.problem = None
@@ -247,13 +297,10 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             return
         if sync.shared_changed() and sync.pull(before_replace=db.engine.dispose):
             db.after_replace()
-            stored = stored_version(db.path)
-            if stored and V.base(stored) and V.base(upd.version) and V.base(stored) > V.base(upd.version):
-                sync.readonly = True
-                sync.problem = (f"Ces voyages ont été enregistrés par Trip Compta {stored}, plus récente que celle-ci : "
-                                f"mets à jour Trip Compta (ℹ️ À propos) pour pouvoir les modifier.")
+            check_newer()
 
-    READ_OK = ("/reglages", "/maj/", "/quitter", "/apercu-fichier")
+    READ_OK = ("/reglages", "/maj/", "/quitter", "/apercu-fichier", "/deverrouiller", "/verrouiller", "/protection")
+    LOCKED_OK = ("/static", "/ping", "/deverrouiller", "/quitter", "/maj/", "/reglages/a-propos", "/favicon")
 
     def readonly_message() -> str:
         if sync.problem:
@@ -280,12 +327,17 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             except Exception:
                 pass
         writing = request.method in ("POST", "PUT", "PATCH", "DELETE")
+        if sync.locked and not path.startswith(LOCKED_OK):
+            if path.startswith("/api/"):
+                return JSONResponse({"detail": "Trip Compta est verrouillé : saisis le mot de passe de tes voyages "
+                                               "dans l'application."}, status_code=423)
+            return RedirectResponse("/deverrouiller", status_code=303)
         if writing and sync.readonly and not path.startswith(READ_OK) and not path.endswith("apercu"):
             if path.startswith("/api/"):
                 return JSONResponse({"detail": readonly_message()}, status_code=423)
             return back(urlparse(request.headers.get("referer") or "/").path or "/", readonly_message())
         response = await call_next(request)
-        if writing and response.status_code < 400 and not sync.readonly and not sync.problem:
+        if writing and response.status_code < 400 and not sync.readonly and not sync.problem and not sync.locked:
             sync.publish()
         return response
 
@@ -343,9 +395,12 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             return None
         o = sync.owner or {}
         saved = max([x for x in (sync.published_at, sync.pulled_at) if x] or [0]) or None
-        return dict(service=sync.service or "le dossier synchronisé", folder=str(sync.shared),
+        return dict(service=sync.service or ("cet ordinateur" if not PATHS.looks_synced(sync.shared)
+                                             else "le dossier synchronisé"), folder=str(sync.shared),
                     readonly=sync.readonly, problem=sync.problem, owner=o.get("ordinateur"),
                     same_host=bool(o) and o.get("ordinateur") == sync.host,
+                    protected=sync.protected, locked=sync.locked,
+                    local=not PATHS.looks_synced(sync.shared) and sync.service is None,
                     since=_hm(o.get("depuis")), stale=bool(o) and sync.lock_is_stale(o), saved=_hm(saved),
                     conflicts=len(sync.conflicts()) if not sync.problem else 0,
                     inbox=len(sync.inbox()) if not sync.problem else 0)
@@ -559,6 +614,9 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         return render(request, "data_dir.html", data_dir=cur, source=data_source, shared=sync is not None,
                       default_dir=default_dir, synced=PATHS.looks_synced(cur), clouds=clouds,
                       conflicts=sync.conflicts() if sync is not None and not sync.problem else [],
+                      protected=sync is not None and sync.protected,
+                      remembered=bool(sync is not None and sync.vault is not None and K.recall(sync.vault.id)),
+                      can_remember=K.keyring_available(),
                       can_restart=app.state.restart is not None, **ctx)
 
     @app.get("/reglages/donnees", response_class=HTMLResponse)
@@ -619,6 +677,10 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         if data_source in ("lancement", "env"):
             return _data_page(request, error="Le dossier est imposé au lancement de l'application : il ne se change "
                                               "pas ici.")
+        if sync is not None and sync.protected and action in ("local", "defaut", "ranger"):
+            return _data_page(request, error="Tes voyages sont protégés par un mot de passe : pour les ranger "
+                                              "ailleurs, retire d'abord la protection (plus bas), change de dossier, "
+                                              "puis protège-les de nouveau. Sinon, une copie lisible serait créée.")
         if action == "proteger":                 # ancien réglage : dossier choisi, synchronisé, sans protection
             PATHS.write_config(partage=True)
             return _restart_page(request, "Trip Compta protège maintenant ce dossier synchronisé (verrou et "
@@ -658,7 +720,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             return _data_page(request, error="Tes voyages sont déjà rangés dans ce dossier.", value=raw)
         if not target.parent.is_dir() and not target.is_dir():
             return _data_page(request, error=f"Le dossier « {target.parent} » est introuvable.", value=raw)
-        has_data = (target / C.DB).exists() or (target / f".{C.DB}.icloud").exists()
+        has_data = (target / C.DB).exists() or (target / f".{C.DB}.icloud").exists() or K.is_protected(target)
         if f.get("mode") == "utiliser":
             if not has_data:
                 return _data_page(request, error="Il n'y a pas encore de voyages Trip Compta dans ce dossier (fichier "
@@ -699,6 +761,295 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         return back(ref, f"Tu as la main : tu peux modifier tes voyages. Sur « {who} », ils passent en lecture seule "
                          f"(dans les minutes qui viennent, le temps que {sync.service or 'ton cloud'} le prévienne).")
 
+    # ------------------------------------------------------------------ protection par un mot de passe
+    from . import crypto as K
+    app.state.pending_protection = None      # en cours d'activation (en mémoire seulement, jamais sur le disque)
+
+    def _folder() -> Path:
+        return db.home
+
+    def _unlock_page(request, **ctx):
+        return render(request, "unlock.html", folder=str(_folder()), can_remember=K.keyring_available(), **ctx)
+
+    @app.get("/deverrouiller", response_class=HTMLResponse)
+    def unlock_page(request: Request):
+        if sync is None or not sync.locked:
+            return RedirectResponse("/", status_code=303)
+        return _unlock_page(request)
+
+    def _after_unlock(vault, remember: bool, request):
+        if not sync._key_works(vault):
+            return _unlock_page(request, error="Les voyages de ce dossier sont abîmés ou incomplets (synchronisation "
+                                               "en cours ?). Attends un peu, puis réessaie.")
+        if remember:
+            K.remember(vault)
+        else:
+            K.forget(vault.id)
+        sync.unlock(vault)
+        open_unlocked()
+        return None
+
+    @app.post("/deverrouiller", response_class=HTMLResponse)
+    async def unlock_post(request: Request):
+        if sync is None or not sync.locked:
+            return RedirectResponse("/", status_code=303)
+        f = await request.form()
+        try:
+            vault = K.unlock(_folder(), password=f.get("mot_de_passe") or "")
+        except K.WrongPassword:
+            return _unlock_page(request, error="Mot de passe incorrect.")
+        except K.Damaged:
+            return _unlock_page(request, error="Le fichier de clé de ce dossier (cle.tripcompta) est introuvable ou "
+                                               "abîmé.")
+        err = _after_unlock(vault, bool(f.get("souvenir")), request)
+        return err or back("/", "Voyages déverrouillés")
+
+    @app.post("/deverrouiller/secours", response_class=HTMLResponse)
+    async def unlock_recovery(request: Request):
+        """Mot de passe oublié : la clé de secours ouvre les voyages et permet d'en choisir un nouveau."""
+        if sync is None or not sync.locked:
+            return RedirectResponse("/", status_code=303)
+        f = await request.form()
+        new, again = f.get("nouveau") or "", f.get("confirmation") or ""
+        if len(new) < K.MIN_PASSWORD:
+            return _unlock_page(request, error_rec=f"Le nouveau mot de passe doit faire au moins {K.MIN_PASSWORD} "
+                                                   "caractères.", show_rec=True)
+        if new != again:
+            return _unlock_page(request, error_rec="Les deux mots de passe ne sont pas identiques.", show_rec=True)
+        try:
+            vault = K.unlock(_folder(), recovery=f.get("secours") or "")
+        except K.WrongPassword:
+            return _unlock_page(request, error_rec="Clé de secours incorrecte.", show_rec=True)
+        K.change_password(_folder(), vault, new)
+        err = _after_unlock(vault, bool(f.get("souvenir")), request)
+        return err or back("/", "Nouveau mot de passe enregistré : voyages déverrouillés")
+
+    @app.post("/verrouiller")
+    def lock_now():
+        if sync is not None and sync.protected and sync.vault is not None:
+            to_locked()
+        return RedirectResponse("/deverrouiller", status_code=303)
+
+    def _protection_page(request, **ctx):
+        return render(request, "protection.html", folder=str(_folder()), can_remember=K.keyring_available(),
+                      protected=sync is not None and sync.protected, **ctx)
+
+    def _need_main(request):
+        if sync is not None and (sync.readonly or sync.problem):
+            return _protection_page(request, step="erreur", error=readonly_message())
+        if data_source in ("lancement", "env"):
+            return _protection_page(request, step="erreur", error="Le dossier est imposé au lancement de "
+                                                                   "l'application : la protection ne se règle pas ici.")
+        return None
+
+    @app.get("/protection/activer", response_class=HTMLResponse)
+    def protect_start(request: Request):
+        if sync is not None and sync.protected:
+            return RedirectResponse("/reglages/donnees#protection", status_code=303)
+        return _need_main(request) or _protection_page(request, step="mot_de_passe")
+
+    @app.post("/protection/activer", response_class=HTMLResponse)
+    async def protect_password(request: Request):
+        import secrets as _secrets
+        if sync is not None and sync.protected:
+            return RedirectResponse("/reglages/donnees#protection", status_code=303)
+        bad = _need_main(request)
+        if bad:
+            return bad
+        f = await request.form()
+        pw, again = f.get("mot_de_passe") or "", f.get("confirmation") or ""
+        if len(pw) < K.MIN_PASSWORD:
+            return _protection_page(request, step="mot_de_passe",
+                                    error=f"Le mot de passe doit faire au moins {K.MIN_PASSWORD} caractères.")
+        if pw != again:
+            return _protection_page(request, step="mot_de_passe", error="Les deux mots de passe ne sont pas identiques.")
+        rec = K.new_recovery_key()
+        app.state.pending_protection = dict(kind="activer", password=pw, recovery=rec,
+                                            remember=bool(f.get("souvenir")), group=_secrets.randbelow(8))
+        return _protection_page(request, step="secours", recovery=rec, group=app.state.pending_protection["group"],
+                                action="/protection/confirmer")
+
+    @app.post("/protection/confirmer", response_class=HTMLResponse)
+    async def protect_confirm(request: Request):
+        pend = app.state.pending_protection
+        if not pend or pend["kind"] != "activer":
+            return RedirectResponse("/reglages/donnees#protection", status_code=303)
+        bad = _need_main(request)
+        if bad:
+            return bad
+        f = await request.form()
+        if not K.check_group(pend["recovery"], pend["group"], f.get("groupe") or ""):
+            return _protection_page(request, step="secours", recovery=pend["recovery"], group=pend["group"],
+                                    action="/protection/confirmer",
+                                    error=f"Ce n'est pas le groupe n° {pend['group'] + 1} de ta clé de secours. "
+                                          "Vérifie ce que tu as noté.")
+        try:
+            vault = _activate(pend["password"], pend["recovery"])
+        except Exception as e:                   # rien n'a été effacé : la protection n'est pas activée
+            app.state.pending_protection = None
+            return _protection_page(request, step="erreur", error=f"La protection n'a pas pu être activée ({e}). "
+                                                                   "Tes voyages n'ont pas été modifiés.")
+        app.state.pending_protection = None
+        if pend["remember"]:
+            K.remember(vault)
+        return _restart_page(request, "Tes voyages sont maintenant protégés par ton mot de passe. Pense à vider la "
+                                      "corbeille et les anciennes versions de ton cloud (par exemple Google Drive les "
+                                      "garde 30 jours) : elles contiennent encore les fichiers d'avant, lisibles.")
+
+    def _activate(password: str, recovery: str):
+        """Chiffre la base et les justificatifs dans le dossier, vérifie TOUT, puis écrit cle.tripcompta (c'est le
+        moment où la protection devient effective), et seulement ensuite efface les fichiers en clair."""
+        import shutil as _sh
+        F = _folder()
+        local = sync.local if sync is not None else C.local_dir_for(F, PATHS.config_file().parent)
+        local.mkdir(parents=True, exist_ok=True)
+        vault, keydata = K.create(F, password, recovery)
+        snap = local / ".protection.db"
+        snap.unlink(missing_ok=True)
+        C.sqlite_copy(db.path, snap)
+        if not C.is_valid_db(snap):
+            raise OSError("copie de la base incomplète")
+        rdir = F / C.RECEIPTS
+        rdir.mkdir(exist_ok=True)
+        receipts = [p_ for p_ in (db.receipts_dir.iterdir() if db.receipts_dir.is_dir() else [])
+                    if p_.is_file() and not p_.name.startswith(".")]
+        vault.encrypt_file(snap, F / K.DB_FILE, "base")
+        for p_ in receipts:
+            vault.encrypt_file(p_, rdir / f"{p_.name}{K.SUFFIX}", f"justificatif:{p_.name}")
+        # vérification complète avant de toucher à quoi que ce soit
+        if vault.decrypt((F / K.DB_FILE).read_bytes(), "base") != snap.read_bytes():
+            raise OSError("vérification de la base chiffrée")
+        for p_ in receipts:
+            if vault.decrypt((rdir / f"{p_.name}{K.SUFFIX}").read_bytes(), f"justificatif:{p_.name}") != p_.read_bytes():
+                raise OSError(f"vérification du justificatif {p_.name}")
+        K.write_key_file(F, keydata)                 # ← la protection est effective
+        # ce qui était en clair dans le dossier : effacé ; l'historique et les sauvegardes partent sur l'ordinateur
+        db.engine.dispose()
+        if sync is None:                              # dossier « sur cet ordinateur » : on passe au mode dossier
+            for name in C.PRIVATE:
+                src = F / name
+                if src.is_dir():
+                    _sh.copytree(src, local / name, dirs_exist_ok=True)
+                    _sh.rmtree(src, ignore_errors=True)
+            _sh.rmtree(F / "imports_en_attente", ignore_errors=True)
+        for name in (C.DB, f"{C.DB}-journal", f"{C.DB}-wal", f"{C.DB}-shm"):
+            (F / name).unlink(missing_ok=True)
+        for p_ in receipts:
+            if p_.parent == rdir:
+                p_.unlink(missing_ok=True)
+        _sh.rmtree(rdir / ".vignettes", ignore_errors=True)
+        snap.unlink(missing_ok=True)
+        helper = C.CloudSync(F, local)                # l'historique sur l'ordinateur : chiffré lui aussi
+        helper.vault = vault
+        helper.encrypt_private()
+        helper.wipe_working_copy()
+        if sync is not None:
+            sync.vault = None
+        PATHS.write_config(data_dir=str(F), partage=True)
+        # jusqu'au redémarrage : une base vide d'attente (surtout ne rien recréer en clair dans le dossier)
+        db.reopen(local / ".verrouille", receipts_in_home=False)
+        return vault
+
+    def _check_current(request, f):
+        try:
+            K.unlock(_folder(), password=f.get("actuel") or "")
+            return None
+        except K.WrongPassword:
+            return _protection_page(request, step="erreur", error="Mot de passe actuel incorrect.", back_link=True)
+
+    @app.post("/protection/mot-de-passe", response_class=HTMLResponse)
+    async def protect_change(request: Request):
+        if sync is None or sync.vault is None:
+            return RedirectResponse("/reglages/donnees#protection", status_code=303)
+        f = await request.form()
+        bad = _check_current(request, f)
+        if bad:
+            return bad
+        new, again = f.get("nouveau") or "", f.get("confirmation") or ""
+        if len(new) < K.MIN_PASSWORD or new != again:
+            return _protection_page(request, step="erreur", back_link=True,
+                                    error=f"Le nouveau mot de passe doit faire au moins {K.MIN_PASSWORD} caractères, "
+                                          "et les deux saisies doivent être identiques.")
+        K.change_password(_folder(), sync.vault, new)
+        return back("/reglages/donnees", "Mot de passe changé (sur tous tes ordinateurs, dès que ton cloud aura "
+                                          "recopié le dossier)")
+
+    @app.post("/protection/secours", response_class=HTMLResponse)
+    async def protect_new_recovery(request: Request):
+        import secrets as _secrets
+        if sync is None or sync.vault is None:
+            return RedirectResponse("/reglages/donnees#protection", status_code=303)
+        f = await request.form()
+        bad = _check_current(request, f)
+        if bad:
+            return bad
+        rec = K.new_recovery_key()
+        app.state.pending_protection = dict(kind="secours", recovery=rec, group=_secrets.randbelow(8))
+        return _protection_page(request, step="secours", recovery=rec, group=app.state.pending_protection["group"],
+                                action="/protection/secours/confirmer", renew=True)
+
+    @app.post("/protection/secours/confirmer", response_class=HTMLResponse)
+    async def protect_new_recovery_confirm(request: Request):
+        pend = app.state.pending_protection
+        if not pend or pend["kind"] != "secours" or sync is None or sync.vault is None:
+            return RedirectResponse("/reglages/donnees#protection", status_code=303)
+        f = await request.form()
+        if not K.check_group(pend["recovery"], pend["group"], f.get("groupe") or ""):
+            return _protection_page(request, step="secours", recovery=pend["recovery"], group=pend["group"],
+                                    action="/protection/secours/confirmer", renew=True,
+                                    error=f"Ce n'est pas le groupe n° {pend['group'] + 1} de ta clé de secours.")
+        K.set_recovery(_folder(), sync.vault, pend["recovery"])
+        app.state.pending_protection = None
+        return back("/reglages/donnees", "Nouvelle clé de secours enregistrée : l'ancienne ne marche plus")
+
+    @app.post("/protection/oublier")
+    def protect_forget():
+        if sync is not None and sync.vault is not None:
+            K.forget(sync.vault.id)
+        return back("/reglages/donnees", "Cet ordinateur ne se souvient plus du mot de passe")
+
+    @app.post("/protection/retirer", response_class=HTMLResponse)
+    async def protect_remove(request: Request):
+        """Retirer la protection : tout redevient lisible (vérifié), puis la clé est effacée."""
+        import shutil as _sh
+        if sync is None or sync.vault is None:
+            return RedirectResponse("/reglages/donnees#protection", status_code=303)
+        bad = _need_main(request)
+        if bad:
+            return bad
+        f = await request.form()
+        bad = _check_current(request, f)
+        if bad:
+            return bad
+        F = _folder()
+        sync.publish()
+        sync.receipts_down()
+        tmp = F / ".compta.db.copie"
+        tmp.unlink(missing_ok=True)
+        C.sqlite_copy(db.path, tmp)
+        if not C.is_valid_db(tmp):
+            tmp.unlink(missing_ok=True)
+            return _protection_page(request, step="erreur", error="La copie lisible de la base est incomplète : rien "
+                                                                   "n'a été changé.", back_link=True)
+        rdir = F / C.RECEIPTS
+        for p_ in (db.receipts_dir.iterdir() if db.receipts_dir.is_dir() else []):
+            if p_.is_file() and not p_.name.startswith("."):
+                _sh.copyfile(p_, rdir / p_.name)
+                if (rdir / p_.name).read_bytes() != p_.read_bytes():
+                    return _protection_page(request, step="erreur", back_link=True,
+                                            error=f"Copie du justificatif {p_.name} incomplète : rien n'a été changé.")
+        C.replace(tmp, F / C.DB)
+        vault_id = sync.vault.id
+        (F / K.KEY_FILE).unlink()                    # ← la protection est retirée
+        (F / K.README).unlink(missing_ok=True)
+        (F / K.DB_FILE).unlink(missing_ok=True)
+        for p_ in rdir.glob(f"*{K.SUFFIX}"):
+            p_.unlink(missing_ok=True)
+        K.forget(vault_id)
+        sync.vault = None
+        sync._save_state(shared=None, local=None)
+        return _restart_page(request, "La protection est retirée : tes voyages sont de nouveau des fichiers normaux.")
+
     @app.post("/reglages/conflit")
     async def resolve_conflict(request: Request):
         """Une copie en conflit (laissée par le service de cloud) : la garder comme version des voyages, ou la ranger
@@ -708,18 +1059,27 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             return back("/reglages/donnees", "Impossible pour l'instant : les voyages sont en lecture seule ici.")
         name = f.get("nom") or ""
         src = sync.shared / name
-        if name.startswith(".") or "/" in name or "\\" in name or not C.CONFLICT_RE.match(name) or not src.is_file():
+        pattern = C.CONFLICT_RE_PROTECTED if sync.protected else C.CONFLICT_RE
+        if name.startswith(".") or "/" in name or "\\" in name or not pattern.match(name) or not src.is_file():
             return back("/reglages/donnees#conflits", "Version introuvable.")
         side = sync.shared / C.OLD_VERSIONS
         side.mkdir(exist_ok=True)
         stamp = dt.datetime.now().strftime("%Y-%m-%d %Hh%M%S")
         if f.get("choix") == "utiliser":
-            if not C.is_valid_db(src):
+            if not sync.conflict_readable(src):
                 return back("/reglages/donnees#conflits", "Cette version est abîmée : elle ne peut pas être utilisée.")
             db.snapshot(f"choix d'une autre version des voyages ({name})")
             db.engine.dispose()
-            C.sqlite_copy(sync.shared_db, side / f"compta (remplacée le {stamp}).db")
-            C.sqlite_copy(src, db.path)
+            if sync.protected:                   # versions chiffrées : on garde l'actuelle telle quelle, chiffrée
+                import shutil as _sh
+                _sh.copyfile(sync.shared_db, side / f"voyages (remplacée le {stamp}).chiffre")
+                tmp_ = sync.local / ".choix.db"
+                sync.decrypt_db(src, tmp_)
+                C.sqlite_copy(tmp_, db.path)
+                tmp_.unlink(missing_ok=True)
+            else:
+                C.sqlite_copy(sync.shared_db, side / f"compta (remplacée le {stamp}).db")
+                C.sqlite_copy(src, db.path)
             db.after_replace()
             sync.publish()
             os.replace(src, side / name)
@@ -738,7 +1098,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             cmd, args = sys.executable, ["--mcp", "--data-dir", str(db.dir)]
         else:
             cmd, args = sys.executable, ["-m", "compta.mcp_server", "--data-dir", str(db.dir)]
-        if db.home != db.dir:                     # dossier synchronisé : les justificatifs y vont
+        if db.home != db.dir and not (sync is not None and sync.protected):   # dossier synchronisé : justificatifs
             args += ["--home", str(db.home)]
         conf = {"mcpServers": {"tripcompta": {"command": cmd, "args": args,
                                                   **({} if frozen else {"cwd": root})}}}
@@ -2249,7 +2609,8 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         db.snapshot(f"ajout de {len(files)} justificatif(s) à trier")
         link_to = {int(x) for x in f.getlist("expenses")}
         done = sync.shared / C.INBOX / C.INBOX_DONE
-        done.mkdir(exist_ok=True)
+        if not sync.protected:
+            done.mkdir(exist_ok=True)
         added = []
         for src in files:
             ext = src.suffix.lower()[:10]
@@ -2265,6 +2626,9 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             added.append(rec)
         s.commit()
         for src in files:                        # après l'enregistrement : rangés, pas effacés
+            if sync.protected:                   # dossier protégé : l'original en clair ne doit pas rester
+                src.unlink(missing_ok=True)
+                continue
             dst = done / src.name
             n_ = 2
             while dst.exists():

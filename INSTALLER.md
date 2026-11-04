@@ -121,6 +121,37 @@ Dropbox), puis relancer Trip Compta.
 
 ---
 
+## Protéger tes voyages par un mot de passe (facultatif)
+
+Dans **☁️ Où ranger mes voyages** → **🔒 Protéger mes voyages…** :
+
+1. Choisis un mot de passe (une phrase facile à retenir est idéale).
+2. Trip Compta t'affiche une **clé de secours** (8 groupes de 4 caractères) : **imprime-la ou note-la sur papier**,
+   et range-la ailleurs que sur l'ordinateur. Il te demande d'en retaper un morceau pour vérifier.
+3. Il chiffre tout, vérifie, puis redémarre et te demande le mot de passe.
+
+**Quand l'activer ?** Si tu partages le dossier, si l'ordinateur est partagé (club), ou pour mieux protéger les
+données personnelles de tes adhérents. Seul sur ton ordinateur, avec un compte cloud bien protégé, ce n'est pas
+indispensable.
+
+**À savoir**
+
+- **Si tu perds le mot de passe ET la clé de secours, tes voyages sont perdus pour toujours.** Personne (pas même
+  l'auteur de Trip Compta) ne peut les ouvrir.
+- Mot de passe oublié : sur l'écran de déverrouillage, **Mot de passe oublié ?** → ta clé de secours, puis un
+  nouveau mot de passe.
+- **Vide la corbeille et les anciennes versions de ton cloud** après l'activation (Google Drive les garde 30 jours) :
+  elles contiennent encore les fichiers d'avant, lisibles.
+- « Se souvenir sur cet ordinateur » : plus besoin de taper le mot de passe sur cet ordinateur (il est rangé dans
+  le trousseau du système). **🔒 Verrouiller**, en haut, le redemande.
+- Sur un 2e ordinateur, Trip Compta demande le même mot de passe.
+- Les photos déposées depuis le téléphone dans « Justificatifs à trier » arrivent en clair ; elles sont chiffrées
+  (et l'original supprimé) dès que tu les ranges dans un voyage.
+- Les PDF et mails que tu envoies restent lisibles : ils sont faits pour être lus.
+- Pour revenir en arrière : **Retirer la protection** (avec le mot de passe).
+
+---
+
 ## Questions
 
 - **Où sont mes données ?** Dans le dossier **Documents/TripCompta**, ou dans le dossier synchronisé que tu as

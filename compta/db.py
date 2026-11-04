@@ -54,8 +54,11 @@ class Database:
     restent alors dans `data_dir`, sur l'ordinateur. Sans `home`, tout est dans `data_dir` (comme avant)."""
 
     def __init__(self, data_dir: Path | str | None = None, app_version: str | None = None,
-                 home: Path | str | None = None):
+                 home: Path | str | None = None, receipts_in_home: bool = True):
+        """receipts_in_home=False (dossier protégé par un mot de passe) : les justificatifs en clair restent dans
+        `data_dir`, sur l'ordinateur ; le dossier ne contient que leurs versions chiffrées (voir cloud.py)."""
         from . import version as V
+        self._args = (data_dir, app_version, home, receipts_in_home)
         self.dir = Path(data_dir) if data_dir else default_data_dir()
         self.home = Path(home) if home else self.dir
         self.app_version = app_version or V.build_info()["version"]
@@ -64,7 +67,7 @@ class Database:
         if stored and V.base(stored) and V.base(self.app_version) and V.base(stored) > V.base(self.app_version):
             raise NewerDatabaseError(stored, self.app_version, self.dir)
         self.dir.mkdir(parents=True, exist_ok=True)
-        self.receipts_dir = self.home / "justificatifs"
+        self.receipts_dir = (self.home if receipts_in_home else self.dir) / "justificatifs"
         self.thumbs_dir = (self.receipts_dir if self.home == self.dir else self.dir) / ".vignettes"
         self.backups_dir = self.dir / "sauvegardes"
         self.undo_dir = self.dir / ".annuler"
@@ -72,7 +75,7 @@ class Database:
         for d in (self.backups_dir, self.undo_dir, self.redo_dir):
             d.mkdir(exist_ok=True)
         try:                                     # dossier synchronisé introuvable : ne rien y créer
-            if self.home == self.dir or self.home.is_dir():
+            if self.home == self.dir or self.home.is_dir() or not receipts_in_home:
                 self.receipts_dir.mkdir(exist_ok=True)
         except OSError:
             pass
@@ -88,6 +91,17 @@ class Database:
         self._migrate()
         self._remember_version()
         self.Session = sessionmaker(self.engine, expire_on_commit=False)
+
+    def reopen(self, data_dir=None, receipts_in_home=None):
+        """Rouvre la base ailleurs (déverrouillage / verrouillage d'un dossier protégé) : tout le code qui tient
+        `db` suit, puisqu'il passe par db.Session, db.receipts_dir… à chaque appel."""
+        try:
+            self.engine.dispose()
+        except Exception:
+            pass
+        d, v, h, r = self._args
+        self.__init__(data_dir if data_dir is not None else d, v, h,
+                      receipts_in_home if receipts_in_home is not None else r)
 
     def _remember_version(self):
         with self.engine.begin() as c:

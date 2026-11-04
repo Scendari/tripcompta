@@ -48,6 +48,9 @@ INBOX_TYPES = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".gif", ".pdf
 # copies en conflit créées par les services : « compta (conflicted copy 2026-…).db », « compta (copie en
 # conflit de …).db », « compta-PC-DE-PAUL.db » (OneDrive), « compta (1).db » (Google Drive), « compta 2.db » (iCloud)…
 CONFLICT_RE = re.compile(r"^compta(?!\.db$).*\.db$", re.I)
+CONFLICT_RE_PROTECTED = re.compile(r"^voyages(?!\.chiffre$).*\.chiffre$", re.I)   # dossier protégé (crypto.py)
+PRIVATE = (".annuler", ".retablir", "sauvegardes", "brouillons_ia")   # chiffrés sur l'ordinateur quand verrouillé
+LOCKED_FLAG = "VERROUILLE"            # dans la copie de travail : voyages protégés, pas encore déverrouillés
 
 SERVICES = [   # (motif dans le chemin, nom affiché)
     ("dropbox", "Dropbox"), ("googledrive", "Google Drive"), ("google drive", "Google Drive"),
@@ -187,11 +190,30 @@ class CloudSync:
         self._stop = threading.Event()
         self._thread = None
         self.on_pulled = None                    # rappel : la copie de travail a été remplacée (rouvrir la base)
+        self.vault = None                        # clé des voyages déverrouillée (dossier protégé, voir crypto.py)
 
     # ------------------------------------------------------------------ chemins
     @property
+    def protected(self) -> bool:
+        """Dossier protégé par un mot de passe (fichier cle.tripcompta présent)."""
+        from . import crypto
+        return crypto.is_protected(self.shared)
+
+    @property
+    def locked(self) -> bool:
+        return self.protected and self.vault is None
+
+    @property
     def shared_db(self) -> Path:
+        if self.protected:
+            from . import crypto
+            return self.shared / crypto.DB_FILE
         return self.shared / DB
+
+    @property
+    def local_receipts(self) -> Path:
+        """Dossier protégé : justificatifs en clair sur l'ordinateur, le temps que l'app est déverrouillée."""
+        return self.local / RECEIPTS
 
     @property
     def local_db(self) -> Path:
@@ -248,8 +270,10 @@ class CloudSync:
             names = os.listdir(self.shared)
         except OSError:
             return out
+        prot = self.protected
+        pattern = CONFLICT_RE_PROTECTED if prot else CONFLICT_RE
         for n in sorted(names):
-            if n.startswith(".") or n == DB or not CONFLICT_RE.match(n):
+            if n.startswith(".") or n == self.shared_db.name or not pattern.match(n):
                 continue
             p = self.shared / n
             try:
@@ -257,8 +281,26 @@ class CloudSync:
             except OSError:
                 continue
             out.append(dict(name=n, size=st.st_size, date=dt.datetime.fromtimestamp(st.st_mtime),
-                            valid=is_valid_db(p)))
+                            valid=self.conflict_readable(p)))
         return out
+
+    def conflict_readable(self, p: Path) -> bool:
+        if not self.protected:
+            return is_valid_db(p)
+        if self.vault is None:
+            return True                              # on ne peut pas vérifier tant que c'est verrouillé
+        tmp = self.local / ".verif-conflit.db"
+        try:
+            self.decrypt_db(p, tmp)
+            return is_valid_db(tmp)
+        except Exception:
+            return False
+        finally:
+            tmp.unlink(missing_ok=True)
+
+    def decrypt_db(self, src: Path, dst: Path) -> None:
+        """Base chiffrée du dossier → base en clair (copie de travail)."""
+        self.vault.decrypt_file(src, dst, "base")
 
     # ------------------------------------------------------------------ verrou
     def read_lock(self) -> dict | None:
@@ -399,15 +441,28 @@ class CloudSync:
         if h is None or (h == st.get("shared") and self.local_db.exists()):
             self._seen_sig = self._sig()
             return False
-        if self.local_db.exists() and file_hash(self.local_db) == h:      # déjà la même (1re ouverture)
+        if not self.protected and self.local_db.exists() and file_hash(self.local_db) == h:   # déjà la même
             self._save_state(shared=h, local=h)
             self._seen_sig = self._sig()
             return False
         incoming = self.local / ".reception.db"
-        shutil.copyfile(self.shared_db, incoming)
-        if file_hash(incoming) != h or not is_valid_db(incoming):
-            incoming.unlink(missing_ok=True)         # fichier en cours de synchronisation : on réessaiera
-            return False
+        if self.protected:
+            if self.vault is None:
+                return False
+            try:
+                self.decrypt_db(self.shared_db, incoming)
+            except Exception:                        # en cours de synchronisation, ou abîmé : on réessaiera
+                incoming.unlink(missing_ok=True)
+                return False
+            if file_hash(self.shared_db) != h or not is_valid_db(incoming):
+                incoming.unlink(missing_ok=True)
+                return False
+            self.receipts_down()
+        else:
+            shutil.copyfile(self.shared_db, incoming)
+            if file_hash(incoming) != h or not is_valid_db(incoming):
+                incoming.unlink(missing_ok=True)     # fichier en cours de synchronisation : on réessaiera
+                return False
         kept = None
         if self.local_db.exists() and self.local_dirty():
             kept = self.keep_local_copy("pas-encore-envoyee")
@@ -416,7 +471,7 @@ class CloudSync:
         replace(incoming, self.local_db)
         for ext in ("-journal", "-wal", "-shm"):
             (self.local / f"{DB}{ext}").unlink(missing_ok=True)
-        self._save_state(shared=h, local=h)
+        self._save_state(shared=h, local=file_hash(self.local_db))
         self._seen_sig = self._sig()
         self.pulled_at = self.clock()
         if kept:
@@ -431,6 +486,48 @@ class CloudSync:
         dst = folder / f"{why}-{dt.datetime.now():%Y-%m-%d-%Hh%M%S}.db"
         sqlite_copy(self.local_db, dst)
         return dst
+
+    # ------------------------------------------------------------------ justificatifs d'un dossier protégé
+    def _receipt_role(self, name: str) -> str:
+        return f"justificatif:{name}"
+
+    def receipts_up(self) -> int:
+        """Chiffre dans le dossier les justificatifs ajoutés sur cet ordinateur (une seule fois chacun)."""
+        from . import crypto
+        if self.vault is None or not self.local_receipts.is_dir():
+            return 0
+        dst_dir = self.shared / RECEIPTS
+        dst_dir.mkdir(exist_ok=True)
+        n = 0
+        for f in self.local_receipts.iterdir():
+            if f.name.startswith(".") or not f.is_file():
+                continue
+            target = dst_dir / f"{f.name}{crypto.SUFFIX}"
+            if not target.exists():
+                self.vault.encrypt_file(f, target, self._receipt_role(f.name))
+                n += 1
+        return n
+
+    def receipts_down(self) -> int:
+        """Déchiffre sur l'ordinateur les justificatifs du dossier qui n'y sont pas encore."""
+        from . import crypto
+        src_dir = self.shared / RECEIPTS
+        if self.vault is None or not src_dir.is_dir():
+            return 0
+        self.local_receipts.mkdir(parents=True, exist_ok=True)
+        n = 0
+        for f in src_dir.iterdir():
+            if f.name.startswith(".") or not f.name.endswith(crypto.SUFFIX) or cloud_only(f):
+                continue
+            name = f.name[:-len(crypto.SUFFIX)]
+            target = self.local_receipts / name
+            if not target.exists():
+                try:
+                    self.vault.decrypt_file(f, target, self._receipt_role(name))
+                    n += 1
+                except crypto.Damaged:
+                    pass                             # signalé à l'affichage (« fichier introuvable »)
+        return n
 
     def publish(self) -> str:
         """Publie la copie de travail dans le dossier partagé, d'un coup. Renvoie « ok », « inchangé »,
@@ -452,11 +549,17 @@ class CloudSync:
                 return "erreur"
             try:
                 cur = file_hash(self.shared_db) if self.shared_db.exists() else None
+                prot = self.protected
+                if prot and self.vault is None:
+                    return "lecture seule"
                 if cur is not None and cur != st.get("shared"):
                     # le dossier a changé dans notre dos (synchronisation tardive d'un autre ordinateur) :
                     # on n'écrase pas ; notre version est déposée à côté, comme une copie en conflit à trancher
-                    side = self.shared / f"compta (version de {_safe(self.host)} {dt.datetime.now():%Y-%m-%d %Hh%M}).db"
-                    atomic_copy(snap, side)
+                    stamp = f"{_safe(self.host)} {dt.datetime.now():%Y-%m-%d %Hh%M}"
+                    if prot:
+                        self.vault.encrypt_file(snap, self.shared / f"voyages (version de {stamp}).chiffre", "base")
+                    else:
+                        atomic_copy(snap, self.shared / f"compta (version de {stamp}).db")
                     self._save_state(local=hl)
                     self.notice = ("Une autre version des voyages est arrivée dans le dossier partagé pendant que tu "
                                    "travaillais. Rien n'est perdu : les deux versions sont gardées ; choisis laquelle "
@@ -464,8 +567,13 @@ class CloudSync:
                     return "conflit"
                 if not is_valid_db(snap):
                     return "erreur"
-                hs = file_hash(snap)
-                atomic_copy(snap, self.shared_db)
+                if prot:
+                    self.receipts_up()               # les justificatifs d'abord : la base n'en cite jamais d'absent
+                    self.vault.encrypt_file(snap, self.shared_db, "base")
+                    hs = file_hash(self.shared_db)
+                else:
+                    hs = file_hash(snap)
+                    atomic_copy(snap, self.shared_db)
                 self._save_state(shared=hs, local=hl)
                 self._seen_sig = self._sig()
                 self.published_at = self.clock()
@@ -491,8 +599,100 @@ class CloudSync:
             return
         (self.shared / RECEIPTS).mkdir(exist_ok=True)
         (self.shared / INBOX).mkdir(exist_ok=True)
+        if self.protected:
+            from . import crypto
+            data = crypto.read_key_file(self.shared) or {}
+            v = crypto.recall(data.get("id", "")) if data.get("id") else None
+            if v is not None and self._key_works(v):
+                self.unlock(v)                       # « se souvenir sur cet ordinateur »
+            else:
+                self.wipe_working_copy()             # restes en clair d'un arrêt brutal : effacés
+                self._flag_locked(True)
+            return
         self.acquire()
         self.pull()
+
+    def _key_works(self, vault) -> bool:
+        if not self.shared_db.exists():
+            return True
+        try:
+            vault.decrypt(self.shared_db.read_bytes(), "base")
+            return True
+        except Exception:
+            return False
+
+    def unlock(self, vault) -> None:
+        """Clé des voyages vérifiée : on reprend la main, déchiffre la base, les justificatifs et l'historique."""
+        self.vault = vault
+        self._flag_locked(False)
+        self.decrypt_private()
+        self.acquire()
+        self._save_state(shared=None, local=None)    # reprendre la base chiffrée quoi qu'il arrive
+        self.pull()
+        self.receipts_down()
+
+    def lock(self) -> None:
+        """Verrouille : chiffre l'historique et les sauvegardes, efface la copie de travail en clair."""
+        if self.vault is None:
+            return
+        if self.local_db.exists() and self.local_dirty() and not self.readonly:
+            self.publish()
+        if self.local_db.exists() and self.local_dirty():        # pas pu publier : gardée, chiffrée
+            self.keep_local_copy("pas-encore-envoyee")
+        self.encrypt_private()
+        self.wipe_working_copy()
+        self.vault = None
+        self._flag_locked(True)
+        self.release()
+
+    def wipe_working_copy(self) -> None:
+        """Efface ce qui est en clair et redondant avec le dossier : base de travail, justificatifs, vignettes."""
+        for name in (DB, f"{DB}-journal", f"{DB}-wal", f"{DB}-shm", ".reception.db", ".envoi.db",
+                     ".verif-conflit.db", STATE):
+            (self.local / name).unlink(missing_ok=True)
+        for d in (self.local_receipts, self.local / ".vignettes", self.local / ".verrouille"):
+            shutil.rmtree(d, ignore_errors=True)
+
+    def _private_files(self):
+        for d in PRIVATE:
+            folder = self.local / d
+            if folder.is_dir():
+                for f in sorted(folder.rglob("*")):
+                    if f.is_file():
+                        yield f
+
+    def encrypt_private(self) -> None:
+        from . import crypto
+        for f in list(self._private_files()):
+            if f.name.endswith(crypto.SUFFIX):
+                continue
+            rel = f.relative_to(self.local).as_posix()
+            self.vault.encrypt_file(f, f.with_name(f.name + crypto.SUFFIX), f"local:{rel}")
+            f.unlink()
+
+    def decrypt_private(self) -> None:
+        from . import crypto
+        for f in list(self._private_files()):
+            if not f.name.endswith(crypto.SUFFIX):
+                continue
+            clear = f.with_name(f.name[:-len(crypto.SUFFIX)])
+            rel = clear.relative_to(self.local).as_posix()
+            try:
+                self.vault.decrypt_file(f, clear, f"local:{rel}")
+                f.unlink()
+            except crypto.Damaged:
+                pass
+
+    def _flag_locked(self, on: bool) -> None:
+        f = self.local / LOCKED_FLAG
+        try:
+            if on:
+                self.local.mkdir(parents=True, exist_ok=True)
+                f.write_text("Voyages protégés par un mot de passe : Trip Compta est verrouillé.", encoding="utf-8")
+            else:
+                f.unlink(missing_ok=True)
+        except OSError:
+            pass
 
     def start(self, every: float = BEAT, on_tick=None) -> None:
         def loop():
@@ -509,6 +709,8 @@ class CloudSync:
 
     def stop(self) -> None:
         self._stop.set()
+        if self.vault is not None:
+            self.lock()                              # rien en clair ne reste sur l'ordinateur
         self.release()
 
     # ------------------------------------------------------------------ justificatifs à trier
@@ -639,7 +841,7 @@ def cloud_roots(home: Path | None = None, env: dict | None = None, platform: str
     for name, root in found:
         target = root / "TripCompta"
         out.append(dict(name=name, root=str(root), target=str(target), has_data=(target / DB).exists()
-                        or (target / f".{DB}.icloud").exists()))
+                        or (target / f".{DB}.icloud").exists() or (target / "cle.tripcompta").exists()))
     return out
 
 

@@ -15,6 +15,7 @@
     Trip Compta
   </a>
   <span class="spacer"></span>
+  {% if cloud and cloud.protected and not cloud.locked %}<form method="post" action="/verrouiller" class="inline"><button class="iconbtn" title="Verrouiller : le mot de passe sera redemandé">🔒 Verrouiller</button></form>{% endif %}
   <button class="iconbtn" data-theme-toggle title="Thème clair / sombre">◐</button>
   <form method="post" action="/quitter" class="inline quit" data-confirm="Arrêter Trip Compta ? Tes données sont enregistrées : tu pourras relancer l'application plus tard.">
     <button class="iconbtn quit-btn" title="Arrêter l'application">⏻ Arrêter</button>
@@ -34,7 +35,7 @@
 <div class="cloud-banner warn" role="status"><span>⚠️ {{ cloud.conflicts }} autre{{ 's' if cloud.conflicts > 1 }} version{{ 's' if cloud.conflicts > 1 }} des voyages {{ 'sont apparues' if cloud.conflicts > 1 else 'est apparue' }} dans le dossier ({{ cloud.service }} n'a pas pu les fusionner). Rien n'est perdu : choisis laquelle garder.</span>
   <a class="btn small" href="/reglages/donnees#conflits">Choisir</a></div>
 {% endif %}
-<div class="cloud-line"><a href="/reglages/donnees" title="{{ cloud.folder }}">☁️ Rangé dans {{ cloud.service }}{% if cloud.saved and not cloud.readonly %} · enregistré à {{ cloud.saved }}{% endif %}{% if cloud.readonly %} · lecture seule{% endif %}</a>
+<div class="cloud-line"><a href="/reglages/donnees" title="{{ cloud.folder }}">{{ '💻 Rangé sur' if cloud.local else '☁️ Rangé dans' }} {{ cloud.service }}{% if cloud.protected %} · 🔒 protégé{% endif %}{% if cloud.saved and not cloud.readonly and not cloud.locked %} · enregistré à {{ cloud.saved }}{% endif %}{% if cloud.readonly %} · lecture seule{% endif %}</a>
   {% if cloud.inbox %}<span aria-hidden="true">·</span> {% if trip %}<a href="/v/{{ trip.id }}/justificatifs#a-trier">📥 {{ cloud.inbox }} justificatif{{ 's' if cloud.inbox > 1 }} à trier</a>{% else %}<span>📥 {{ cloud.inbox }} justificatif{{ 's' if cloud.inbox > 1 }} à trier</span>{% endif %}{% endif %}
 </div>
 {% endif %}

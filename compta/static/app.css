@@ -197,7 +197,7 @@ tr.family-row td { background: var(--bg-2); }
 label { font-weight: 600; font-size: .9rem; display: block; margin-bottom: .25rem; }
 .field { margin-bottom: .9rem; }
 .hint { font-size: .82rem; color: var(--muted); font-weight: 400; margin-top: .2rem; }
-input[type=text], input[type=date], input[type=number], input[type=email], input[type=tel], input[type=search], select, textarea {
+input[type=text], input[type=date], input[type=number], input[type=email], input[type=tel], input[type=search], input[type=password], select, textarea {
   width: 100%; padding: .55rem .7rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card);
   color: var(--text); font: inherit;
 }
@@ -891,3 +891,27 @@ label.check { display: inline-flex; align-items: center; gap: .4rem; font-weight
 .inbox-item .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .inbox-item .d-block { display: block; }
 .data-card { overflow-wrap: anywhere; }
+
+/* protection par un mot de passe */
+.unlock { display: grid; place-items: center; padding: 2rem 0; }
+.unlock-card { width: 100%; max-width: 480px; }
+.unlock-card h1 { margin-top: 0; font-size: 1.4rem; }
+.unlock-form { display: flex; flex-direction: column; gap: .6rem; margin: .8rem 0 1rem; }
+.unlock-form .btn { align-self: flex-start; }
+.unlock-forgot { border-top: 1px solid var(--border); padding-top: .7rem; }
+.unlock-forgot summary { cursor: pointer; color: var(--teal-strong); }
+.unlock-forgot form { display: flex; flex-direction: column; gap: .5rem; margin-top: .5rem; }
+.unlock-forgot .btn { align-self: flex-start; }
+.unlock-where { margin: 1rem 0 0; overflow-wrap: anywhere; }
+.mono { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: .03em; }
+.recovery-key { font-size: 1.15rem; font-weight: 700; background: var(--bg-2); border: 2px dashed var(--border);
+  border-radius: 10px; padding: .8rem 1rem; text-align: center; overflow-wrap: anywhere; user-select: all; }
+.pw-meter { display: flex; align-items: center; gap: .5rem; margin-top: .35rem; }
+.pw-bar { flex: 0 0 160px; height: 6px; border-radius: 3px; background: var(--bg-2); overflow: hidden; }
+.pw-bar i { display: block; height: 100%; width: 0; background: var(--coral); transition: width .2s; }
+.pw-bar i[data-s="2"] { background: var(--amber); } .pw-bar i[data-s="3"], .pw-bar i[data-s="4"] { background: var(--ok); }
+.prot-action { margin: .5rem 0; }
+.prot-action summary { cursor: pointer; color: var(--teal-strong); }
+.prot-action form { display: flex; flex-direction: column; gap: .5rem; margin-top: .5rem; max-width: 360px; }
+.prot-action .btn { align-self: flex-start; }
+@media print { .topbar, .cloud-line, .cloud-banner, .page-head .btn, .no-print, .hint, .row .btn { display: none !important; } }

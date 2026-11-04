@@ -9,7 +9,7 @@
 <div class="card data-card">
   <span class="label-like">Tes voyages sont rangés</span>
   {% if shared %}
-  <p class="data-where">☁️ Dans <b>{{ cloud.service }}</b></p>
+  <p class="data-where">{% if cloud.local %}💻 Sur <b>cet ordinateur</b>{% else %}☁️ Dans <b>{{ cloud.service }}</b>{% endif %}{% if protected %} · 🔒 protégés par un mot de passe{% endif %}</p>
   <p class="data-path">{{ data_dir }}</p>
   <p class="small muted data-state">
     {% if cloud.problem %}⚠️ {{ cloud.problem }}
@@ -46,6 +46,43 @@
 {% endif %}
 
 {% if source in ('defaut', 'choisi') %}
+<div class="card data-card" id="protection">
+  {% if protected %}
+  <h3 style="margin-top:0">🔒 Tes voyages sont protégés par un mot de passe</h3>
+  <p class="hint">La base et les justificatifs du dossier sont chiffrés. {% if remembered %}Cet ordinateur se souvient du mot de passe.{% endif %}</p>
+  <details class="prot-action"><summary>Changer le mot de passe</summary>
+    <form method="post" action="/protection/mot-de-passe">
+      <div class="field"><label for="c-cur">Mot de passe actuel</label><input type="password" id="c-cur" name="actuel" autocomplete="current-password" required></div>
+      <div class="field"><label for="c-new">Nouveau mot de passe</label><input type="password" id="c-new" name="nouveau" autocomplete="new-password" required minlength="8"></div>
+      <div class="field"><label for="c-again">Encore une fois</label><input type="password" id="c-again" name="confirmation" autocomplete="new-password" required minlength="8"></div>
+      <button class="btn small">Changer le mot de passe</button>
+    </form></details>
+  <details class="prot-action"><summary>Nouvelle clé de secours</summary>
+    <p class="hint">Si tu as perdu ta clé de secours (ou si quelqu'un a pu la voir) : une nouvelle remplace l'ancienne.</p>
+    <form method="post" action="/protection/secours">
+      <div class="field"><label for="r-cur">Mot de passe actuel</label><input type="password" id="r-cur" name="actuel" autocomplete="current-password" required></div>
+      <button class="btn small">Créer une nouvelle clé de secours</button>
+    </form></details>
+  {% if remembered %}<form method="post" action="/protection/oublier" class="inline"><button class="btn small ghost">Oublier le mot de passe sur cet ordinateur</button></form>{% endif %}
+  <details class="prot-action"><summary>Retirer la protection</summary>
+    <p class="hint">Tes voyages redeviennent des fichiers normaux (lisibles), sur tous tes ordinateurs.</p>
+    <form method="post" action="/protection/retirer" data-confirm="Retirer la protection ? Tes voyages redeviendront lisibles sans mot de passe.">
+      <div class="field"><label for="x-cur">Mot de passe actuel</label><input type="password" id="x-cur" name="actuel" autocomplete="current-password" required></div>
+      <button class="btn small ghost">Retirer la protection</button>
+    </form></details>
+  {% else %}
+  <h3 style="margin-top:0">🔒 Protéger mes voyages par un mot de passe <span class="pill grey">facultatif</span></h3>
+  <p class="hint">Ta base et tes justificatifs sont alors chiffrés dans le dossier : sans le mot de passe (ou la clé de secours), personne ne peut les lire, même ton service de cloud. Utile si tu partages le dossier, si l'ordinateur est partagé (club), ou pour les données personnelles de tes adhérents.</p>
+  <a class="btn small" href="/protection/activer">Protéger mes voyages…</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if source in ('defaut', 'choisi') %}
+{% if protected %}
+<div class="card data-card"><h3 style="margin-top:0">Ranger mes voyages ailleurs</h3>
+  <p class="hint">Tes voyages sont protégés : pour les ranger dans un autre dossier, retire d'abord la protection (ci-dessus), change de dossier, puis protège-les de nouveau.</p></div>
+{% else %}
 <form class="card data-card" method="post" action="/reglages/donnees" id="choisir" data-data-choice>
   <h3 style="margin-top:0">{{ 'Ranger mes voyages ailleurs' if shared else 'Ranger mes voyages dans un dossier synchronisé' }}</h3>
   <div class="data-options">
@@ -69,6 +106,7 @@
     <button class="btn" name="action" value="ranger">Ranger mes voyages ici</button>
   </div>
 </form>
+{% endif %}
 
 <div class="card data-card">
   <h3 style="margin-top:0">Avec plusieurs ordinateurs</h3>
@@ -80,7 +118,7 @@
   </ul>
 </div>
 
-{% if shared or source == 'choisi' %}
+{% if (shared or source == 'choisi') and not protected %}
 <form class="card data-card" method="post" action="/reglages/donnees" data-confirm="Ranger de nouveau tes voyages sur cet ordinateur (dans {{ default_dir }}) ? Ils y sont copiés ; ce qui s'y trouvait est gardé dans ses sauvegardes, et le dossier actuel n'est pas touché.">
   <h3 style="margin-top:0">Revenir sur cet ordinateur</h3>
   <p class="hint">Tes voyages sont copiés dans <b>{{ default_dir }}</b> et ne sont plus synchronisés.</p>
