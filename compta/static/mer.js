@@ -1,5 +1,5 @@
 // Trip Compta — « Mes voyages » : surprises de la mer (baleine, dauphins, mouette…).
-// Rythme : à l'arrivée, une chance sur deux qu'une surprise passe 4 à 8 s après ; puis une toutes les 40 à 70 s
+// Rythme : à l'arrivée, une chance sur deux qu'une surprise passe 4 à 8 s après ; puis une toutes les 20 à 30 s
 // tant qu'on reste. Jamais deux fois la même d'affilée (mémoire des dernières vues), coucher de soleil le soir,
 // phare en thème sombre, « tout est réglé » seulement quand tous les voyages le sont (une fois).
 // Rien si « réduire les animations », si la fenêtre est cachée, ou si un formulaire de l'accueil est ouvert.
@@ -286,15 +286,15 @@
   function schedule(ms) { clearTimeout(next); next = setTimeout(tick, ms); }
   function tick() {
     if (!quietNow()) play(choose());
-    schedule(rnd(40000, 70000));
+    schedule(rnd(20000, 30000));
   }
   // essais : window.tcMer.play("whale") (aucune règle ni hasard)
   window.tcMer = { play: (n, mirror) => { busy = false; return play(n, !!mirror); }, names: () => Object.keys(EGGS) };
   if (reduced.matches) return;
   setTimeout(() => {
-    if (quietNow()) return schedule(rnd(40000, 70000));
+    if (quietNow()) return schedule(rnd(20000, 30000));
     if (party()) play("party");
     else if (Math.random() < .5) play(choose());
-    schedule(rnd(40000, 70000));
+    schedule(rnd(20000, 30000));
   }, rnd(4000, 8000));
 })();
