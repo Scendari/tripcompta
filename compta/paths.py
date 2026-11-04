@@ -2,26 +2,21 @@
 
 Ordre de priorité :
   1. l'option `--data-dir` au lancement (développement, tests) ;
-  2. la variable d'environnement TRIPCOMPTA_DATA_DIR (ou l'ancienne COMPTA_DATA_DIR) ;
-  3. le dossier choisi dans l'application (« Où ranger mes voyages », voir cloud.py), mémorisé dans un petit fichier de réglages
+  2. la variable d'environnement TRIPCOMPTA_DATA_DIR ;
+  3. le dossier choisi dans l'application (« Où sont mes voyages », voir cloud.py), mémorisé dans un petit fichier de réglages
      propre à l'ordinateur (il ne peut pas être rangé dans le dossier des données lui-même) ;
   4. par défaut : <Documents>/TripCompta, où <Documents> est le VRAI dossier Documents (sous Windows avec OneDrive,
      c'est souvent C:\\Users\\<nom>\\OneDrive\\Documents, et pas C:\\Users\\<nom>\\Documents).
-
-L'ancien dossier « Compta Voyages » est renommé en « TripCompta » au premier lancement (une seule fois, s'il n'y a
-pas déjà de dossier TripCompta) : rien n'est copié ni perdu.
 """
 from __future__ import annotations
 
 import json
 import os
-import shutil
 import sys
 from pathlib import Path
 
 APP_NAME = "Trip Compta"
 FOLDER = "TripCompta"
-OLD_FOLDER = "Compta Voyages"
 CLOUD_HINTS = ("dropbox", "onedrive", "icloud", "mobile documents", "google drive", "googledrive", "pcloud", "box sync")
 
 
@@ -84,38 +79,18 @@ def write_config(**values) -> None:
 
 def chosen_dir() -> Path | None:
     """Dossier choisi dans l'application (ou par variable d'environnement), s'il y en a un."""
-    env = os.environ.get("TRIPCOMPTA_DATA_DIR") or os.environ.get("COMPTA_DATA_DIR")
+    env = os.environ.get("TRIPCOMPTA_DATA_DIR")
     if env:
         return Path(env).expanduser()
     v = read_config().get("data_dir")
     return Path(v).expanduser() if v else None
 
 
-def migrate_old_folder(docs: Path) -> Path | None:
-    """Une seule fois : <Documents>/Compta Voyages → <Documents>/TripCompta (si la nouvelle n'existe pas encore).
-    Une copie de la base est d'abord rangée dans ses sauvegardes. Renvoie le nouveau dossier s'il a été renommé."""
-    old, new = docs / OLD_FOLDER, docs / FOLDER
-    if new.exists() or not old.is_dir():
-        return None
-    db = old / "compta.db"
-    if db.exists():
-        (old / "sauvegardes").mkdir(exist_ok=True)
-        shutil.copy2(db, old / "sauvegardes" / "avant-renommage-tripcompta.db")
-    os.replace(old, new)
-    return new
-
-
 def default_data_dir() -> Path:
     chosen = chosen_dir()
     if chosen:
         return chosen
-    docs = documents_dir()
-    try:
-        migrate_old_folder(docs)
-    except OSError:                          # dossier ouvert ailleurs, droits… : on garde l'ancien tel quel
-        if (docs / OLD_FOLDER).is_dir() and not (docs / FOLDER).exists():
-            return docs / OLD_FOLDER
-    return docs / FOLDER
+    return documents_dir() / FOLDER
 
 
 def looks_synced(path: Path) -> bool:
