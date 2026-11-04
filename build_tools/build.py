@@ -78,7 +78,7 @@ def main():
         "--workpath", str(ROOT / "build"),
         "--specpath", str(ROOT / "build"),
     ]
-    icons = ROOT / "build_tools" / "icone"          # dessin : build_tools/icone/fabriquer_icone.py
+    icons = ROOT / "build_tools" / "icone"          # voir build_tools/icone/LISEZMOI.md
     if sys.platform == "darwin":
         args += ["--windowed", "--osx-bundle-identifier", "org.asso.comptavoyages",
                  "--icon", str(icons / "TripCompta.icns")]
