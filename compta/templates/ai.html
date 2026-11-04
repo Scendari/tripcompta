@@ -156,7 +156,7 @@
   const TRIP = {{ trip.id }}, MODE = {{ ia_mode|tojson }}, TRIP_NAME = {{ trip.name|tojson }};
   const GUIDE = {{ guide|tojson }};
   const STATE = {{ state|tojson }};
-  const KEY = "compta-ia-" + TRIP + "-" + MODE;
+  const KEY = "compta-ia-" + TRIP + "-{{ trip.created.strftime('%Y%m%d%H%M%S%f') if trip.created else '' }}-" + MODE;   // un numéro de voyage supprimé peut être réutilisé : la date de création, non
   const SAVE_URL = "/v/" + TRIP + "/ia/brouillon/" + MODE;
   const ta = document.getElementById("modele");
   const blank = {{ modele|tojson }};

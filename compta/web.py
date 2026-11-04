@@ -1184,8 +1184,12 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         return dict(conf=json.dumps(conf, indent=2, ensure_ascii=False), cli=cli,
                     api=str(request.base_url) + "api/docs")
 
-    drafts_dir = db.dir / "brouillons_ia"
-    drafts_dir.mkdir(exist_ok=True)
+    def drafts() -> Path:
+        """Dossier des brouillons IA : recalculé à chaque fois (la base peut être rouverte ailleurs, par exemple
+        après le déverrouillage d'un dossier protégé)."""
+        d_ = db.dir / "brouillons_ia"
+        d_.mkdir(exist_ok=True)
+        return d_
     INIT, UPDATE = "initialisation", "mise-a-jour"
     # Brouillon unique des versions précédentes (avant l'IA par voyage) : gardé à part s'il contenait quelque chose.
     for legacy in ("brouillon_ia.txt", "brouillon_ia.md", "brouillon_ia.precedent.txt", "brouillon_ia.precedent.md",
@@ -1197,11 +1201,11 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             if _imp.is_old_markdown_draft(txt):
                 txt = _imp.markdown_draft_to_text(txt)
             if txt.strip() and txt.strip() != _imp.template().strip() and "Nom du voyage :\n" not in txt[:600]:
-                (drafts_dir / f"ancien-{legacy.replace('.md', '.txt')}").write_text(txt, encoding="utf-8")
+                (drafts() / f"ancien-{legacy.replace('.md', '.txt')}").write_text(txt, encoding="utf-8")
             f_.unlink()
 
     def draft_paths(tid: int, mode: str):
-        base = drafts_dir / f"voyage-{tid}-{mode}"
+        base = drafts() / f"voyage-{tid}-{mode}"
         return base.with_suffix(".txt"), Path(str(base) + ".precedent.txt")
 
     def ai_mode(t: M.Trip, value) -> str:
@@ -1242,7 +1246,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
                 l.strip().startswith("- ") and l.strip()[2:].strip() for l in draft.splitlines()):
             draft = None            # ancien modèle à rubriques, jamais rempli : on repart d'un texte libre
         saved = dt.datetime.fromtimestamp(dfile.stat().st_mtime) if draft is not None else None
-        legacy = sorted(p_.name for p_ in drafts_dir.glob("ancien-*.txt"))
+        legacy = sorted(p_.name for p_ in drafts().glob("ancien-*.txt"))
         return render(request, "ai.html", trip=t, ia_mode=mode, INIT=INIT, UPDATE=UPDATE, modele=blank,
                       guide=importer.guide(), state=trip_state_for_ai(t), draft=draft, draft_saved=saved,
                       has_prev=dprev.exists(), legacy=legacy, cur=f"/v/{t.id}/ia", **mcp_conf(request), **ctx)
@@ -1273,7 +1277,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
 
     @app.get("/ia/ancien-brouillon/{name}")
     def ai_legacy(name: str):
-        f_ = drafts_dir / name
+        f_ = drafts() / name
         if not name.startswith("ancien-") or "/" in name or not f_.exists():
             raise HTTPException(404, "Brouillon introuvable")
         return Response(f_.read_text(encoding="utf-8"), media_type="text/plain; charset=utf-8",
@@ -1400,6 +1404,13 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         db.snapshot(f"suppression du voyage « {t.name} »")
         _delete_trip(s, t)
         s.commit()
+        # ses brouillons IA sont mis de côté : un nouveau voyage peut recevoir le même numéro, il ne doit pas en hériter
+        stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+        for f_ in drafts().glob(f"voyage-{tid}-*"):
+            try:
+                f_.rename(drafts() / f"supprime-{stamp}-{f_.name}")
+            except OSError:
+                pass
         return back("/", f"Voyage « {t.name} » supprimé (tu peux encore annuler)")
 
     def _delete_trip(s, t):
