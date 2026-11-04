@@ -37,7 +37,7 @@
 {% if cloud %}
 {% if cloud.problem %}
 <div class="cloud-banner err" role="alert"><span>⚠️ {{ cloud.problem }}</span>
-  <a class="btn small ghost" href="/reglages/donnees">Où ranger mes voyages</a></div>
+  <a class="btn small ghost" href="/reglages/donnees">Où sont mes voyages</a></div>
 {% elif cloud.readonly %}
 <div class="cloud-banner ro" role="status"><span>🔒 <b>Lecture seule</b> : {% if cloud.same_host %}Trip Compta est déjà ouvert sur cet ordinateur (une autre fenêtre ou une autre version){% if cloud.since %} depuis {{ cloud.since }}{% endif %}. Utilise celle-là, ou ferme-la ({{ POWER }} Arrêter) pour pouvoir modifier ici.{% else %}tes voyages sont ouverts sur « {{ cloud.owner or 'un autre ordinateur' }} »{% if cloud.since %} depuis {{ cloud.since }}{% endif %}.{% endif %}
   {% if cloud.same_host and not cloud.stale %}{% elif cloud.stale %}Cet ordinateur ne donne plus signe de vie (éteint ou planté ?).{% else %}Ferme Trip Compta là-bas pour pouvoir les modifier ici.{% endif %}</span>
