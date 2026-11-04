@@ -73,7 +73,10 @@ def service_name(path: Path | str) -> str | None:
 
 
 def computer_name() -> str:
-    """Nom lisible de cet ordinateur (« MacBook Pro de Paul », « PC-BUREAU »)."""
+    """Nom lisible de cet ordinateur (« MacBook Pro de Paul », « PC-BUREAU »). TRIPCOMPTA_ORDINATEUR : essais à deux
+    « ordinateurs » sur une même machine."""
+    if os.environ.get("TRIPCOMPTA_ORDINATEUR"):
+        return os.environ["TRIPCOMPTA_ORDINATEUR"]
     try:
         if sys.platform == "darwin":
             out = subprocess.run(["scutil", "--get", "ComputerName"], capture_output=True, text=True, timeout=3)
