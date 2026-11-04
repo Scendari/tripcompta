@@ -166,7 +166,7 @@ def test_round_trip_activate_unlock_remove(env):
     assert "Voyages déverrouillés" in r.text and not app.state.sync.locked
     assert amounts(app, tid) == EXPECTED
     assert receipts_bytes(app, tid) == files                     # octet pour octet
-    assert "🔒 Verrouiller" in cl.get("/").text and "🔒 protégé" in cl.get("/").text
+    assert "🔒 Verrouiller" in cl.get("/").text and "protégé par mot de passe" in cl.get("/").text
     # une saisie : publiée chiffrée
     cl.post("/voyages", data={"name": "Voyage secret"})
     assert no_clear_text(folder) == [] and b"Voyage secret" not in (folder / K.DB_FILE).read_bytes()

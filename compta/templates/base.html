@@ -15,6 +15,18 @@
     Trip Compta
   </a>
   <span class="spacer"></span>
+  {% if cloud %}
+  {# où sont les voyages, en discret (le détail au survol ; les vrais problèmes ont leur bandeau) #}
+  {% set where = ('💻 Rangé sur ' if cloud.local else '☁️ Rangé dans ') ~ cloud.service
+       ~ (' · protégé par mot de passe' if cloud.protected else '')
+       ~ (' · enregistré à ' ~ cloud.saved if cloud.saved and not cloud.readonly and not cloud.locked else '')
+       ~ (' · lecture seule' if cloud.readonly else '') %}
+  <a class="cloud-chip" href="/reglages/donnees" title="{{ where }}" aria-label="{{ where }}">
+    {% if cloud.local %}<span aria-hidden="true">💻</span>{% else %}<svg class="ico-cloud" viewBox="0 0 24 24" width="1.15em" height="1.15em" aria-hidden="true"><path d="M7 18h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.6 9.2 4.5 4.5 0 0 0 7 18z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg>{% endif %}<span class="lbl">{% if cloud.readonly %}lecture seule{% elif cloud.saved and not cloud.locked %}{{ cloud.saved }}{% else %}{{ cloud.service }}{% endif %}</span></a>
+  {% if cloud.inbox %}{% set n = cloud.inbox %}{% set txt = '📥 ' ~ n ~ ' justificatif' ~ ('s' if n > 1 else '') ~ ' à trier' %}
+  {% if trip %}<a class="cloud-chip inbox" href="/v/{{ trip.id }}/justificatifs#a-trier" title="Déposés depuis le téléphone : à ranger dans les dépenses">{{ txt }}</a>
+  {% else %}<span class="cloud-chip inbox" title="Ouvre un voyage, puis 📎 Justificatifs, pour les ranger">{{ txt }}</span>{% endif %}{% endif %}
+  {% endif %}
   {% if cloud and cloud.protected and not cloud.locked %}<form method="post" action="/verrouiller" class="inline"><button class="iconbtn" title="Verrouiller : le mot de passe sera redemandé">🔒 Verrouiller</button></form>{% endif %}
   <a class="iconbtn settings-btn{{ ' on' if request.url.path.startswith('/reglages') or request.url.path.startswith('/protection') }}" href="/reglages" title="Réglages : où sont tes voyages, mot de passe, mises à jour" aria-label="Réglages">⚙️<span class="lbl"> Réglages</span></a>
   <button class="iconbtn" data-theme-toggle title="Thème clair / sombre">◐</button>
@@ -36,9 +48,6 @@
 <div class="cloud-banner warn" role="status"><span>⚠️ {{ cloud.conflicts }} autre{{ 's' if cloud.conflicts > 1 }} version{{ 's' if cloud.conflicts > 1 }} des voyages {{ 'sont apparues' if cloud.conflicts > 1 else 'est apparue' }} dans le dossier ({{ cloud.service }} n'a pas pu les fusionner). Rien n'est perdu : choisis laquelle garder.</span>
   <a class="btn small" href="/reglages/donnees#conflits">Choisir</a></div>
 {% endif %}
-<div class="cloud-line"><a href="/reglages/donnees" title="{{ cloud.folder }}">{{ '💻 Rangé sur' if cloud.local else '☁️ Rangé dans' }} {{ cloud.service }}{% if cloud.protected %} · 🔒 protégé{% endif %}{% if cloud.saved and not cloud.readonly and not cloud.locked %} · enregistré à {{ cloud.saved }}{% endif %}{% if cloud.readonly %} · lecture seule{% endif %}</a>
-  {% if cloud.inbox %}<span aria-hidden="true">·</span> {% if trip %}<a href="/v/{{ trip.id }}/justificatifs#a-trier">📥 {{ cloud.inbox }} justificatif{{ 's' if cloud.inbox > 1 }} à trier</a>{% else %}<span>📥 {{ cloud.inbox }} justificatif{{ 's' if cloud.inbox > 1 }} à trier</span>{% endif %}{% endif %}
-</div>
 {% endif %}
 {% if update_banner %}
 <div class="update-banner" role="status">
