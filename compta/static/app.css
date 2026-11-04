@@ -1079,7 +1079,7 @@ label.check { display: inline-flex; align-items: center; gap: .4rem; font-weight
   52% { opacity: .9; transform: scaleY(1); } 64%, 100% { opacity: 0; transform: scaleY(.6) translateY(-6px); } }
 /* dauphins : deux sauts en arc */
 .dolphin { width: 52px; bottom: 34px; transform-origin: 50% 50%; }
-.dolphin.go { animation: leap 2.1s cubic-bezier(.33,0,.67,1) forwards; animation-delay: var(--dl, 0s); opacity: 0; }
+.dolphin.go { animation: leap 2.1s cubic-bezier(.33,0,.67,1) both; animation-delay: var(--dl, 0s); opacity: 0; }
 @keyframes leap {
   0% { opacity: 0; transform: translate(0, 40px) rotate(-38deg); }
   8% { opacity: var(--life-op); }
@@ -1087,7 +1087,7 @@ label.check { display: inline-flex; align-items: center; gap: .4rem; font-weight
   92% { opacity: var(--life-op); }
   100% { opacity: 0; transform: translate(calc(2 * var(--jx, 160px)), 40px) rotate(38deg); } }
 .splash { width: 24px; bottom: 30px; opacity: 0; }
-.splash.go { animation: splash 1s ease-out forwards; animation-delay: var(--dl, 0s); }
+.splash.go { animation: splash 1s ease-out both; animation-delay: var(--dl, 0s); }   /* « both » : invisible avant son heure */
 @keyframes splash { 0% { opacity: 0; transform: scale(.3); } 25% { opacity: 1; } 100% { opacity: 0; transform: scale(1.3) translateY(-6px); } }
 /* mouette : traverse en ligne droite, roulis léger, battements depuis les épaules puis vol plané */
 .gull { width: 46px; bottom: 110px; left: 0; }
