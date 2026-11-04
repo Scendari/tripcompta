@@ -90,8 +90,9 @@ ton cloud qui les recopie sur tes autres ordinateurs (Mac, Windows, Linux).
    kDrive, Proton Drive…), s'il n'y est pas déjà.
 2. Dans Trip Compta : accueil → **☁️ Où ranger mes voyages** (lien en bas). Les dossiers synchronisés trouvés sur
    l'ordinateur sont proposés ; sinon « Autre dossier… » → **Parcourir…**.
-3. Sur le 1er ordinateur : **Y copier mes voyages** (tout est copié et vérifié, l'ancien dossier n'est pas touché).
-   Sur les suivants, une fois la synchronisation faite : **Utiliser les voyages déjà dans ce dossier**.
+3. Sur le 1er ordinateur : **Copier mes voyages dans ce dossier** (tout est copié et vérifié, l'ancien dossier n'est pas
+   touché). Sur les suivants, une fois la synchronisation faite : **Ouvrir les voyages de ce dossier** (Trip Compta
+   indique d'abord combien de voyages il y trouve).
 
 Dans le dossier synchronisé : `compta.db` (la version enregistrée), `justificatifs/`, `Justificatifs à trier/` et
 `tripcompta-verrou.json`. Sur chaque ordinateur restent l'historique Défaire/Rétablir, les sauvegardes du jour et

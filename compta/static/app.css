@@ -1213,3 +1213,10 @@ a.cloud-chip:hover { color: var(--teal-strong); background: var(--bg); text-deco
 .cloud-chip.inbox { color: var(--amber); font-weight: 600; }
 @media (max-width: 760px) { .cloud-chip:not(.inbox) .lbl { display: none; } }
 @media print { .cloud-chip { display: none !important; } }
+
+/* « Changer de dossier » : ce que contient le dossier choisi, et ce qui va se passer */
+.folder-status { margin: .6rem 0 0; padding: .5rem .75rem; border-radius: 8px; background: var(--bg-2); font-size: .92rem; }
+.folder-status.has { background: var(--blue-bg); }
+.what-happens { margin: .5rem 0 .8rem; font-size: .92rem; line-height: 1.5; }
+.what-happens:empty { display: none; }
+.btn:disabled, .btn[disabled] { opacity: .45; cursor: not-allowed; filter: saturate(.4); }
