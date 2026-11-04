@@ -62,7 +62,7 @@ document.querySelectorAll('.home-actions [data-toggle-row]').forEach(function (b
       {% elif r.to_collect == 0 and r.to_refund == 0 %}<span class="pill ok">🟢 Tout est réglé</span>
       {% else %}
         {% if r.to_collect %}<span class="pill doit">🟠 Reste à recevoir : {{ r.to_collect|money }} ({{ owe|map(attribute='name')|join(', ') if owe|length <= 3 else owe|length ~ ' personnes ou familles' }})</span>{% endif %}
-        {% if r.to_refund %}<span class="pill du">🔵 {{ asso_name|capfirst }} doit rembourser {{ r.to_refund|money }}</span>{% endif %}
+        {% if r.to_refund %}<span class="pill du">🔵 {{ t|caisse|capfirst }} doit rembourser {{ r.to_refund|money }}</span>{% endif %}
       {% endif %}
     </div>
     <div class="muted small" style="margin-top:.5rem">Coût : {{ r.total_cost|money }}</div>

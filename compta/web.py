@@ -116,6 +116,7 @@ def _label(name: str) -> Markup:
 
 
 templates.env.filters["capfirst"] = _capfirst
+templates.env.filters["caisse"] = lambda t: _label(S.caisse_label(t))   # nom de la caisse d'un voyage donné
 
 
 def newer_data_app(err: NewerDatabaseError, updater) -> FastAPI:
@@ -2323,16 +2324,16 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         t = trip_or_404(s, tid)
         r = S.compute_trip(t, mode_of(request))
         return render(request, "asso.html", trip=t, r=r, A=S.asso_account(t, r), cashier=S.cashier(t),
-                      asso_custom=S.asso_name(s) != "l'asso", asso_real=S.asso_name(s))
+                      asso_custom=S.trip_asso_name(t) != "l'asso", asso_real=S.trip_asso_name(t))
 
     @app.post("/v/{tid}/asso/nom")
     async def asso_rename(tid: int, request: Request, s: Session = Depends(get_s)):
-        trip_or_404(s, tid)
+        t = trip_or_404(s, tid)
         name = str((await request.form()).get("name") or "")
-        S.set_asso_name(s, name)
+        S.set_trip_asso_name(t, name, s)
         s.commit()
-        return back(f"/v/{tid}/asso", f"L'asso s'appelle maintenant « {S.asso_name(s)} »" if name.strip()
-                    else "Nom de l'asso effacé")
+        return back(f"/v/{tid}/asso", f"Dans ce voyage, l'asso s'appelle maintenant « {S.trip_asso_name(t)} »"
+                    if name.strip() else "Nom de l'asso effacé pour ce voyage")
 
     @app.post("/v/{tid}/asso/caisse")
     async def asso_cashier(tid: int, request: Request, s: Session = Depends(get_s)):
@@ -2348,7 +2349,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         s.commit()
         c = S.cashier(t)
         return back(f"/v/{tid}/asso", f"C'est {c.name} qui tient la caisse" if c else
-                    f"C'est {S.asso_name(s)} qui tient la caisse")
+                    f"C'est {S.trip_asso_name(t)} qui tient la caisse")
 
     @app.post("/v/{tid}/asso/arrondi")
     async def asso_rounding(tid: int, request: Request, s: Session = Depends(get_s)):

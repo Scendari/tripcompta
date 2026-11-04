@@ -243,8 +243,7 @@ def trip_detail(t: M.Trip, mode=E.ACTUAL) -> dict:
     wd = {w.participant_id: w for w in t.withdrawals}
     out = trip_summary(t, mode)
     out["note"] = t.note or ""
-    from sqlalchemy.orm import object_session
-    out["asso"] = S.asso_name(object_session(t))
+    out["asso"] = S.trip_asso_name(t)
     out["groupes"] = {g["name"]: [p.name for p in g["members"]] for g in S.trip_groups(t)}
     out["caisse"] = S.cashier(t).name if S.cashier(t) else "asso"
     out["mode_de_calcul"] = "réel" if mode == E.ACTUAL else "prévu"
@@ -336,8 +335,7 @@ def _is_asso(ref, t: M.Trip | None = None) -> bool:
         return True
     if t is None:
         return False
-    from sqlalchemy.orm import object_session
-    name = S.asso_name(object_session(t))
+    name = S.trip_asso_name(t)
     key = E.sort_key(str(ref)).strip()
     return name != "l'asso" and key == E.sort_key(name).strip() and \
         not any(E.sort_key(p.name).strip() == key for p in t.participants)

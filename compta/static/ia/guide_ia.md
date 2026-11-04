@@ -272,8 +272,8 @@ On n'y met que ce qui change. Les noms de dépenses et de personnes sont ceux de
 - **Dates** : `"AAAA-MM-JJ"` (ou `"JJ/MM/AAAA"`). Facultatives.
 - `participants` : un prénom, ou un objet `{"nom", "famille", "accompagnant", "telephone", "email", "note"}`.
   `famille` = le nom de famille commun (sans « Famille ») ; `accompagnant: true` si la personne ne plonge pas.
-- `voyage.asso` : le nom de l'asso (ex. `"Club Subaqua"`). C'est un réglage commun à tous les voyages : il n'est
-  appliqué que si l'application n'a pas encore de nom. Le nom de l'asso (une fois enregistré) vaut `"asso"` partout.
+- `voyage.asso` : le nom de l'asso pour ce voyage (ex. `"Club Subaqua"`) ; chaque voyage a le sien. Le nom de
+  l'asso du voyage vaut `"asso"` partout (payeur, remboursement…).
 - `voyage.roles_du_voyage` : rôles propres au voyage (`["Conducteur", "Photographe"]`), à déclarer avant de les
   utiliser dans `roles` ou `pour`. `voyage.caisse` : `"asso"` ou le participant qui tient la caisse.
 - `voyage.organisateur` : son nom tel qu'écrit dans `participants` (s'il ne vient pas au voyage, son nom) ;

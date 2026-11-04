@@ -90,7 +90,7 @@ def test_asso_name_refund_date_and_supplement_default(ops):
                        desistements=[{"participant": "D", "date": "2026-05-02", "pris_en_charge_par": "groupe",
                                       "remboursement": "100", "date_remboursement": "2026-05-10"}],
                        remises=[{"participant": "A", "type": "supplement", "montant": "30"}])
-    assert "Nom de l'asso : Club Subaqua" in r["actions"]
+    assert "Nom de l'asso pour ce voyage : Club Subaqua" in r["actions"]
     mv = [m for m in r["apercu"]["mouvements"] if m["type"] == "remboursement"]
     assert mv[0]["date"] == "2026-05-10" and mv[0]["montant"] == 100.0
     adj = r["apercu"]["ajustements"][0]
@@ -99,6 +99,6 @@ def test_asso_name_refund_date_and_supplement_default(ops):
     # A +30, B et C −15 → 163,33 / 118,33 / 118,33, l'un des trois avec 1 centime de plus
     assert sh["D"] == 0.0 and round(sh["A"] + sh["B"] + sh["C"], 2) == 400.0
     assert sorted([round(sh["A"] - 163.33, 2), round(sh["B"] - 118.33, 2), round(sh["C"] - 118.33, 2)]) == [0, 0, 0.01]
-    # un autre nom alors que l'asso en a déjà un : pas appliqué, signalé
+    # un autre nom : le nom de l'asso est propre à chaque voyage, il est appliqué à ce voyage
     r = ops.import_trip({"voyage_id": tid, "voyage": {"asso": "Autre club"}}, voyage=tid, verifier_id=tid)
-    assert any("s'appelle déjà « Club Subaqua »" in n for n in r["a_verifier"])
+    assert "Nom de l'asso pour ce voyage : Autre club" in r["actions"]
