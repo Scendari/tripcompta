@@ -27,11 +27,11 @@ jobs:
       matrix:
         include:
           - os: macos-14
-            exe: dist/Trip Compta.app/Contents/MacOS/Trip Compta
+            exe: dist/TripCompta.app/Contents/MacOS/TripCompta
           - os: windows-latest
-            exe: dist/Trip Compta/Trip Compta.exe
+            exe: dist/TripCompta/TripCompta.exe
           - os: ubuntu-22.04
-            exe: dist/Trip Compta/Trip Compta
+            exe: dist/TripCompta/TripCompta
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

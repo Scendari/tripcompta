@@ -28,20 +28,20 @@ tout en bas, dans « Assets ».
 2. Copie-colle cette ligne, puis appuie sur Entrée :
 
    ```
-   A=$(uname -m | sed 's/x86_64/intel/'); curl -fL -o /tmp/TripCompta.zip "https://github.com/Scendari/tripcompta/releases/latest/download/TripCompta-mac-$A.zip" && ditto -x -k /tmp/TripCompta.zip /Applications && open "/Applications/Trip Compta.app"
+   A=$(uname -m | sed 's/x86_64/intel/'); curl -fL -o /tmp/TripCompta.zip "https://github.com/Scendari/tripcompta/releases/latest/download/TripCompta-mac-$A.zip" && ditto -x -k /tmp/TripCompta.zip /Applications && open /Applications/TripCompta.app
    ```
 
    Elle télécharge la bonne version pour ton Mac, la range dans **Applications** et la lance.
 
 ### Ou bien à la main
 
-1. Télécharge le fichier `.zip` (voir le tableau plus haut) et double-clique dessus : **Trip Compta** apparaît.
-2. Glisse **Trip Compta** dans le dossier **Applications**.
-3. Double-clique sur **Trip Compta**. La première fois, macOS affiche :
-   *« Trip Compta » n'a pas pu être ouvert car Apple ne peut pas vérifier qu'il ne contient pas de logiciel
+1. Télécharge le fichier `.zip` (voir le tableau plus haut) et double-clique dessus : **TripCompta** apparaît.
+2. Glisse **TripCompta** dans le dossier **Applications**.
+3. Double-clique sur **TripCompta**. La première fois, macOS affiche :
+   *« TripCompta » n'a pas pu être ouvert car Apple ne peut pas vérifier qu'il ne contient pas de logiciel
    malveillant.* C'est normal : l'application n'est pas enregistrée (payante) chez Apple. Clique sur **Terminé**.
 4. Ouvre **Réglages Système** → **Confidentialité et sécurité**, descends jusqu'à
-   *« Trip Compta » a été bloqué…* et clique sur **Ouvrir quand même**, puis confirme avec ton mot de passe.
+   *« TripCompta » a été bloqué…* et clique sur **Ouvrir quand même**, puis confirme avec ton mot de passe.
 
 Ces étapes 3 et 4 ne sont à faire **qu'une fois** : les mises à jour faites par l'application ne redemandent rien.
 
@@ -57,10 +57,10 @@ Au premier lancement, macOS peut demander si Trip Compta peut accéder au dossie
    en bas → **OK**.
 3. Clic droit → **Extraire tout…** et choisis un dossier **à toi**, par exemple ton dossier personnel
    (`C:\Users\<ton nom>`). Évite « Program Files » : l'application ne pourrait pas se mettre à jour toute seule.
-4. Dans le dossier **Trip Compta**, double-clique sur **Trip Compta.exe**. Si Windows affiche
+4. Dans le dossier **TripCompta**, double-clique sur **TripCompta.exe**. Si Windows affiche
    *« Windows a protégé votre ordinateur »* : clique sur **Informations complémentaires**, puis
    **Exécuter quand même**. (Une seule fois.)
-5. Pour la retrouver facilement : clic droit sur **Trip Compta.exe** → **Envoyer vers** → **Bureau (créer un raccourci)**.
+5. Pour la retrouver facilement : clic droit sur **TripCompta.exe** → **Envoyer vers** → **Bureau (créer un raccourci)**.
 
 Une fenêtre noire s'ouvre avec le navigateur : c'est normal. **La fermer arrête l'application.**
 
@@ -71,7 +71,7 @@ Une fenêtre noire s'ouvre avec le navigateur : c'est normal. **La fermer arrêt
 ```bash
 curl -fL -o /tmp/TripCompta.tar.gz https://github.com/Scendari/tripcompta/releases/latest/download/TripCompta-linux.tar.gz
 mkdir -p ~/Applications && tar -xzf /tmp/TripCompta.tar.gz -C ~/Applications
-~/Applications/"Trip Compta"/"Trip Compta"
+~/Applications/TripCompta/TripCompta
 ```
 
 (Linux 64 bits, distribution de 2022 ou plus récente.)

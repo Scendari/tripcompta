@@ -57,7 +57,7 @@ def main():
     sep = ";" if os.name == "nt" else ":"
     args = [
         str(ROOT / "run.py"),
-        "--name", "Trip Compta",
+        "--name", "TripCompta",                       # fichiers sans espace ; nom affiché : « Trip Compta »
         "--noconfirm",
         "--clean",
         "--add-data", f"{ROOT / 'compta' / 'templates'}{sep}compta/templates",
@@ -91,15 +91,15 @@ def main():
     finally:
         BUILD_FILE.unlink(missing_ok=True)      # le code source reste en « version de développement »
     if sys.platform == "darwin":
-        plist = ROOT / "dist" / "Trip Compta.app" / "Contents" / "Info.plist"
+        plist = ROOT / "dist" / "TripCompta.app" / "Contents" / "Info.plist"
         if plist.exists():                       # numéro visible dans « Lire les informations » du Finder
             import plistlib
             with open(plist, "rb") as f:
                 data = plistlib.load(f)
             data["CFBundleShortVersionString"] = version.split("-")[0]
             data["CFBundleVersion"] = version
-            if dev:                              # distincte de l'app installée dans le Launchpad et Spotlight
-                data["CFBundleDisplayName"] = data["CFBundleName"] = "Trip Compta (dév)"
+            # nom affiché (Dock, menu, Launchpad) : avec l'espace ; en développement, distinct de l'app installée
+            data["CFBundleDisplayName"] = data["CFBundleName"] = "Trip Compta (dév)" if dev else "Trip Compta"
             with open(plist, "wb") as f:
                 plistlib.dump(data, f)
             # Info.plist modifié : refaire la signature « ad hoc » (sinon macOS refuse d'ouvrir l'app)

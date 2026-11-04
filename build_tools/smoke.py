@@ -1,6 +1,6 @@
 """Vérifie qu'une application fabriquée démarre et répond avec la bonne version (utilisé par GitHub Actions).
 
-    python build_tools/smoke.py "dist/Trip Compta.app/Contents/MacOS/Trip Compta" 1.2.0
+    python build_tools/smoke.py "dist/TripCompta.app/Contents/MacOS/TripCompta" 1.2.0
 """
 import json
 import os

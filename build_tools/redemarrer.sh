@@ -2,7 +2,7 @@
 # Arrête Trip Compta s'il tourne, puis le relance depuis le code source (mêmes données, même adresse).
 # Depuis le code source : pas de nouvelle demande d'accès au dossier Documents à chaque reconstruction de l'app.
 # L'onglet déjà ouvert se recharge tout seul ; un onglet n'est ouvert que si l'appli ne tournait pas.
-# Option --app : relancer l'application Mac reconstruite (dist/Trip Compta.app) à la place.
+# Option --app : relancer l'application Mac reconstruite (dist/TripCompta.app) à la place.
 cd "$(dirname "$0")/.."
 was_running=0
 for port in {8765..8814}; do
@@ -12,7 +12,8 @@ for port in {8765..8814}; do
     echo "Arrêté (port $port)"
   fi
 done
-pkill -f "Trip Compta.app/Contents/MacOS/Trip Compta" 2>/dev/null
+pkill -f "TripCompta.app/Contents/MacOS/TripCompta" 2>/dev/null
+pkill -f "Trip Compta.app/Contents/MacOS/Trip Compta" 2>/dev/null   # avant la 1.2
 pkill -f "Compta Voyages.app/Contents/MacOS/Compta Voyages" 2>/dev/null   # ancien nom
 # attendre que le port 8765 soit vraiment libéré (sinon l'appli démarrerait sur 8766 et l'onglet ouvert serait perdu)
 for i in {1..40}; do
@@ -22,7 +23,7 @@ done
 args=()
 [[ $was_running == 1 ]] && args+=(--no-browser)
 if [[ "$1" == "--app" ]]; then
-  open -n "dist/Trip Compta.app" --args "${args[@]}"
+  open -n "dist/TripCompta.app" --args "${args[@]}"
 else
   mkdir -p "$HOME/Library/Logs"
   nohup .venv/bin/python run.py "${args[@]}" >> "$HOME/Library/Logs/tripcompta.log" 2>&1 &
