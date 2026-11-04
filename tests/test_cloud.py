@@ -428,7 +428,7 @@ def test_migration_round_trip_same_amounts(tmp_path, monkeypatch):
     (app.state.db.receipts_dir / "1_ticket.jpg").write_bytes(b"jpg")
     cl = TestClient(app)
     page = cl.get("/reglages/donnees").text
-    assert "Où ranger mes voyages" in page and "Sur cet ordinateur" in page
+    assert "Où sont mes voyages" in page and "Sur cet ordinateur" in page
     cloud = tmp_path / "Dropbox (Asso)" / "TripCompta"
     cloud.parent.mkdir()                                         # le dossier du service existe, pas encore TripCompta
     r = cl.post("/reglages/donnees", data={"action": "ranger", "dossier": "__autre__", "autre": str(cloud),

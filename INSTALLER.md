@@ -131,7 +131,7 @@ Dropbox), puis relancer Trip Compta.
 
 ## Protéger tes voyages par un mot de passe (facultatif)
 
-Dans **☁️ Où ranger mes voyages** → **🔒 Protéger mes voyages…** :
+Dans **⚙️ Réglages → Mot de passe** :
 
 1. Choisis un mot de passe (une phrase facile à retenir est idéale).
 2. Trip Compta t'affiche une **clé de secours** (8 groupes de 4 caractères) : **imprime-la ou note-la sur papier**,
@@ -163,7 +163,7 @@ indispensable.
 ## Questions
 
 - **Où sont mes données ?** Dans le dossier **Documents/TripCompta**, ou dans le dossier synchronisé que tu as
-  choisi (**☁️ Où ranger mes voyages**, en bas de l'accueil). Elles ne sont jamais touchées par une mise à jour, et une copie de sécurité est faite juste avant
+  choisi (**⚙️ Réglages → Où sont mes voyages**). Elles ne sont jamais touchées par une mise à jour, et une copie de sécurité est faite juste avant
   (dans `sauvegardes/`).
 - **Comment savoir quelle version j'ai ?** En bas de l'accueil : **À propos**. On peut aussi y vérifier les mises
   à jour à la main, ou désactiver la vérification automatique.

@@ -88,7 +88,7 @@ ton cloud qui les recopie sur tes autres ordinateurs (Mac, Windows, Linux).
 
 1. Installe l'application de ton cloud pour ordinateur (Dropbox, Google Drive pour ordinateur, OneDrive, iCloud,
    kDrive, Proton Drive…), s'il n'y est pas déjà.
-2. Dans Trip Compta : accueil → **☁️ Où ranger mes voyages** (lien en bas). Les dossiers synchronisés trouvés sur
+2. Dans Trip Compta : **⚙️ Réglages → Où sont mes voyages**. Les dossiers synchronisés trouvés sur
    l'ordinateur sont proposés ; sinon « Autre dossier… » → **Parcourir…**.
 3. Sur le 1er ordinateur : **Copier mes voyages dans ce dossier** (tout est copié et vérifié, l'ancien dossier n'est pas
    touché). Sur les suivants, une fois la synchronisation faite : **Ouvrir les voyages de ce dossier** (Trip Compta
