@@ -4,7 +4,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, event, func, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -26,6 +26,7 @@ class Trip(Base):
     end: Mapped[Optional[dt.date]] = mapped_column(Date, nullable=True)
     note: Mapped[str] = mapped_column(Text, default="")      # club, lieu de départ, infos utiles…
     cashier_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)   # participant qui tient la caisse (sinon l'asso)
+    asso_name: Mapped[str] = mapped_column(String(100), default="")   # nom de l'asso / de la caisse pour ce voyage
     groups: Mapped[str] = mapped_column(Text, default="")    # JSON : [{"name": "Minibus", "members": [ids]}]
     roles_conf: Mapped[str] = mapped_column(Text, default="")  # JSON : {"perso": ["Moniteur"], "masques": ["dp"]}
     rounding: Mapped[str] = mapped_column(String(20), default="participants")   # centimes d'arrondi : participants | asso
@@ -348,3 +349,14 @@ class SubTransfer(Base):
     receiver_id: Mapped[int] = mapped_column(ForeignKey("participants.id"))
     amount: Mapped[int] = mapped_column(Integer)
     date: Mapped[Optional[dt.date]] = mapped_column(Date, nullable=True)
+
+
+ASSO_NAME_KEY = "nom_asso"   # réglage : nom proposé pour la caisse des nouveaux voyages (le dernier utilisé)
+
+
+@event.listens_for(Trip, "before_insert")
+def _trip_asso_name(mapper, connection, target):
+    """Un nouveau voyage reprend le dernier nom de caisse utilisé ; le renommer ensuite ne touche que lui."""
+    if not (target.asso_name or "").strip():
+        v = connection.execute(text("SELECT value FROM settings WHERE key = :k"), {"k": ASSO_NAME_KEY}).scalar()
+        target.asso_name = (v or "").strip()[:100]

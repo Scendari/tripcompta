@@ -39,10 +39,10 @@
     <summary class="btn small ghost">{{ "Renommer" if asso_custom else "Donner un nom à l'asso" }}</summary>
     <form method="post" action="/v/{{ trip.id }}/asso/nom" class="row" style="gap:.5rem;margin-top:.5rem;flex-wrap:nowrap">
       <label for="asso-name" class="sr-only">Nom de l'asso</label>
-      <input type="text" id="asso-name" name="name" value="{{ asso_name if asso_custom }}" placeholder="ex. Club de plongée de Niort" style="flex:1;min-width:0">
+      <input type="text" id="asso-name" name="name" value="{{ asso_real if asso_custom }}" placeholder="ex. Club de plongée de Niort" style="flex:1;min-width:0">
       <button class="btn small">Enregistrer</button>
     </form>
-    <p class="hint">Commun à tous tes voyages. Laisse vide pour revenir à « l'asso ».</p>
+    <p class="hint">Pour ce voyage seulement (tes autres voyages gardent leur nom) ; tes prochains voyages reprendront ce nom. Laisse vide pour revenir à « l'asso ».</p>
   </details>
   {% endif %}
   </div>

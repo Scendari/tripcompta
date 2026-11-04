@@ -256,17 +256,13 @@ def _run_import(s, data, t, expected_id, require_id) -> dict:
             errors.append(f"{labels[kind]} n°{i}" + (f" « {label} »" if label else "") + f" : {e}")
 
     try:
-        if _g(v, "asso"):                            # nom de l'asso : réglage commun à tous les voyages
+        if _g(v, "asso"):                            # nom de l'asso : propre à chaque voyage
             from . import services as S
             new_name = str(v["asso"]).strip()[:100]
-            cur = S.asso_name(s)
-            if cur == "l'asso":
-                S.set_asso_name(s, new_name)
+            if new_name and S.trip_asso_name(t) != new_name:
+                S.set_trip_asso_name(t, new_name, s)
                 s.flush()
-                actions.append(f"Nom de l'asso : {new_name}")
-            elif E.sort_key(cur) != E.sort_key(new_name):
-                notes.append(f"L'asso s'appelle déjà « {cur} » dans l'application (nom commun à tous les voyages) : "
-                             f"« {new_name} » n'a pas été appliqué. Change-le sur la page de l'asso si besoin.")
+                actions.append(f"Nom de l'asso pour ce voyage : {new_name}")
         rv = v.get("roles_du_voyage") or []          # rôles propres au voyage (conducteur, photographe…)
         if not isinstance(rv, list):
             rv = [rv]

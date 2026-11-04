@@ -40,6 +40,12 @@ def _row(obj) -> dict:
     return out
 
 
+def _asso(t: M.Trip) -> str:
+    """Nom de l'asso tel qu'il s'affiche dans ce voyage (vide : « l'asso »)."""
+    name = S.trip_asso_name(t)
+    return "" if name == "l'asso" else name
+
+
 def _expense_rows(t: M.Trip, expenses) -> list:
     """Les dépenses, avec le tirage des centimes d'arrondi tel que le calcul l'utilise (même s'il n'est pas
     encore enregistré) : le voyage importé donne exactement les mêmes montants."""
@@ -57,7 +63,7 @@ def _expense_rows(t: M.Trip, expenses) -> list:
 def trip_data(t: M.Trip) -> dict:
     expenses = list(t.expenses)
     return dict(
-        voyage=_row(t),
+        voyage=dict(_row(t), asso_name=_asso(t)),
         participants=[_row(x) for x in t.participants],
         familles=[_row(x) for x in t.families],
         categories=[_row(x) for x in t.categories],
@@ -78,6 +84,8 @@ def trip_data(t: M.Trip) -> dict:
 def settings_data(s) -> dict:
     out = {}
     for k in SETTING_KEYS:
+        if k == S.ASSO_NAME_KEY:     # le nom de l'asso est dans chaque voyage : rien d'autre ne sort de la base
+            continue
         row = s.get(M.Setting, k)
         if row is not None and (row.value or "").strip():
             out[k] = row.value
@@ -288,6 +296,15 @@ def merge_settings(s, reglages: dict) -> list:
 
 def import_zip(s, content: bytes, receipts_dir: Path) -> tuple[list, list]:
     data, z = read_zip(content)
+    old_name = str((data.get("reglages") or {}).get(S.ASSO_NAME_KEY) or "").strip()[:100]
+    for v in data["voyages"]:    # export d'une version plus ancienne : le nom commun devient celui du voyage
+        if old_name and not str((v.get("voyage") or {}).get("asso_name") or "").strip():
+            v["voyage"] = dict(v["voyage"], asso_name=old_name)
     trips = [import_trip(s, v, z, receipts_dir) for v in data["voyages"]]
     done = merge_settings(s, data.get("reglages") or {})
+    named = [t.asso_name for t in trips if (t.asso_name or "").strip()]
+    if named and S.asso_name(s) == "l'asso" and S.ASSO_NAME_KEY not in done:   # rien ici : nom proposé
+        S.set_asso_name(s, named[-1])
+        s.flush()
+        done.append(S.ASSO_NAME_KEY)
     return trips, done

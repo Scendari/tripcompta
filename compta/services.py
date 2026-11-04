@@ -821,11 +821,11 @@ def person_account(trip: M.Trip, result: E.Result, pid: int) -> dict:
 
 
 # ---------------------------------------------------------------- l'asso, acteur à part entière
-ASSO_NAME_KEY = "nom_asso"
+ASSO_NAME_KEY = M.ASSO_NAME_KEY
 
 
 def asso_name(s) -> str:
-    """Nom de l'asso (réglage commun à tous les voyages) ; « l'asso » s'il n'est pas renseigné."""
+    """Nom proposé pour la caisse des nouveaux voyages (le dernier utilisé) ; « l'asso » s'il n'y en a pas."""
     row = s.get(M.Setting, ASSO_NAME_KEY) if s is not None else None
     return (row.value.strip() if row and row.value and row.value.strip() else "l'asso")
 
@@ -839,6 +839,24 @@ def set_asso_name(s, name: str) -> None:
         row.value = name
 
 
+def trip_asso_name(trip: M.Trip, s=None) -> str:
+    """Nom de l'asso pour ce voyage (propre à chaque voyage) ; à défaut (voyage créé par une version plus
+    ancienne), le nom proposé ; sinon « l'asso »."""
+    own = (trip.asso_name or "").strip()
+    if own:
+        return own
+    from sqlalchemy.orm import object_session
+    return asso_name(s if s is not None else object_session(trip))
+
+
+def set_trip_asso_name(trip: M.Trip, name: str, s=None) -> None:
+    """Renomme la caisse de ce voyage seulement ; le nom devient aussi celui proposé aux prochains voyages."""
+    from sqlalchemy.orm import object_session
+    name = (name or "").strip()[:100]
+    trip.asso_name = name
+    set_asso_name(s if s is not None else object_session(trip), name)   # effacé : les nouveaux voyages aussi
+
+
 def cashier(trip: M.Trip):
     """Participant qui tient la caisse (voyage sans asso), ou None si c'est l'asso."""
     return next((p for p in trip.participants if p.id == trip.cashier_id), None) if trip.cashier_id else None
@@ -849,8 +867,7 @@ def caisse_label(trip: M.Trip, s=None) -> str:
     c = cashier(trip)
     if c is not None:
         return f"la caisse ({c.name})"
-    from sqlalchemy.orm import object_session
-    return asso_name(s if s is not None else object_session(trip))
+    return trip_asso_name(trip, s)
 
 
 def asso_account(trip: M.Trip, result: E.Result) -> dict:

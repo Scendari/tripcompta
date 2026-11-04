@@ -119,7 +119,7 @@ class Database:
                      "tickets": "TEXT NOT NULL DEFAULT ''", "cents_mode": "VARCHAR(20) NOT NULL DEFAULT ''",
                      "cents_who": "TEXT NOT NULL DEFAULT ''"},
         "expense_shares": {"fixed": "INTEGER"},
-        "trips": {"note": "TEXT NOT NULL DEFAULT ''", "cashier_id": "INTEGER", "groups": "TEXT NOT NULL DEFAULT ''",
+        "trips": {"note": "TEXT NOT NULL DEFAULT ''", "cashier_id": "INTEGER", "asso_name": "VARCHAR(100) NOT NULL DEFAULT ''", "groups": "TEXT NOT NULL DEFAULT ''",
                   "roles_conf": "TEXT NOT NULL DEFAULT ''",
                   "rounding": "VARCHAR(20) NOT NULL DEFAULT 'participants'"},
     }
@@ -131,6 +131,9 @@ class Database:
                 for col, ddl in cols.items():
                     if col not in have:
                         c.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
+                        if (table, col) == ("trips", "asso_name"):   # chaque voyage garde le nom commun d'avant
+                            c.exec_driver_sql("UPDATE trips SET asso_name = COALESCE((SELECT substr(trim(value), 1, 100) "
+                                              "FROM settings WHERE key = 'nom_asso'), '')")
             self._migrate_roles(c)
             self._migrate_fixed_adjustments(c)
 
