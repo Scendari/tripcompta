@@ -326,3 +326,10 @@ la relance, remet l'ancienne si la nouvelle ne répond pas). Une base ouverte pa
 
 Pile : Python 3.10+, FastAPI, Jinja2, SQLAlchemy/SQLite, fpdf2 (police DejaVu embarquée), SDK MCP, PyInstaller.
 Pas de framework JavaScript : un petit `static/app.js` pour les aperçus en direct.
+
+---
+
+## Licence
+
+Trip Compta est **gratuit et open source**, sous licence [MIT](LICENSE) : tu peux l'utiliser, le copier, le
+modifier et le redistribuer librement, en gardant la mention de copyright. Il est fourni « tel quel », sans garantie.
