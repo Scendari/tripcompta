@@ -18,6 +18,12 @@ def free_port():
         return s.getsockname()[1]
 
 
+try:                                                      # Windows : console en cp1252, le journal a des accents
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
+
 def get(url, data=None):
     import urllib.parse
     req = urllib.request.Request(url, data=urllib.parse.urlencode(data).encode() if data is not None else None)

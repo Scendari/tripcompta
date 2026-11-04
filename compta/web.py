@@ -214,6 +214,8 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
     app.state.argv = []
     app.state.update_notice = None if upd.dev else upd.startup_notice()
     app.state.sync = sync
+    if sync is not None:
+        sync.before_wipe = lambda: db.engine.dispose()
     if updater is None:
         upd.start_background()
     if sync is not None:

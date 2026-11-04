@@ -78,12 +78,29 @@ def main():
     from compta.web import create_app
 
     def restart():
-        """Relance le même programme (même port, sans rouvrir d'onglet : la page ouverte se recharge seule)."""
+        """Relance le même programme, à la MÊME adresse (sans rouvrir d'onglet : la page ouverte se recharge seule)."""
         os.environ["TRIPCOMPTA_RESTARTED"] = "1"
+        port_now = getattr(app.state, "port", None) or a.port
+        os.environ["TRIPCOMPTA_PORT_WAIT"] = str(port_now)
+        args, skip = [], False
+        for x in sys.argv[1:]:
+            if skip:
+                skip = False
+                continue
+            if x == "--port":
+                skip = True
+                continue
+            args.append(x)
+        args += ["--port", str(port_now)]
+        cmd = [sys.executable] + ([] if getattr(sys, "frozen", False) else [sys.argv[0]]) + args
         sys.stdout.flush()
-        if getattr(sys, "frozen", False):            # application construite (Mac / Windows)
-            os.execv(sys.executable, [sys.executable] + sys.argv[1:])
-        os.execv(sys.executable, [sys.executable] + sys.argv)
+        if sys.platform == "win32":
+            # Windows ne remplace pas le programme en cours : le nouveau démarrerait avant que l'ancien ait libéré
+            # l'adresse, et en prendrait une autre (l'onglet ouvert le perdrait). Il attend qu'elle se libère.
+            import subprocess
+            subprocess.Popen(cmd, close_fds=True)
+            os._exit(0)
+        os.execv(sys.executable, cmd)
 
     app = create_app(a.data_dir, restart=restart)
     if a.demo and app.state.db is not None:
@@ -91,6 +108,12 @@ def main():
         seed_family_demo(app.state.db, replace=False)
         seed_demo(app.state.db, replace=False)
 
+    if os.environ.get("TRIPCOMPTA_PORT_WAIT") == str(a.port):     # relancé : attendre que l'ancien libère l'adresse
+        os.environ.pop("TRIPCOMPTA_PORT_WAIT", None)
+        for _ in range(60):
+            if free_port(a.port) == a.port:
+                break
+            time.sleep(0.25)
     port = free_port(a.port)
     app.state.port = port                    # pour relancer au même endroit après une mise à jour
     app.state.argv = sys.argv[1:]
