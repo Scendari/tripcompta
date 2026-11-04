@@ -102,7 +102,7 @@ ils te suivent sur tous tes ordinateurs, sans aucun serveur (rien n'est envoyé 
 |---|---|
 | iCloud Drive (Mac) | Finder → clic droit sur le dossier TripCompta → **Toujours garder sur cet appareil** |
 | OneDrive (Windows / Mac) | Clic droit sur le dossier TripCompta → **Toujours conserver sur cet appareil** |
-| Google Drive pour ordinateur | Clic droit sur le dossier → **Disponible hors connexion** (ou réglage « Dupliquer les fichiers ») |
+| Google Drive pour ordinateur | Mac : clic droit sur le dossier TripCompta → **Actions rapides › Rendre disponible hors connexion** ; Windows : clic droit → **Accès hors connexion › Disponible hors connexion** (ne pas choisir « Retirer le téléchargement ») |
 | Dropbox | Clic droit → **Rendre disponible hors connexion** (si tu utilises « en ligne uniquement ») |
 | kDrive, Proton Drive, pCloud | Garde le dossier disponible hors connexion |
 
