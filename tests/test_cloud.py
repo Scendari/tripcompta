@@ -718,3 +718,47 @@ def test_this_computer_is_an_option_of_the_list(tmp_path, monkeypatch):
     app5 = create_app()
     assert app5.state.sync is None and "Saisi dans le cloud" in TestClient(app5).get("/").text
     app5.state.db.engine.dispose()
+
+
+def test_settings_page(cloud_env):
+    """⚙️ Réglages : un bouton sur chaque page, et une page qui donne l'état de chaque réglage d'un coup d'œil."""
+    import uvicorn
+    from playwright.sync_api import sync_playwright
+    from tests.conftest import _free_port
+    tmp, shared = cloud_env
+    a = make(tmp, shared, "PC-A", 101)
+    tid = seed(a)
+    cl = TestClient(a)
+    assert 'href="/reglages"' in cl.get(f"/v/{tid}").text
+    page = cl.get("/reglages").text
+    assert "Où sont mes voyages" in page and "Dans Google Drive" in page and "Non protégés" in page
+    assert "Version et mises à jour" in page and "Protéger ›" in page
+    port = _free_port()
+    srv = uvicorn.Server(uvicorn.Config(a, host="127.0.0.1", port=port, log_level="error"))
+    th = threading.Thread(target=srv.run, daemon=True)
+    th.start()
+    while not srv.started:
+        time.sleep(0.05)
+    shots = os.environ.get("TRIPCOMPTA_SHOTS")
+    try:
+        with sync_playwright() as p:
+            br = p.chromium.launch()
+            for dark in (False, True):
+                for w in (1280, 390):
+                    pg = br.new_page(viewport={"width": w, "height": 900}, color_scheme="dark" if dark else "light")
+                    pg.goto(f"http://127.0.0.1:{port}/v/{tid}")
+                    pg.get_by_role("link", name="Réglages").click()
+                    assert pg.url.endswith("/reglages")
+                    assert pg.evaluate("document.documentElement.scrollWidth") <= w + 1
+                    if shots:
+                        Path(shots).mkdir(parents=True, exist_ok=True)
+                        tag = ("sombre" if dark else "clair") + ("-mobile" if w < 500 else "")
+                        pg.screenshot(path=f"{shots}/reglages-{tag}.png", full_page=True)
+                    pg.get_by_role("link", name=re.compile("Mot de passe")).click()
+                    assert pg.url.endswith("/reglages/protection") and pg.get_by_text("Protéger mes voyages…").is_visible()
+                    pg.close()
+            br.close()
+    finally:
+        srv.should_exit = True
+        th.join(5)
+        stop(a)

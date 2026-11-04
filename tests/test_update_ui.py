@@ -1,6 +1,7 @@
 """Mises à jour dans le navigateur : bandeau, « À propos », « Vérifier maintenant », désactivation, page d'attente.
 API GitHub simulée. Captures en clair, sombre et à la largeur d'un téléphone (dossier TRIPCOMPTA_SHOTS si défini)."""
 import os
+import re
 import threading
 import time
 from pathlib import Path
@@ -92,7 +93,9 @@ def test_flow(env, browser):
     pg = new_page(browser)
     pg.goto(url + "/")
     assert pg.locator(".update-banner").count() == 0
-    pg.get_by_role("link", name="ℹ️ À propos · version 1.0.0").click()
+    pg.get_by_role("link", name="Réglages").click()                 # Réglages → Version et mises à jour
+    assert "Trip Compta 1.0.0" in pg.locator(".settings").inner_text()
+    pg.get_by_role("link", name=re.compile("Version et mises à jour")).click()
     assert pg.locator(".about-version").inner_text() == "Trip Compta 1.0.0"
     assert pg.get_by_text("Pas encore vérifié").is_visible()
 

@@ -651,6 +651,23 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
     def data_dir_page(request: Request):
         return _data_page(request)
 
+    @app.get("/reglages", response_class=HTMLResponse)
+    def settings_page(request: Request):
+        """Réglages : où sont les voyages, mot de passe, version et mises à jour — l'état de chacun d'un coup d'œil."""
+        checked = upd.checked_at()
+        return render(request, "settings.html", data_dir=db.home, source=data_source, shared=sync is not None,
+                      protected=sync is not None and sync.protected,
+                      remembered=bool(sync is not None and sync.vault is not None and K.recall(sync.vault.id)),
+                      info=upd, available=upd.available(), latest=upd.latest(),
+                      checked=dt.datetime.fromtimestamp(checked).strftime("%d/%m/%Y") if checked else None)
+
+    @app.get("/reglages/protection", response_class=HTMLResponse)
+    def protection_settings(request: Request):
+        return render(request, "protection_settings.html", source=data_source,
+                      protected=sync is not None and sync.protected,
+                      remembered=bool(sync is not None and sync.vault is not None and K.recall(sync.vault.id)),
+                      can_remember=K.keyring_available())
+
     @app.post("/reglages/ouvrir-dossier")
     def data_dir_open(request: Request):
         import subprocess
@@ -882,14 +899,14 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
     @app.get("/protection/activer", response_class=HTMLResponse)
     def protect_start(request: Request):
         if sync is not None and sync.protected:
-            return RedirectResponse("/reglages/donnees#protection", status_code=303)
+            return RedirectResponse("/reglages/protection", status_code=303)
         return _need_main(request) or _protection_page(request, step="mot_de_passe")
 
     @app.post("/protection/activer", response_class=HTMLResponse)
     async def protect_password(request: Request):
         import secrets as _secrets
         if sync is not None and sync.protected:
-            return RedirectResponse("/reglages/donnees#protection", status_code=303)
+            return RedirectResponse("/reglages/protection", status_code=303)
         bad = _need_main(request)
         if bad:
             return bad
@@ -910,7 +927,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
     async def protect_confirm(request: Request):
         pend = app.state.pending_protection
         if not pend or pend["kind"] != "activer":
-            return RedirectResponse("/reglages/donnees#protection", status_code=303)
+            return RedirectResponse("/reglages/protection", status_code=303)
         bad = _need_main(request)
         if bad:
             return bad
@@ -997,7 +1014,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
     @app.post("/protection/mot-de-passe", response_class=HTMLResponse)
     async def protect_change(request: Request):
         if sync is None or sync.vault is None:
-            return RedirectResponse("/reglages/donnees#protection", status_code=303)
+            return RedirectResponse("/reglages/protection", status_code=303)
         f = await request.form()
         bad = _check_current(request, f)
         if bad:
@@ -1008,14 +1025,14 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
                                     error=f"Le nouveau mot de passe doit faire au moins {K.MIN_PASSWORD} caractères, "
                                           "et les deux saisies doivent être identiques.")
         K.change_password(_folder(), sync.vault, new)
-        return back("/reglages/donnees", "Mot de passe changé (sur tous tes ordinateurs, dès que ton cloud aura "
+        return back("/reglages/protection", "Mot de passe changé (sur tous tes ordinateurs, dès que ton cloud aura "
                                           "recopié le dossier)")
 
     @app.post("/protection/secours", response_class=HTMLResponse)
     async def protect_new_recovery(request: Request):
         import secrets as _secrets
         if sync is None or sync.vault is None:
-            return RedirectResponse("/reglages/donnees#protection", status_code=303)
+            return RedirectResponse("/reglages/protection", status_code=303)
         f = await request.form()
         bad = _check_current(request, f)
         if bad:
@@ -1029,7 +1046,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
     async def protect_new_recovery_confirm(request: Request):
         pend = app.state.pending_protection
         if not pend or pend["kind"] != "secours" or sync is None or sync.vault is None:
-            return RedirectResponse("/reglages/donnees#protection", status_code=303)
+            return RedirectResponse("/reglages/protection", status_code=303)
         f = await request.form()
         if not K.check_group(pend["recovery"], pend["group"], f.get("groupe") or ""):
             return _protection_page(request, step="secours", recovery=pend["recovery"], group=pend["group"],
@@ -1037,20 +1054,20 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
                                     error=f"Ce n'est pas le groupe n° {pend['group'] + 1} de ta clé de secours.")
         K.set_recovery(_folder(), sync.vault, pend["recovery"])
         app.state.pending_protection = None
-        return back("/reglages/donnees", "Nouvelle clé de secours enregistrée : l'ancienne ne marche plus")
+        return back("/reglages/protection", "Nouvelle clé de secours enregistrée : l'ancienne ne marche plus")
 
     @app.post("/protection/oublier")
     def protect_forget():
         if sync is not None and sync.vault is not None:
             K.forget(sync.vault.id)
-        return back("/reglages/donnees", "Cet ordinateur ne se souvient plus du mot de passe")
+        return back("/reglages/protection", "Cet ordinateur ne se souvient plus du mot de passe")
 
     @app.post("/protection/retirer", response_class=HTMLResponse)
     async def protect_remove(request: Request):
         """Retirer la protection : tout redevient lisible (vérifié), puis la clé est effacée."""
         import shutil as _sh
         if sync is None or sync.vault is None:
-            return RedirectResponse("/reglages/donnees#protection", status_code=303)
+            return RedirectResponse("/reglages/protection", status_code=303)
         bad = _need_main(request)
         if bad:
             return bad

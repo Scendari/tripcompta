@@ -319,7 +319,8 @@ def test_remember_on_this_computer(env, keyring_mem):
     app = create_app()                                           # le trousseau donne la clé : pas d'écran
     assert not app.state.sync.locked and amounts(app, tid) == EXPECTED
     cl = TestClient(app)
-    assert "Cet ordinateur se souvient du mot de passe" in cl.get("/reglages/donnees").text
+    assert "Cet ordinateur se souvient du mot de passe" in cl.get("/reglages/protection").text
+    assert "cet ordinateur se souvient du mot de passe" in cl.get("/reglages").text
     r = cl.post("/verrouiller", follow_redirects=True)           # verrouiller sans quitter
     assert "Mot de passe de tes voyages" in r.text and app.state.sync.locked
     assert not (app.state.sync.local / C.DB).exists()
@@ -441,7 +442,7 @@ def test_protection_screens_light_dark_phone(env):
                     assert pg.evaluate("document.documentElement.scrollWidth") <= w + 1, ("secours", tag)
                     if shots:
                         pg.screenshot(path=f"{shots}/protection-2-{tag}.png", full_page=True)
-                    pg.goto(url + "/reglages/donnees#protection")
+                    pg.goto(url + "/reglages/protection")
                     assert pg.evaluate("document.documentElement.scrollWidth") <= w + 1, ("reglages", tag)
                     assert errs == []
                     pg.close()
@@ -475,7 +476,7 @@ def test_protection_screens_light_dark_phone(env):
             pg.locator("#u-pw").fill(PASSWORD)
             pg.get_by_role("button", name="Déverrouiller").click()
             assert "Voyages déverrouillés" in pg.locator(".flash").inner_text()
-            pg.goto(url2 + "/reglages/donnees#protection")
+            pg.goto(url2 + "/reglages/protection")
             if shots:
                 pg.screenshot(path=f"{shots}/protection-reglages.png", full_page=True)
             br.close()

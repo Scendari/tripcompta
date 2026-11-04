@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Mot de passe · Trip Compta{% endblock %}
+{% block page %}
+<div class="page-head"><div class="grow">
+  <h1>🔒 Mot de passe</h1>
+  <p class="muted">Protéger tes voyages par un mot de passe : la base et les justificatifs sont chiffrés.</p>
+</div><a class="btn ghost small" href="/reglages">← Réglages</a></div>
+{% if source not in ('defaut', 'choisi') %}
+<div class="card data-card"><p class="hint" style="margin:0">Le dossier des voyages est imposé au lancement de l'application : la protection ne se règle pas ici.</p></div>
+{% else %}
+<div class="card data-card" id="protection">
+  {% if protected %}
+  <h3 style="margin-top:0">🔒 Tes voyages sont protégés par un mot de passe</h3>
+  <p class="hint">La base et les justificatifs du dossier sont chiffrés. {% if remembered %}Cet ordinateur se souvient du mot de passe.{% endif %}</p>
+  <details class="prot-action"><summary>Changer le mot de passe</summary>
+    <form method="post" action="/protection/mot-de-passe">
+      <div class="field"><label for="c-cur">Mot de passe actuel</label><input type="password" id="c-cur" name="actuel" autocomplete="current-password" required></div>
+      <div class="field"><label for="c-new">Nouveau mot de passe</label><input type="password" id="c-new" name="nouveau" autocomplete="new-password" required minlength="8"></div>
+      <div class="field"><label for="c-again">Encore une fois</label><input type="password" id="c-again" name="confirmation" autocomplete="new-password" required minlength="8"></div>
+      <button class="btn small">Changer le mot de passe</button>
+    </form></details>
+  <details class="prot-action"><summary>Nouvelle clé de secours</summary>
+    <p class="hint">Si tu as perdu ta clé de secours (ou si quelqu'un a pu la voir) : une nouvelle remplace l'ancienne.</p>
+    <form method="post" action="/protection/secours">
+      <div class="field"><label for="r-cur">Mot de passe actuel</label><input type="password" id="r-cur" name="actuel" autocomplete="current-password" required></div>
+      <button class="btn small">Créer une nouvelle clé de secours</button>
+    </form></details>
+  {% if remembered %}<form method="post" action="/protection/oublier" class="inline"><button class="btn small ghost">Oublier le mot de passe sur cet ordinateur</button></form>{% endif %}
+  <details class="prot-action"><summary>Retirer la protection</summary>
+    <p class="hint">Tes voyages redeviennent des fichiers normaux (lisibles), sur tous tes ordinateurs.</p>
+    <form method="post" action="/protection/retirer" data-confirm="Retirer la protection ? Tes voyages redeviendront lisibles sans mot de passe.">
+      <div class="field"><label for="x-cur">Mot de passe actuel</label><input type="password" id="x-cur" name="actuel" autocomplete="current-password" required></div>
+      <button class="btn small ghost">Retirer la protection</button>
+    </form></details>
+  {% else %}
+  <h3 style="margin-top:0">🔒 Protéger mes voyages par un mot de passe <span class="pill grey">facultatif</span></h3>
+  <p class="hint">Ta base et tes justificatifs sont alors chiffrés dans le dossier : sans le mot de passe (ou la clé de secours), personne ne peut les lire, même ton service de cloud. Utile si tu partages le dossier, si l'ordinateur est partagé (club), ou pour les données personnelles de tes adhérents.</p>
+  <a class="btn small" href="/protection/activer">Protéger mes voyages…</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

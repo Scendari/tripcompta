@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Réglages · Trip Compta{% endblock %}
+{% block page %}
+<div class="page-head"><div class="grow">
+  <h1>⚙️ Réglages</h1>
+</div><a class="btn ghost small" href="/">← Mes voyages</a></div>
+
+<div class="settings">
+  <a class="card setting" href="/reglages/donnees">
+    <span class="setting-ico" aria-hidden="true">{{ '☁️' if cloud and not cloud.local else '💻' }}</span>
+    <span class="setting-body">
+      <b>Où sont mes voyages</b>
+      <span class="setting-state">
+        {% if cloud %}{% if cloud.local %}Sur cet ordinateur{% else %}Dans {{ cloud.service }}{% endif %}
+          {% if cloud.problem %} · <span class="warn-text">⚠️ dossier indisponible</span>
+          {% elif cloud.readonly %} · lecture seule (ouverts sur « {{ cloud.owner }} »)
+          {% elif cloud.saved %} · enregistré à {{ cloud.saved }}{% endif %}
+        {% else %}Sur cet ordinateur · pas synchronisé{% endif %}
+      </span>
+      <span class="setting-hint">Les ranger dans Google Drive, Dropbox, OneDrive, iCloud Drive… pour les retrouver sur tous tes ordinateurs.</span>
+    </span>
+    <span class="setting-go">{{ 'Changer' if source in ('defaut', 'choisi') else 'Voir' }} ›</span>
+  </a>
+
+  <a class="card setting" href="/reglages/protection">
+    <span class="setting-ico" aria-hidden="true">🔒</span>
+    <span class="setting-body">
+      <b>Mot de passe</b>
+      <span class="setting-state">{% if protected %}Voyages protégés{% if remembered %} · cet ordinateur se souvient du mot de passe{% endif %}{% else %}Non protégés{% endif %}</span>
+      <span class="setting-hint">Chiffrer la base et les justificatifs : sans le mot de passe, personne ne peut les lire.</span>
+    </span>
+    <span class="setting-go">{{ 'Gérer' if protected else 'Protéger' }} ›</span>
+  </a>
+
+  <a class="card setting" href="/reglages/a-propos">
+    <span class="setting-ico" aria-hidden="true">🔄</span>
+    <span class="setting-body">
+      <b>Version et mises à jour</b>
+      <span class="setting-state">Trip Compta {{ info.label }}
+        {% if available %} · <span class="ok-text">🎁 {{ available.version }} disponible</span>
+        {% elif info.dev %} · version de développement
+        {% elif checked %} · à jour (vérifié le {{ checked }}){% endif %}</span>
+      <span class="setting-hint">Nouveautés, vérification des mises à jour.</span>
+    </span>
+    <span class="setting-go">{{ 'Installer' if available else 'Voir' }} ›</span>
+  </a>
+</div>
+<p class="hint settings-quit">Pour arrêter Trip Compta : « ⏻ Arrêter », en haut à droite. Tes voyages sont enregistrés à chaque modification.</p>
+{% endblock %}

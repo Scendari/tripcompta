@@ -365,7 +365,9 @@ def test_ping_and_about_page_release(client):
     assert c.get("/ping").json()["version"] == "1.0.0"
     r = c.get("/reglages/a-propos")
     assert "Trip Compta 1.0.0" in r.text and "Pas encore vérifié" in r.text and "Version de développement" not in r.text
-    assert "ℹ️ À propos · version 1.0.0" in c.get("/").text
+    assert 'href="/reglages"' in c.get("/").text                        # ⚙️ Réglages, en haut de chaque page
+    r = c.get("/reglages")
+    assert "Version et mises à jour" in r.text and "Trip Compta 1.0.0" in r.text
 
 
 def test_about_page_dev(client):

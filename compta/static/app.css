@@ -923,3 +923,26 @@ label.check { display: inline-flex; align-items: center; gap: .4rem; font-weight
   place-items: center; font-size: 1rem; }
 .help-steps b { display: block; font-size: .95rem; }
 .help-steps p { margin: .15rem 0 0; font-size: .88rem; color: var(--muted); line-height: 1.45; }
+
+/* Réglages */
+.settings { display: flex; flex-direction: column; gap: .7rem; max-width: 760px; }
+.card.setting { display: flex; align-items: center; gap: 1rem; text-decoration: none; color: var(--text); margin: 0;
+  transition: border-color .15s, box-shadow .15s; }
+.card.setting:hover, .card.setting:focus-visible { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal) inset; }
+.setting-ico { flex: none; width: 2.6rem; height: 2.6rem; border-radius: 12px; background: var(--bg-2); display: grid;
+  place-items: center; font-size: 1.3rem; }
+.setting-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .15rem; }
+.setting-body b { font-size: 1.02rem; }
+.setting-state { font-size: .92rem; overflow-wrap: anywhere; }
+.setting-hint { font-size: .82rem; color: var(--muted); }
+.setting-go { flex: none; color: var(--teal-strong); font-weight: 600; font-size: .9rem; white-space: nowrap; }
+.warn-text { color: var(--amber); font-weight: 600; } .ok-text { color: var(--ok); font-weight: 600; }
+.settings-quit { margin-top: 1rem; }
+.settings-btn { text-decoration: none; }
+.settings-btn.on { border-color: var(--teal); color: var(--teal-strong); }
+@media (max-width: 640px) {
+  .card.setting { flex-wrap: wrap; align-items: flex-start; gap: .4rem .8rem; }
+  .setting-body { flex: 1 1 calc(100% - 3.6rem); }
+  .setting-go { margin-left: 3.4rem; }
+  .settings-btn .lbl { display: none; }
+}
