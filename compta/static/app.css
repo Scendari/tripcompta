@@ -915,3 +915,11 @@ label.check { display: inline-flex; align-items: center; gap: .4rem; font-weight
 .prot-action form { display: flex; flex-direction: column; gap: .5rem; margin-top: .5rem; max-width: 360px; }
 .prot-action .btn { align-self: flex-start; }
 @media print { .topbar, .cloud-line, .cloud-banner, .page-head .btn, .no-print, .hint, .row .btn { display: none !important; } }
+
+.help-steps { list-style: none; padding: 0; margin: .4rem 0 0; display: flex; flex-direction: column; gap: .2rem; }
+.help-steps li { display: flex; gap: .8rem; align-items: flex-start; padding: .55rem 0; border-top: 1px solid var(--border); }
+.help-steps li:first-child { border-top: 0; padding-top: .2rem; }
+.help-ico { flex: none; width: 2rem; height: 2rem; border-radius: 50%; background: var(--bg-2); display: grid;
+  place-items: center; font-size: 1rem; }
+.help-steps b { display: block; font-size: .95rem; }
+.help-steps p { margin: .15rem 0 0; font-size: .88rem; color: var(--muted); line-height: 1.45; }
