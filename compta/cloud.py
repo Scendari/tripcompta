@@ -191,6 +191,7 @@ class CloudSync:
         self._thread = None
         self.on_pulled = None                    # rappel : la copie de travail a été remplacée (rouvrir la base)
         self.vault = None                        # clé des voyages déverrouillée (dossier protégé, voir crypto.py)
+        self.before_wipe = None                  # rappel : refermer la base avant d'effacer la copie (Windows)
 
     # ------------------------------------------------------------------ chemins
     @property
@@ -647,9 +648,14 @@ class CloudSync:
 
     def wipe_working_copy(self) -> None:
         """Efface ce qui est en clair et redondant avec le dossier : base de travail, justificatifs, vignettes."""
+        if self.before_wipe:
+            try:
+                self.before_wipe()               # Windows ne supprime pas un fichier encore ouvert
+            except Exception:
+                pass
         for name in (DB, f"{DB}-journal", f"{DB}-wal", f"{DB}-shm", ".reception.db", ".envoi.db",
                      ".verif-conflit.db", STATE):
-            (self.local / name).unlink(missing_ok=True)
+            _unlink(self.local / name)
         for d in (self.local_receipts, self.local / ".vignettes", self.local / ".verrouille"):
             shutil.rmtree(d, ignore_errors=True)
 
@@ -739,6 +745,18 @@ def inbox_file(shared: Path, name: str) -> Path | None:
         return None
     p = Path(shared) / INBOX / name
     return p if p.is_file() else None
+
+
+def _unlink(p: Path, tries: int = 8) -> None:
+    """Supprime un fichier, en réessayant un peu si Windows le bloque un instant (antivirus, indexation…)."""
+    for i in range(tries):
+        try:
+            p.unlink(missing_ok=True)
+            return
+        except PermissionError:
+            if i == tries - 1:
+                raise
+            time.sleep(0.25 * (i + 1))
 
 
 def _iso(ts: float) -> str:
