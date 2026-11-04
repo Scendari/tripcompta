@@ -48,9 +48,19 @@ document.querySelectorAll('.home-actions [data-toggle-row]').forEach(function (b
     document.querySelectorAll('.home-actions [data-toggle-row]').forEach(function (o) {
       if (o !== b) { var t = document.querySelector(o.dataset.toggleRow); if (t) t.hidden = true; o.setAttribute('aria-expanded', 'false'); }
     });
-    setTimeout(function () { var t = document.querySelector(b.dataset.toggleRow), f = t && !t.hidden && t.querySelector('input'); if (f) f.focus(); }, 0);
+    setTimeout(function () { var t = document.querySelector(b.dataset.toggleRow), f = t && !t.hidden && t.querySelector('input'); if (f) f.focus(); homeButtons(); }, 0);
   });
 });
+// Formulaire ouvert : on cache « + Nouveau voyage » / « Importer » (on les prenait pour le bouton de validation) ;
+// ils reviennent avec « Fermer »
+function homeButtons() {
+  var open = Array.prototype.some.call(document.querySelectorAll('.home-panel'), function (p) { return !p.hidden; });
+  var a = document.querySelector('.home-actions'); if (a) a.hidden = open;
+}
+document.querySelectorAll('.home-panel [data-toggle-row]').forEach(function (b) {
+  b.addEventListener('click', function () { setTimeout(homeButtons, 0); });
+});
+homeButtons();
 </script>
 <div class="trip-grid">
   {% for t, r in cards %}
