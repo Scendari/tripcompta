@@ -622,6 +622,12 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
                             "Tes données sont enregistrées dans « " + str(db.home) + " ».</p></body>")
 
     # ------------------------------------------------------------------ où ranger mes voyages
+    def source_is_default() -> bool:
+        try:
+            return db.home.resolve() == (PATHS.documents_dir() / PATHS.FOLDER).resolve()
+        except OSError:
+            return False
+
     def _data_page(request, **ctx):
         cur = db.home
         default_dir = PATHS.documents_dir() / PATHS.FOLDER
@@ -632,6 +638,8 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             except OSError:
                 c_["current"] = False
         return render(request, "data_dir.html", data_dir=cur, source=data_source, shared=sync is not None,
+                      local_has_data=(default_dir / C.DB).exists(),
+                      local_current=sync is None and source_is_default(),
                       default_dir=default_dir, synced=PATHS.looks_synced(cur), clouds=clouds,
                       conflicts=sync.conflicts() if sync is not None and not sync.problem else [],
                       protected=sync is not None and sync.protected,
@@ -694,6 +702,8 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
     async def data_dir_change(request: Request):
         f = await request.form()
         action = f.get("action") or "ranger"
+        if f.get("dossier") == "__local__":     # l'option « 💻 Sur cet ordinateur » de la liste
+            action = "local"
         if data_source in ("lancement", "env"):
             return _data_page(request, error="Le dossier est imposé au lancement de l'application : il ne se change "
                                               "pas ici.")
@@ -711,6 +721,13 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
                 same = target.resolve() == db.home.resolve()
             except OSError:
                 same = False
+            if f.get("mode") == "utiliser":   # reprendre les voyages déjà rangés sur cet ordinateur
+                if not (target / C.DB).exists():
+                    return _data_page(request, error=f"Il n'y a pas encore de voyages Trip Compta dans « {target} ». "
+                                                      "Choisis « Y copier mes voyages ».", mode="utiliser")
+                PATHS.write_config(data_dir=None, partage=False)
+                return _restart_page(request, f"Trip Compta va utiliser les voyages rangés sur cet ordinateur, dans "
+                                              f"« {target} ».")
             if not same:
                 try:
                     if (target / C.DB).exists():  # ce qui y était (l'ancien dossier) est gardé dans ses sauvegardes

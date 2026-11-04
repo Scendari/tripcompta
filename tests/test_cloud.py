@@ -11,6 +11,7 @@ Voyage de test (montants vérifiés à la main) : Anne, Bruno, Chloé.
   Parts : Anne 145, Bruno 145, Chloé 100 (total 390) ; soldes : Anne 145 − 90 = 55, Bruno 145, Chloé 100.
 """
 import os
+import re
 import shutil
 import sqlite3
 import sys
@@ -674,3 +675,46 @@ def test_take_over_while_other_is_alive(cloud_env):
     assert "Tu as déjà la main" in r.text
     stop(a)
     stop(b)
+
+
+def test_this_computer_is_an_option_of_the_list(tmp_path, monkeypatch):
+    """« 💻 Sur cet ordinateur » est une option de « Ranger mes voyages ailleurs », avec les deux modes :
+    y copier ses voyages (l'ancien contenu est gardé dans les sauvegardes), ou reprendre ceux qui y sont déjà."""
+    monkeypatch.delenv("TRIPCOMPTA_DATA_DIR", raising=False)
+    monkeypatch.setenv("TRIPCOMPTA_CONFIG", str(tmp_path / "conf" / "reglages.json"))
+    docs = tmp_path / "Mes Documents"
+    monkeypatch.setenv("TRIPCOMPTA_DOCUMENTS", str(docs))
+    app = create_app()                                           # sur cet ordinateur : option « actuel »
+    tid = seed(app)
+    page = TestClient(app).get("/reglages/donnees").text
+    assert "💻 Sur cet ordinateur" in page and "Revenir sur cet ordinateur" not in page
+    assert re.search(r'value="__local__"[^>]*disabled', page)
+    cloud = tmp_path / "Dropbox" / "TripCompta"
+    cloud.parent.mkdir()
+    TestClient(app).post("/reglages/donnees", data={"dossier": "__autre__", "autre": str(cloud), "mode": "copier"})
+    app.state.db.engine.dispose()
+    app2 = create_app()                                          # dans le cloud : l'option redevient choisissable
+    cl = TestClient(app2)
+    page = cl.get("/reglages/donnees").text
+    assert not re.search(r'value="__local__"[^>]*disabled', page) and "contient une ancienne copie" in page
+    assert re.search(r'value="__local__" data-has="0"', page)    # « Y copier » reste choisi : rien ne se perd
+    Ops(app2.state.db).create_trip("Saisi dans le cloud")
+    app2.state.sync.publish()
+    # reprendre les voyages déjà sur cet ordinateur : sans la saisie faite dans le cloud
+    r = cl.post("/reglages/donnees", data={"dossier": "__local__", "mode": "utiliser"})
+    assert "va utiliser les voyages rangés sur cet ordinateur" in r.text
+    app3 = create_app()
+    assert app3.state.sync is None and amounts(app3, tid) == EXPECTED
+    assert "Saisi dans le cloud" not in TestClient(app3).get("/").text
+    app3.state.db.engine.dispose()
+    # ou y copier ses voyages : la saisie revient, l'ancien contenu est gardé dans les sauvegardes
+    from compta import paths as P
+    P.write_config(data_dir=str(cloud), partage=True)
+    app4 = create_app()
+    r = TestClient(app4).post("/reglages/donnees", data={"dossier": "__local__", "mode": "copier"})
+    assert "de nouveau rangés sur cet ordinateur" in r.text
+    assert list((docs / "TripCompta" / "sauvegardes").glob("avant-retour-*.db"))
+    app4.state.db.engine.dispose()
+    app5 = create_app()
+    assert app5.state.sync is None and "Saisi dans le cloud" in TestClient(app5).get("/").text
+    app5.state.db.engine.dispose()

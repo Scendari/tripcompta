@@ -59,7 +59,7 @@ def chosen(tmp_path, monkeypatch):
 def test_move_data_to_another_folder(chosen):
     app, c, tmp, calls = chosen
     page = c.get("/reglages/donnees").text
-    assert str(tmp / "a") in page and "que tu as choisi" in page and "Revenir sur cet ordinateur" in page
+    assert str(tmp / "a") in page and "que tu as choisi" in page and 'value="__local__"' in page
     r = c.post("/reglages/donnees", data={"dossier": str(tmp / "b"), "mode": "deplacer"})
     import html
     assert "Redémarrage" in r.text and "n'a pas été touché" in html.unescape(r.text)
