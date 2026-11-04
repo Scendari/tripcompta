@@ -583,3 +583,23 @@ def test_cloud_only_file_is_never_read(cloud_env, monkeypatch):
     b.state.sync._seen_sig = None
     assert b.state.sync.shared_changed() is False and C.DB not in read
     stop(b)
+
+
+def test_older_version_refuses_shared_folder(cloud_env):
+    """Une version d'avant le dossier synchronisé (1.0.x) ne doit pas écrire dans un dossier enregistré par une
+    version plus récente : elle affiche « installe la nouvelle version » et ne touche à rien."""
+    from compta import updater as U
+    from compta import __version__
+    tmp, shared = cloud_env
+    a = make(tmp, shared, "PC-A", 101)
+    TestClient(a).post("/voyages", data={"name": "Récent"})
+    stop(a)
+    before = (shared / C.DB).read_bytes()
+    old = U.Updater(info=dict(version="1.0.0-beta3", commit="x", dev=False), fetch=lambda: None)
+    assert __version__ > "1.0.0"
+    app = create_app(shared, updater=old)                        # l'ancienne app : directement sur le dossier
+    r = TestClient(app).get("/")
+    import html
+    assert r.status_code == 409 and "1.1.0" in html.unescape(r.text)
+    assert (shared / C.DB).read_bytes() == before                # rien d'écrit
+    assert not (shared / ".annuler").exists() and not (shared / "sauvegardes").exists()
