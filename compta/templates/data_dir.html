@@ -84,8 +84,11 @@
   <p class="hint">Tes voyages sont protégés : pour les ranger dans un autre dossier, retire d'abord la protection (ci-dessus), change de dossier, puis protège-les de nouveau.</p></div>
 {% else %}
 <form class="card data-card" method="post" action="/reglages/donnees" id="choisir" data-data-choice>
-  <h3 style="margin-top:0">{{ 'Ranger mes voyages ailleurs' if shared else 'Ranger mes voyages dans un dossier synchronisé' }}</h3>
+  <h3 style="margin-top:0">Ranger mes voyages ailleurs</h3>
   <div class="data-options">
+    <label class="data-option{{ ' current' if local_current }}"><input type="radio" name="dossier" value="__local__" data-has="0" {{ 'disabled' if local_current }}>
+      <span><b>💻 Sur cet ordinateur</b>{% if local_current %} <span class="pill ok">actuel</span>{% elif local_has_data %} <span class="pill grey" title="Tes voyages tels qu'ils étaient avant d'être rangés ailleurs : « Y copier mes voyages » les remplace (ils sont gardés dans les sauvegardes)">contient une ancienne copie</span>{% endif %}
+        <span class="muted small d-block">{{ default_dir }} · pas synchronisé</span></span></label>
     {% for c in clouds %}
     <label class="data-option{{ ' current' if c.current }}"><input type="radio" name="dossier" value="{{ c.target }}" data-has="{{ 1 if c.has_data else 0 }}" {{ 'disabled' if c.current }}>
       <span><b>{{ c.name }}</b>{% if c.current %} <span class="pill ok">actuel</span>{% elif c.has_data %} <span class="pill grey">contient déjà des voyages</span>{% endif %}
@@ -124,13 +127,6 @@
   </ul>
 </div>
 
-{% if (shared or source == 'choisi') and not protected %}
-<form class="card data-card" method="post" action="/reglages/donnees" data-confirm="Ranger de nouveau tes voyages sur cet ordinateur (dans {{ default_dir }}) ? Ils y sont copiés ; ce qui s'y trouvait est gardé dans ses sauvegardes, et le dossier actuel n'est pas touché.">
-  <h3 style="margin-top:0">Revenir sur cet ordinateur</h3>
-  <p class="hint">Tes voyages sont copiés dans <b>{{ default_dir }}</b> et ne sont plus synchronisés.</p>
-  <div class="row" style="justify-content:flex-end"><button class="btn ghost" name="action" value="local">Ranger mes voyages sur cet ordinateur</button></div>
-</form>
-{% endif %}
 {% endif %}
 <script>
 (function () {
