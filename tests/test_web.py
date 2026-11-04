@@ -243,9 +243,9 @@ def test_stop_button_always_in_top_bar(tmp_path):
     for url in ["/", f"/v/{tid}", f"/v/{tid}/depenses", f"/v/{tid}/ia"]:
         page = c.get(url).text
         top = page.split("</header>")[0]
-        assert 'action="/quitter"' in top and "⏻ Arrêter" in top, url
+        assert 'action="/quitter"' in top and "ico-power" in top and "Arrêter</button>" in top, url
         assert 'data-confirm="Arrêter Trip Compta ?' in top
-        assert top.index("⏻ Arrêter") > top.index("data-theme-toggle")      # tout à droite, après le thème
+        assert top.index("ico-power") > top.index("data-theme-toggle")      # tout à droite, après le thème
 
 
 def test_ping_identifies_the_app(tmp_path):

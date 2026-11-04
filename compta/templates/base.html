@@ -19,7 +19,7 @@
   <a class="iconbtn settings-btn{{ ' on' if request.url.path.startswith('/reglages') or request.url.path.startswith('/protection') }}" href="/reglages" title="Réglages : où sont tes voyages, mot de passe, mises à jour" aria-label="Réglages">⚙️<span class="lbl"> Réglages</span></a>
   <button class="iconbtn" data-theme-toggle title="Thème clair / sombre">◐</button>
   <form method="post" action="/quitter" class="inline quit" data-confirm="Arrêter Trip Compta ? Tes données sont enregistrées : tu pourras relancer l'application plus tard.">
-    <button class="iconbtn quit-btn" title="Arrêter l'application">⏻ Arrêter</button>
+    <button class="iconbtn quit-btn" title="Arrêter l'application">{{ POWER }} Arrêter</button>
   </form>
 </header>
 {% if cloud %}
@@ -27,7 +27,7 @@
 <div class="cloud-banner err" role="alert"><span>⚠️ {{ cloud.problem }}</span>
   <a class="btn small ghost" href="/reglages/donnees">Où ranger mes voyages</a></div>
 {% elif cloud.readonly %}
-<div class="cloud-banner ro" role="status"><span>🔒 <b>Lecture seule</b> : {% if cloud.same_host %}Trip Compta est déjà ouvert sur cet ordinateur (une autre fenêtre ou une autre version){% if cloud.since %} depuis {{ cloud.since }}{% endif %}. Utilise celle-là, ou ferme-la (⏻ Arrêter) pour pouvoir modifier ici.{% else %}tes voyages sont ouverts sur « {{ cloud.owner or 'un autre ordinateur' }} »{% if cloud.since %} depuis {{ cloud.since }}{% endif %}.{% endif %}
+<div class="cloud-banner ro" role="status"><span>🔒 <b>Lecture seule</b> : {% if cloud.same_host %}Trip Compta est déjà ouvert sur cet ordinateur (une autre fenêtre ou une autre version){% if cloud.since %} depuis {{ cloud.since }}{% endif %}. Utilise celle-là, ou ferme-la ({{ POWER }} Arrêter) pour pouvoir modifier ici.{% else %}tes voyages sont ouverts sur « {{ cloud.owner or 'un autre ordinateur' }} »{% if cloud.since %} depuis {{ cloud.since }}{% endif %}.{% endif %}
   {% if cloud.same_host and not cloud.stale %}{% elif cloud.stale %}Cet ordinateur ne donne plus signe de vie (éteint ou planté ?).{% else %}Ferme Trip Compta là-bas pour pouvoir les modifier ici.{% endif %}</span>
   {% if not cloud.same_host %}<form method="post" action="/reglages/prendre-la-main" class="inline" data-confirm="{% if cloud.stale %}Prendre la main ? Si Trip Compta est encore ouvert sur « {{ cloud.owner }} », il passera en lecture seule.{% else %}Prendre la main ? « {{ cloud.owner }} » passera en lecture seule dans les minutes qui viennent. Si quelqu'un y saisit encore quelque chose, préviens-le d'abord : sinon tu devras choisir entre deux versions (rien n'est perdu).{% endif %}"><button class="btn small{{ '' if cloud.stale else ' ghost' }}">Prendre la main</button></form>{% endif %}
 </div>
@@ -60,7 +60,7 @@
       <a href="/v/{{ trip.id }}/depenses" class="{{ 'on' if '/depenses' in cur }}">🧾 Dépenses</a>
       <a href="/v/{{ trip.id }}/categories" class="{{ 'on' if '/categories' in cur }}">🏷️ Catégories</a>
       <a href="/v/{{ trip.id }}/argent" class="{{ 'on' if '/argent' in cur }}">💶 Argent reçu et rendu</a>
-      <a href="/v/{{ trip.id }}/repartition" class="{{ 'on' if '/repartition' in cur }}">▦ Qui paie quoi</a>
+      <a href="/v/{{ trip.id }}/repartition" class="{{ 'on' if '/repartition' in cur }}">🧮 Qui paie quoi</a>
       <a href="/v/{{ trip.id }}/en-images" class="{{ 'on' if '/en-images' in cur }}">📊 En images</a>
       <a href="/v/{{ trip.id }}/asso" class="{{ 'on' if cur.endswith('/asso') }}" title="Le compte de {{ asso_name }} pour ce voyage">🏛️ {{ asso_name|capfirst|truncate(28, True, '…') }}</a>
       <div class="sep"></div>

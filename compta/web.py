@@ -59,6 +59,9 @@ templates.env.filters["role_label"] = S.role_label
 templates.env.globals["ROLE_TITLES"] = S.ROLE_TITLES
 templates.env.filters["weight"] = lambda w: E.fmt_weight(E.to_weight(w))
 templates.env.globals["ASSO"] = E.ASSO
+# icône « Arrêter » dessinée : le caractère ⏻ (U+23FB) manque aux polices de Windows 10 (il s'affiche en carré vide)
+templates.env.globals["POWER"] = Markup('<svg class="ico-power" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true">'
+    '<path d="M12 3v8M7.1 6.6a7.5 7.5 0 1 0 9.8 0" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>')
 # Version des fichiers statiques : force le navigateur à recharger le CSS / JS après une mise à jour
 templates.env.globals["STATIC_V"] = str(int(max((HERE / "static" / n).stat().st_mtime for n in ("app.css", "app.js"))))
 TRANSPARENT_PNG = bytes.fromhex(
@@ -398,7 +401,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         since = _hm(o.get("depuis"))
         if o.get("ordinateur") == sync.host:
             return ("Lecture seule : Trip Compta est déjà ouvert sur cet ordinateur (une autre fenêtre ou une autre "
-                    "version). Utilise celle-là, ou ferme-la (⏻ Arrêter) pour pouvoir modifier ici.")
+                    "version). Utilise celle-là, ou ferme-la (bouton « Arrêter ») pour pouvoir modifier ici.")
         txt = (f"Lecture seule : tes voyages sont ouverts sur « {o.get('ordinateur') or 'un autre ordinateur'} »"
                + (f" depuis {since}" if since else "") + ". Ferme Trip Compta là-bas pour pouvoir les modifier ici.")
         if o and sync.lock_is_stale(o):

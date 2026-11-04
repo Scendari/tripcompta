@@ -412,6 +412,16 @@ def test_browser_draft_survives_crash_and_reload(tmp_path):
         srv.should_exit = True
         th.join(5)
 
+    def draft_has(text, timeout=5.0):
+        """Le brouillon sur l'ordinateur contient-il ce texte ? (on laisse à l'écriture le temps de se faire :
+        une machine lente, comme un Windows de test, peut afficher « Enregistré » un instant avant)."""
+        end = time.time() + timeout
+        while time.time() < end:
+            if draft.exists() and text in draft.read_text(encoding="utf-8"):
+                return True
+            time.sleep(0.1)
+        return False
+
     srv, th = start()
     base = f"http://127.0.0.1:{port}/v/{tid}"
     draft = tmp_path / "d" / "brouillons_ia" / f"voyage-{tid}-initialisation.txt"
@@ -425,7 +435,7 @@ def test_browser_draft_survives_crash_and_reload(tmp_path):
             pg.goto(base + "/ia")
             type_after(pg, "Organisateur :", " Banyuls")
             pg.wait_for_function(saved)
-            assert "Banyuls" in draft.read_text(encoding="utf-8")         # sur l'ordinateur, sans rien cliquer
+            assert draft_has("Banyuls")                                    # sur l'ordinateur, sans rien cliquer
             # Plantage : l'application s'arrête pendant qu'on tape
             stop(srv, th)
             pg.keyboard.type(" en juin")
@@ -436,7 +446,7 @@ def test_browser_draft_survives_crash_and_reload(tmp_path):
             pg.goto(base + "/ia")
             assert "Banyuls en juin" in pg.evaluate("window.iaModel()")   # copie gardée par le navigateur
             pg.wait_for_function(saved)                                    # et renvoyée à l'ordinateur
-            assert "Banyuls en juin" in draft.read_text(encoding="utf-8")
+            assert draft_has("Banyuls en juin")
             # Un autre navigateur (sans copie locale) retrouve aussi le brouillon
             other = b.new_context().new_page()
             other.goto(base + "/ia")
@@ -446,11 +456,7 @@ def test_browser_draft_survives_crash_and_reload(tmp_path):
             type_after(pg, "DP (directeur de plongée) :", " Pyrénées")
             assert "Pyrénées" in pg.evaluate("window.iaModel()")
             pg.goto("about:blank")
-            for _ in range(50):
-                if "Pyrénées" in draft.read_text(encoding="utf-8"):
-                    break
-                time.sleep(0.1)
-            assert "Pyrénées" in draft.read_text(encoding="utf-8")
+            assert draft_has("Pyrénées", timeout=10)
             assert errors == []
             b.close()
     finally:
