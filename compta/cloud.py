@@ -911,8 +911,8 @@ def cloud_roots(home: Path | None = None, env: dict | None = None, platform: str
             for sub in ("My files", "Mes fichiers"):
                 if (acc / sub).is_dir():
                     add("Proton Drive", acc / sub)
-    if platform == "win32":                                      # Google Drive pour ordinateur : lecteur G:, H:…
-        for letter in "GHIJKLMNOPQRSTUVWXYZ":
+    if platform == "win32":                    # Google Drive pour ordinateur : lecteur G: par défaut, mais E:, F:… si pris
+        for letter in "DEFGHIJKLMNOPQRSTUVWXYZ":
             for sub in ("Mon Drive", "My Drive"):
                 p = Path(f"{letter}:/") / sub
                 try:
@@ -947,7 +947,8 @@ def pick_folder(prompt: str = "Choisis le dossier où ranger tes voyages") -> st
                   "[Console]::OutputEncoding=[Text.Encoding]::UTF8;"
                   "if($f.ShowDialog() -eq 'OK'){$f.SelectedPath}")
             r = subprocess.run(["powershell", "-NoProfile", "-STA", "-Command", ps], capture_output=True,
-                               text=True, encoding="utf-8", timeout=600)
+                               text=True, encoding="utf-8", timeout=600,
+                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))   # pas de console bleue
         else:
             cmd = (["zenity", "--file-selection", "--directory", f"--title={prompt}"] if shutil.which("zenity")
                    else ["kdialog", "--getexistingdirectory", str(Path.home())] if shutil.which("kdialog") else None)

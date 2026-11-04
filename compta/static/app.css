@@ -202,6 +202,16 @@ input[type=text], input[type=date], input[type=number], input[type=email], input
   color: var(--text); font: inherit;
 }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--teal); outline-offset: 0; border-color: var(--teal); }
+/* choix de fichier : le bouton natif (gris, « vieille interface » sous Windows) prend le style des boutons de l'app */
+input[type=file] { font: inherit; font-size: .88rem; color: var(--muted); width: 100%; }   /* sinon « Aucun fichier… » est coupé */
+input[type=file]:focus { outline: none; }
+input[type=file]::file-selector-button {
+  margin-right: .75rem; padding: .5rem .95rem; border-radius: 9px; border: 1px solid var(--teal);
+  background: transparent; color: var(--teal-strong); font: inherit; font-weight: 600; cursor: pointer;
+  transition: background .12s;
+}
+input[type=file]::file-selector-button:hover { background: var(--bg-2); }
+input[type=file]:focus-visible::file-selector-button { outline: 2px solid var(--teal); outline-offset: 2px; }
 input.amount { max-width: 170px; text-align: right; font-variant-numeric: tabular-nums; }
 input.weight { width: 70px; text-align: center; padding: .3rem; }
 textarea { min-height: 110px; }
