@@ -867,3 +867,24 @@ def test_open_tab_keeps_the_hand(cloud_env):
         srv.should_exit = True
         th.join(5)
         stop(a)
+
+
+def test_last_save_time_shown_right_after_launch(cloud_env):
+    """Juste après le lancement (rien modifié) : l'heure du dernier enregistrement dans le dossier synchronisé
+    s'affiche quand même (date du fichier), avec la date si ce n'est pas aujourd'hui."""
+    import os
+    import time as _t
+    tmp, shared = cloud_env
+    a = make(tmp, shared, "PC-A", 101)
+    TestClient(a).post("/voyages", data={"name": "Voyage"})
+    stop(a)
+    b = make(tmp, shared, "PC-A", 102)                       # nouveau lancement : rien publié depuis
+    assert b.state.sync.published_at is None
+    hm = _t.strftime("%H h %M", _t.localtime((shared / C.DB).stat().st_mtime)).lstrip("0")
+    page = TestClient(b).get("/").text
+    assert "enregistré à " in page and hm.replace(" h ", " h ") in page
+    old = _t.time() - 3 * 86400                              # enregistré il y a 3 jours (autre ordinateur, par ex.)
+    os.utime(shared / C.DB, (old, old))
+    page = TestClient(b).get("/").text
+    assert "enregistré le " in page and _t.strftime("%d/%m", _t.localtime(old)) in page
+    stop(b)

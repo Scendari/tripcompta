@@ -497,7 +497,14 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         if sync is None:
             return None
         o = sync.owner or {}
-        saved = max([x for x in (sync.published_at, sync.pulled_at) if x] or [0]) or None
+        # dernier enregistrement réel dans le dossier synchronisé (même avant ce lancement, ou depuis un autre
+        # ordinateur) : date du fichier ; « stat » ne télécharge rien d'un fichier resté dans le cloud
+        try:
+            shared_file = sync.shared / (K.DB_FILE if sync.protected else C.DB)
+            on_disk = shared_file.stat().st_mtime if shared_file.exists() else None
+        except OSError:
+            on_disk = None
+        saved = max([x for x in (sync.published_at, sync.pulled_at, on_disk) if x] or [0]) or None
         return dict(service=sync.service or ("cet ordinateur" if not PATHS.looks_synced(sync.shared)
                                              else "le dossier synchronisé"), folder=str(sync.shared),
                     readonly=sync.readonly, problem=sync.problem, owner=o.get("ordinateur"),
