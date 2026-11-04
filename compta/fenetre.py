@@ -19,6 +19,7 @@ import webbrowser
 TITLE = "Trip Compta"
 # essais automatiques : fenêtres invisibles, sans icône dans le Dock, sans prendre le focus de l'utilisateur
 DISCRETE = bool(os.environ.get("TRIPCOMPTA_FENETRE_DISCRETE"))
+OFFSCREEN_X = -20000                           # Windows, essais : bien à gauche de tous les écrans
 
 
 def available() -> bool:
@@ -64,9 +65,14 @@ class Fenetres:
     def new(self, url: str | None = None):
         import webview
         n = len(webview.windows)
+        x, y = (None, None) if not n else (80 + 30 * n, 60 + 30 * n)
+        hidden = DISCRETE
+        if DISCRETE and sys.platform == "win32":
+            # Windows : une fenêtre masquée ne dessine pas (WebView2 en pause) -> visible mais HORS de l'écran,
+            # sans activation ni bouton dans la barre des tâches (voir _win_discreet)
+            x, y, hidden = OFFSCREEN_X - 40 * n, 100, False
         return webview.create_window(TITLE, url or self.base, width=1280, height=860, min_size=(820, 560),
-                                     x=None if not n else 80 + 30 * n, y=None if not n else 60 + 30 * n,
-                                     text_select=True, zoomable=True, hidden=DISCRETE, focus=not DISCRETE)
+                                     x=x, y=y, text_select=True, zoomable=True, hidden=hidden, focus=not DISCRETE)
 
     def new_later(self, url: str | None = None):
         """Nouvelle fenêtre sans bloquer l'appelant (route du serveur, menu)."""
@@ -253,6 +259,69 @@ def _win_hooks(f: Fenetres):
     ec.EdgeChrome.on_new_window_request = on_new_window_request
 
 
+def _win_discreet():
+    """Windows, essais automatiques : fenêtres hors écran, sans bouton dans la barre des tâches, qui ne gardent pas le
+    premier plan (Form.Show() active la fenêtre : ShowWithoutActivation, TopMost sans activation ; s'il reste un
+    passage au premier plan pendant Show() — ~10 ms, cause non trouvée — il est rendu aussitôt)."""
+    # Surcharger une propriété .NET demande une classe pythonnet « __namespace__ » ; or une telle classe dérivée de
+    # BrowserForm (classe Python) perd ses méthodes (sa MRO saute BrowserForm). On la dérive donc de Form et on y
+    # recopie les méthodes de BrowserForm (seul __init__ appelle super() : on le rattache à la nouvelle classe).
+    import ctypes
+    import types
+    import clr
+    from webview.platforms import winforms as wf
+    base = wf.BrowserView.BrowserForm
+    if getattr(base, "tc_discrete", False):    # déjà fait (2e lancement dans le même processus)
+        return
+
+    init = base.__init__
+    cls_cell = types.CellType()                # rempli plus bas avec la nouvelle classe (pour super())
+    cells = tuple(cls_cell if name == "__class__" else cell
+                  for name, cell in zip(init.__code__.co_freevars, init.__closure__ or ()))
+    base_init = types.FunctionType(init.__code__, init.__globals__, init.__name__, init.__defaults__, cells)
+
+    # pywebview fait « self.TopMost = window.on_top » dès que le handle existe : le TopMost de WinForms appelle alors
+    # SetWindowPos SANS SWP_NOACTIVATE, ce qui met la fenêtre (même pas encore affichée) au premier plan.
+    def _get_top(self):
+        return bool(ctypes.windll.user32.GetWindowLongW(self.Handle.ToInt64(), -20) & 0x8)   # WS_EX_TOPMOST
+
+    def _set_top(self, value):
+        ctypes.windll.user32.SetWindowPos(self.Handle.ToInt64(), -1 if value else -2, 0, 0, 0, 0,
+                                          0x0001 | 0x0002 | 0x0010)                         # NOSIZE|NOMOVE|NOACTIVATE
+
+    class FenetreDiscrete(wf.WinForms.Form):
+        __namespace__ = "TripCompta.Essais"
+        tc_discrete = True
+
+        def __init__(self, window, cache_dir):
+            self.tc_avant = ctypes.windll.user32.GetForegroundWindow()   # à qui rendre le premier plan
+            base_init(self, window, cache_dir)
+            # pas de bouton dans la barre des tâches : WS_EX_TOOLWINDOW (et sans WS_EX_APPWINDOW), avant l'affichage
+            h = self.Handle.ToInt64()
+            ex = ctypes.windll.user32.GetWindowLongW(h, -20)
+            ctypes.windll.user32.SetWindowLongW(h, -20, (ex | 0x80 | 0x08000000) & ~0x40000)
+
+        def _sans_activation(self):
+            return True
+        ShowWithoutActivation = clr.clrproperty(bool, _sans_activation)
+        TopMost = clr.clrproperty(bool, _get_top, _set_top)
+
+    def on_shown(self, *_):                    # sans webview.Focus() : SetFocus activerait la fenêtre
+        # malgré tout, la 1re fenêtre de pywebview passe parfois au premier plan pendant Show() : on le rend aussitôt
+        # (pendant Show, ce processus a encore le droit de choisir le premier plan)
+        u32 = ctypes.windll.user32
+        if self.tc_avant and u32.GetForegroundWindow() == self.Handle.ToInt64():
+            u32.SetForegroundWindow(self.tc_avant)
+        self.shown.set()
+
+    cls_cell.cell_contents = FenetreDiscrete
+    for k, v in vars(base).items():
+        if k not in {"__dict__", "__weakref__", "__module__", "__qualname__", "__doc__", "__init__", "__str__"}:
+            setattr(FenetreDiscrete, k, v)
+    FenetreDiscrete.on_shown = on_shown
+    wf.BrowserView.BrowserForm = FenetreDiscrete
+
+
 def _mac_shortcuts():
     """Raccourcis du menu Fichier (pywebview n'en pose pas) : Cmd+N, Cmd+F."""
     import AppKit
@@ -297,6 +366,8 @@ def run(app, host: str, port: int, log_level: str = "warning", on_start=None) ->
             cocoa.BrowserView.app.setActivationPolicy_(2)     # « prohibited » : jamais au premier plan
     elif sys.platform == "win32":
         _win_hooks(f)
+        if DISCRETE:
+            _win_discreet()
     f.new()
 
     def after_start():
