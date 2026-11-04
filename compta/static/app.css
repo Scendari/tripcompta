@@ -1009,7 +1009,7 @@ label.check { display: inline-flex; align-items: center; gap: .4rem; font-weight
 .pb-blue .sail-r { fill: var(--pbb-sr); } .pb-blue .sym { fill: var(--pbb-sym); }
 .pb-sun .hull-l { fill: var(--pbs-hl); } .pb-sun .hull-r { fill: var(--pbs-hr); } .pb-sun .sail-l { fill: var(--pbs-sl); }
 .pb-sun .sail-r { fill: var(--pbs-sr); } .pb-sun .sym { fill: var(--pbs-sym); }
-.harbour .pb { position: absolute; opacity: var(--pb-op); }
+.harbour .pb { position: absolute; opacity: var(--pb-op); z-index: 2; }   /* au-dessus des ombres et de la lueur du couchant */
 .harbour .b1 { width: 96px; left: 8%; bottom: 14px; --d: -1.3s; --t: 10s; }
 .harbour .b2 { width: 74px; right: 10%; bottom: 26px; --d: -3.7s; --t: 11.5s; }
 .harbour .b3 { width: 56px; left: 46%; bottom: 52px; --d: -6.1s; --t: 9s; opacity: calc(var(--pb-op) * .8); }
@@ -1025,3 +1025,139 @@ label.check { display: inline-flex; align-items: center; gap: .4rem; font-weight
   .harbour .b3 { display: none; } .home-page { padding-bottom: 120px; } }
 @media print { .harbour { display: none; } .home-page { padding-bottom: 0; } }
 .ico-power { vertical-align: -.12em; }
+
+/* ---------- « Mes voyages » : surprises de la mer (baleine, dauphins, mouette… ; voir static/mer.js) ---------- */
+:root {
+  --wh-top: #4f7a96; --wh-side: #6c95ae; --wh-tail: #3f6782; --wh-belly: #c7dbe6;
+  --do-top: #5d8fb0; --do-belly: #b9d3e2; --do-fin: #4a7898;
+  --gu-body: #fff; --gu-wing: #9fb2bf; --gu-tip: #2f3d47; --gu-beak: #f2b630; --gu-line: #7d909c;
+  --bo-glass: rgba(74,150,120,.55); --bo-cork: #a8783f; --bo-note: #fbf3df; --spray: #fff; --life-op: .9;
+  --rock: #7d8b93; --lh-white: #f4f7f8; --lh-red: #d64545; --lh-dark: #3b4a55; --beam: rgba(255,214,110,.32);
+  --ff-body: #5f9fc0; --ff-wing: #a8d2e3; --tu-shell: #5f8f5a; --tu-shell-2: #4a7646; --tu-skin: #93b57d;
+  --fish-shadow: rgba(26,60,80,.22); --coin: #e6b33a; --coin-2: #c9952a; --coin-sym: #5a4310;
+  --hood: #2b3d4f; --mask: #8fd3e6; --snorkel: #f2b630; --bubble: rgba(70,130,160,.55); --bubble-fill: rgba(255,255,255,.55);
+  --pbc-hl: #d64545; --pbc-hr: #b53939; --pbc-sl: #ec6b6b; --pbc-sr: #c84848; --pbc-sym: #fff;
+  --sun-1: #ffcf6b; --sun-2: #ff9a52; --dusk: rgba(255,150,90,.28); 
+}
+:root[data-theme="dark"] {
+  --wh-top: #2f5670; --wh-side: #3f6a86; --wh-tail: #264a62; --wh-belly: #7f9fb2;
+  --do-top: #3d6f8f; --do-belly: #7fa3b8; --do-fin: #315d79;
+  --gu-body: #dfe8ee; --gu-wing: #9db1bd; --gu-tip: #e8f1f8; --gu-beak: #d9a83a; --gu-line: transparent;
+  --bo-glass: rgba(74,150,120,.45); --bo-cork: #7d5a30; --bo-note: #c9c2ad; --spray: rgba(200,230,245,.7); --life-op: .65;
+  --rock: #3a4954; --lh-white: #c9d6de; --lh-red: #b84a4a; --lh-dark: #1a2630; --beam: rgba(255,214,110,.42);
+  --ff-body: #3f7a99; --ff-wing: #6f9db2; --tu-shell: #3f6a3c; --tu-shell-2: #31552f; --tu-skin: #6e8f5d;
+  --fish-shadow: rgba(150,200,225,.16); --coin: #c99a2e; --coin-2: #9c7621; --coin-sym: #2a1e04;
+  --hood: #1c2a37; --mask: #5f9fb2; --snorkel: #c99a2e; --bubble: rgba(190,225,240,.6); --bubble-fill: rgba(190,225,240,.15);
+  --pbc-hl: #c95656; --pbc-hr: #8f3434; --pbc-sl: #d46a6a; --pbc-sr: #a24040; --pbc-sym: #fbecec;
+  --sun-1: #e8a85a; --sun-2: #c4683a; --dusk: rgba(255,130,80,.12); 
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  --wh-top: #2f5670; --wh-side: #3f6a86; --wh-tail: #264a62; --wh-belly: #7f9fb2;
+  --do-top: #3d6f8f; --do-belly: #7fa3b8; --do-fin: #315d79;
+  --gu-body: #dfe8ee; --gu-wing: #9db1bd; --gu-tip: #e8f1f8; --gu-beak: #d9a83a; --gu-line: transparent;
+  --bo-glass: rgba(74,150,120,.45); --bo-cork: #7d5a30; --bo-note: #c9c2ad; --spray: rgba(200,230,245,.7); --life-op: .65;
+  --rock: #3a4954; --lh-white: #c9d6de; --lh-red: #b84a4a; --lh-dark: #1a2630; --beam: rgba(255,214,110,.42);
+  --ff-body: #3f7a99; --ff-wing: #6f9db2; --tu-shell: #3f6a3c; --tu-shell-2: #31552f; --tu-skin: #6e8f5d;
+  --fish-shadow: rgba(150,200,225,.16); --coin: #c99a2e; --coin-2: #9c7621; --coin-sym: #2a1e04;
+  --hood: #1c2a37; --mask: #5f9fb2; --snorkel: #c99a2e; --bubble: rgba(190,225,240,.6); --bubble-fill: rgba(190,225,240,.15);
+  --pbc-hl: #c95656; --pbc-hr: #8f3434; --pbc-sl: #d46a6a; --pbc-sr: #a24040; --pbc-sym: #fbecec;
+  --sun-1: #e8a85a; --sun-2: #c4683a; --dusk: rgba(255,130,80,.12); 
+  }
+}
+.sea-life { position: fixed; left: 0; right: 0; bottom: 0; height: 300px; z-index: 5; pointer-events: none; overflow: hidden; }
+.sea-life.under { bottom: 46px; height: 120px; }   /* coupée à la ligne de flottaison : la baleine sort de l'eau */
+.sea-life svg { position: absolute; overflow: visible; opacity: var(--life-op); }
+/* baleine : fait surface, souffle, replonge */
+.whale { width: 136px; bottom: -92px; }
+.whale.go { animation: whale-rise 9s ease-in-out forwards; }
+.whale .spout { opacity: 0; transform-origin: 50% 100%; transform-box: fill-box; }
+.whale.go .spout { animation: spout 9s ease-out forwards; }
+@keyframes whale-rise { 0% { transform: translateY(0) rotate(4deg); } 25%, 70% { transform: translateY(-50px) rotate(0); }
+  100% { transform: translateY(10px) rotate(-6deg); } }
+@keyframes spout { 0%, 30% { opacity: 0; transform: scaleY(.1); } 38% { opacity: 1; transform: scaleY(1.1); }
+  52% { opacity: .9; transform: scaleY(1); } 64%, 100% { opacity: 0; transform: scaleY(.6) translateY(-6px); } }
+/* dauphins : deux sauts en arc */
+.dolphin { width: 52px; bottom: 34px; transform-origin: 50% 50%; }
+.dolphin.go { animation: leap 2.1s cubic-bezier(.33,0,.67,1) forwards; animation-delay: var(--dl, 0s); opacity: 0; }
+@keyframes leap {
+  0% { opacity: 0; transform: translate(0, 40px) rotate(-38deg); }
+  8% { opacity: var(--life-op); }
+  50% { transform: translate(var(--jx, 160px), calc(-1 * var(--jy, 120px))) rotate(0deg); }
+  92% { opacity: var(--life-op); }
+  100% { opacity: 0; transform: translate(calc(2 * var(--jx, 160px)), 40px) rotate(38deg); } }
+.splash { width: 24px; bottom: 30px; opacity: 0; }
+.splash.go { animation: splash 1s ease-out forwards; animation-delay: var(--dl, 0s); }
+@keyframes splash { 0% { opacity: 0; transform: scale(.3); } 25% { opacity: 1; } 100% { opacity: 0; transform: scale(1.3) translateY(-6px); } }
+/* mouette : traverse en ligne droite, roulis léger, battements depuis les épaules puis vol plané */
+.gull { width: 46px; bottom: 110px; left: 0; }
+.gull.go { animation: fly 14s linear forwards; }
+.gull .bob { animation: gull-bob 2.2s ease-in-out infinite alternate; transform-origin: 50% 60%; transform-box: fill-box; }
+.gull .wing { transform-box: fill-box; }
+.gull .wing.l { transform-origin: 100% 100%; }   /* l'épaule : coin bas-droit de l'aile gauche */
+.gull .wing.r { transform-origin: 0% 100%; }     /* coin bas-gauche de l'aile droite */
+.gull.go .wing.l { animation: flap-l 2.6s ease-in-out infinite; }
+.gull.go .wing.r { animation: flap-r 2.6s ease-in-out infinite; }
+@keyframes fly { from { transform: translateX(-90px); } to { transform: translateX(calc(100vw + 90px)); } }
+@keyframes gull-bob { from { transform: translateY(-4px) rotate(-2deg); } to { transform: translateY(4px) rotate(2deg); } }
+/* 3 battements (ailes hautes puis basses), puis plané ailes légèrement relevées */
+@keyframes flap-l { 0%, 24% { transform: rotate(0); } 4%, 12%, 20% { transform: rotate(22deg); } 8%, 16% { transform: rotate(-18deg); }
+  30%, 100% { transform: rotate(6deg); } }
+@keyframes flap-r { 0%, 24% { transform: rotate(0); } 4%, 12%, 20% { transform: rotate(-22deg); } 8%, 16% { transform: rotate(18deg); }
+  30%, 100% { transform: rotate(-6deg); } }
+/* bouteille à la mer : dérive lentement sur l'eau */
+.bottle { width: 32px; bottom: 30px; left: 0; }
+.bottle.go { animation: float-by 28s linear forwards; }
+.bottle .bob { animation: bob 2.4s ease-in-out infinite alternate; transform-origin: 50% 50%; transform-box: fill-box; }
+@keyframes float-by { from { transform: translateX(-60px); } to { transform: translateX(calc(100vw + 60px)); } }
+@keyframes bob { from { transform: translateY(0) rotate(-12deg); } to { transform: translateY(-4px) rotate(8deg); } }
+/* --- 10 surprises de plus --- */
+.pb-coral .hull-l { fill: var(--pbc-hl); } .pb-coral .hull-r { fill: var(--pbc-hr); } .pb-coral .sail-l { fill: var(--pbc-sl); }
+.pb-coral .sail-r { fill: var(--pbc-sr); } .pb-coral .sym { fill: var(--pbc-sym); }
+.lighthouse { width: 150px; right: 2vw; bottom: 26px; opacity: 0; }   /* la tour fait ~35 px, le reste est le faisceau */
+.lighthouse .beam { transform-box: view-box; transform-origin: 21px 26px; animation: beam 3.2s linear infinite; }
+.lighthouse .lamp { animation: lamp 3.2s ease-in-out infinite; }
+@keyframes beam { 0% { transform: scaleX(1); } 50% { transform: scaleX(-1); } 100% { transform: scaleX(1); } }
+@keyframes lamp { 0%, 100% { opacity: .55; } 25%, 75% { opacity: 1; } }
+.ffish { width: 36px; bottom: 34px; }
+.turtle { width: 60px; bottom: -40px; }
+.turtle .head { transform-box: fill-box; transform-origin: 0% 80%; }
+.school { position: absolute; bottom: 14px; width: 150px; height: 40px; z-index: 1; }
+.school svg { width: 16px; }
+.school svg path { fill: var(--fish-shadow); }
+.regatta.pb { width: 46px; bottom: 4px; opacity: var(--pb-op); }
+.coin { width: 18px; bottom: 34px; }
+.coin .face { transform-box: fill-box; transform-origin: 50% 50%; animation: spin .45s linear infinite; }
+@keyframes spin { 0% { transform: scaleX(1); } 50% { transform: scaleX(.08); } 100% { transform: scaleX(1); } }
+.bubble { width: 10px; bottom: 30px; }
+.diver { width: 30px; bottom: -32px; }
+.sunset { position: absolute; left: 0; right: 0; bottom: 0; height: 100px; z-index: 1; opacity: 0;
+  background: linear-gradient(transparent, var(--dusk) 35%, transparent);
+  -webkit-mask: linear-gradient(90deg, transparent, #000 15%, #000 85%, transparent); mask: linear-gradient(90deg, transparent, #000 15%, #000 85%, transparent); }
+.horizon { position: absolute; left: 0; right: 0; bottom: 92px; height: 60px; overflow: hidden; }   /* au-dessus de l'eau, coupé à l'horizon */
+.sun { width: 54px; bottom: 0; opacity: 0; }
+.gull.perch .wing { animation: none !important; }
+.gull.perch .wing.l { transform: rotate(-38deg); } .gull.perch .wing.r { transform: rotate(38deg); }
+.gull.perch .bob { animation: none; }
+.confetti { width: 7px; height: 4px; position: absolute; border-radius: 1px; }
+
+
+@media (prefers-reduced-motion: reduce) { .sea-life { display: none; } }
+@media print { .sea-life { display: none; } }
+
+/* « Mes voyages » : la liste défile AU-DESSUS de la mer (qui reste visible, sans rien cacher des surprises) */
+body.sea-page { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+body.sea-page > .page-scroll { flex: 1; min-height: 0; overflow-y: auto; margin-bottom: 130px; }
+body.sea-page .home-page { padding-bottom: 1.5rem; }
+@media (max-width: 640px) { body.sea-page > .page-scroll { margin-bottom: 100px; } }
+@media (max-height: 560px) {            /* écran trop bas : on garde toute la place pour la liste */
+  body.sea-page > .page-scroll { margin-bottom: 0; } body.sea-page .harbour, body.sea-page .sea-life { display: none; } }
+@media print { body.sea-page { height: auto; overflow: visible; display: block; } body.sea-page > .page-scroll { margin: 0; overflow: visible; } }
+/* surprises « dans l'autre sens » : le calque est retourné (le symbole € de la pièce reste lisible) */
+.sea-mirror { position: absolute; inset: 0; transform: scaleX(-1); pointer-events: none; }
+.harbour > .sea-mirror { z-index: 1; }
+.sea-mirror .coin text { transform: scaleX(-1); transform-box: fill-box; transform-origin: center; }
+.sea-life.under .faces-left { scale: -1 1; }
+body.sea-page > .page-scroll { -webkit-mask-image: linear-gradient(#000 calc(100% - 28px), transparent); mask-image: linear-gradient(#000 calc(100% - 28px), transparent); }
+button.card.setting { font: inherit; text-align: left; width: 100%; cursor: pointer; }
+.card.setting[hidden] { display: none; }

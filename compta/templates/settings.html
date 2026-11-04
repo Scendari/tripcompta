@@ -44,6 +44,16 @@
     </span>
     <span class="setting-go">{{ 'Installer' if available else 'Voir' }} ›</span>
   </a>
+  <button type="button" class="card setting" data-window-only hidden
+          onclick="fetch('/fenetre/navigateur', {method: 'POST'})">
+    <span class="setting-ico" aria-hidden="true">🌐</span>
+    <span class="setting-body">
+      <b>Ouvrir dans le navigateur</b>
+      <span class="setting-state">Trip Compta s'ouvre dans sa propre fenêtre</span>
+      <span class="setting-hint">Pour l'avoir aussi dans un onglet de ton navigateur (Chrome, Edge, Safari…), à côté d'autres onglets.</span>
+    </span>
+    <span class="setting-go">Ouvrir ›</span>
+  </button>
 </div>
 <p class="hint settings-quit">Pour arrêter Trip Compta : ferme sa fenêtre, ou « {{ POWER }} Arrêter », en haut à droite. Tes voyages sont enregistrés à chaque modification.</p>
 {% endblock %}

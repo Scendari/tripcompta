@@ -23,3 +23,70 @@
   {{ boat("€", "pb-white drift b1") }}{{ boat("+", "pb-sun drift b2") }}{{ boat("=", "pb-blue drift b3") }}
 </div>
 {%- endmacro %}
+
+{# Surprises de la mer (static/mer.js) : deux calques (sous la ligne de flottaison / au-dessus de l'eau) et les dessins. #}
+{% macro sea_life(settled=false) -%}
+<div class="sea-life under" aria-hidden="true" id="sea-under"></div>
+<div class="sea-life" aria-hidden="true" id="sea-life" data-regle="{{ '1' if settled else '' }}"></div>
+<template id="boat"><svg class="pb" viewBox="0 0 220 160" aria-hidden="true" focusable="false"><path class="hull-l" d="M10 90h200l-40 52H50z"/><path class="hull-r" d="M110 90h100l-40 52h-60z"/><path class="sail-l" d="M110 6L52 90h58z"/><path class="sail-r" d="M110 6l58 84h-58z"/><path class="wake-l" d="M14 146c30 9 62 11 96 11s66-2 96-11"/><path class="wake-s" d="M2 140c6 3 12 4 18 4M218 140c-6 3-12 4-18 4"/><text class="sym" x="110" y="134" text-anchor="middle"></text></svg></template>
+<template id="t-whale"><svg class="whale" viewBox="0 0 200 120">
+  <g class="spout" fill="none" stroke="var(--spray)" stroke-width="4" stroke-linecap="round">
+    <path d="M66 34 Q58 14 46 8"/><path d="M68 32 Q68 10 68 0"/><path d="M70 34 Q78 14 90 8"/></g>
+  <path d="M10 74 L56 40 L132 38 L166 60 Z" fill="var(--wh-top)"/>
+  <path d="M10 74 L166 60 L148 92 L58 96 Z" fill="var(--wh-side)"/>
+  <path d="M30 84 L148 76 L140 90 L62 94 Z" fill="var(--wh-belly)" opacity=".7"/>
+  <path d="M164 60 L196 36 L186 66 L198 94 L158 78 Z" fill="var(--wh-tail)"/>
+  <circle cx="40" cy="66" r="3" fill="#1a2b36"/></svg></template>
+<template id="t-dolphin"><svg class="dolphin" viewBox="0 0 120 60"><g transform="translate(120 0) scale(-1 1)">
+  <path d="M4 40 Q40 12 90 20 L110 8 L104 26 L118 36 L96 32 Q60 50 4 40 Z" fill="var(--do-top)"/>
+  <path d="M4 40 Q50 37 96 32 Q60 50 4 40 Z" fill="var(--do-belly)"/>
+  <path d="M52 18 L66 2 L70 18 Z" fill="var(--do-fin)"/>
+  <circle cx="20" cy="33" r="2" fill="#1a2b36"/></g></svg></template>
+<template id="t-splash"><svg class="splash" viewBox="0 0 40 30" fill="none" stroke="var(--spray)" stroke-width="3" stroke-linecap="round">
+  <path d="M8 26 Q6 14 2 10"/><path d="M20 26 V6"/><path d="M32 26 Q34 14 38 10"/></svg></template>
+<template id="t-gull"><svg class="gull" viewBox="0 0 80 40"><g class="bob">
+  <g class="wing l"><path d="M40 23 L25 10 L3 17 L23 17 Z" fill="var(--gu-wing)" stroke="var(--gu-line)" stroke-width=".8" stroke-linejoin="round"/>
+    <path d="M3 17 L10 14.6 L11 17 Z" fill="var(--gu-tip)"/></g>
+  <g class="wing r"><path d="M40 23 L55 10 L77 17 L57 17 Z" fill="var(--gu-wing)" stroke="var(--gu-line)" stroke-width=".8" stroke-linejoin="round"/>
+    <path d="M77 17 L70 14.6 L69 17 Z" fill="var(--gu-tip)"/></g>
+  <path d="M28 24 Q40 18 52 23 Q41 29 28 24 Z" fill="var(--gu-body)" stroke="var(--gu-line)" stroke-width="1"/>
+  <path d="M28 24 L22 21 L23 26 Z" fill="var(--gu-body)" stroke="var(--gu-line)" stroke-width=".8"/>
+  <path d="M52 22.6 L58 23.6 L52 24.6 Z" fill="var(--gu-beak)"/>
+  <circle cx="49" cy="22.3" r=".9" fill="#1a2b36"/></g></svg></template>
+<template id="t-bottle"><svg class="bottle" viewBox="0 0 60 30"><g class="bob">
+  <path d="M6 10 Q6 6 12 6 L38 6 Q44 6 46 10 L52 12 L52 18 L46 20 Q44 24 38 24 L12 24 Q6 24 6 20 Z" fill="var(--bo-glass)" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/>
+  <rect x="52" y="12" width="6" height="6" rx="1.5" fill="var(--bo-cork)"/>
+  <rect x="14" y="11" width="22" height="8" rx="4" fill="var(--bo-note)"/>
+  <path d="M18 15 H32" stroke="#a89a78" stroke-width="1" /></g></svg></template>
+
+<template id="t-lighthouse"><svg class="lighthouse" viewBox="-130 0 170 100">
+  <path class="beam" d="M21 26 L-125 12 L-125 40 Z" fill="var(--beam)"/>
+  <path d="M0 100 L6 86 L18 82 L30 84 L40 100 Z" fill="var(--rock)"/>
+  <path d="M14 84 L17 34 L25 34 L28 84 Z" fill="var(--lh-white)"/>
+  <path d="M21 34 L25 34 L28 84 L21 84 Z" fill="#000" opacity=".08"/>
+  <path d="M15.1 72 L26.9 72 L26.4 63 L15.6 63 Z M16.1 54 L25.9 54 L25.5 45 L16.5 45 Z" fill="var(--lh-red)"/>
+  <rect x="14.5" y="30" width="13" height="4" rx="1" fill="var(--lh-dark)"/>
+  <circle class="lamp" cx="21" cy="26" r="3.6" fill="#ffd16b"/>
+  <path d="M15 24 L21 15 L27 24 Z" fill="var(--lh-red)"/></svg></template>
+<template id="t-ffish"><svg class="ffish" viewBox="0 0 32 16"><g transform="translate(32 0) scale(-1 1)">
+  <path d="M2 9 Q12 3 24 7 L31 3 L28 9 L31 15 L24 11 Q12 14 2 9 Z" fill="var(--ff-body)"/>
+  <path d="M10 8 L19 0 L19 9 Z" fill="var(--ff-wing)"/><circle cx="6" cy="8" r="1" fill="#1a2b36"/></g></svg></template>
+<template id="t-turtle"><svg class="turtle" viewBox="0 0 70 40">
+  <path d="M4 36 C5 16 55 16 56 36 Z" fill="var(--tu-shell)"/>
+  <path d="M30 21 C44 21 55 26 56 36 L30 36 Z" fill="var(--tu-shell-2)"/>
+  <path d="M22 31 L25 25 L35 25 L38 31 Z M12 33 L16 28 M48 33 L44 28" fill="none" stroke="var(--tu-skin)" stroke-width="1.6" opacity=".7"/>
+  <g class="head"><path d="M52 33 Q56 20 64 21 Q70 24 68 29 Q66 34 58 35 Z" fill="var(--tu-skin)"/><circle cx="64" cy="25" r="1.6" fill="#1a2b36"/></g></svg></template>
+<template id="t-fishshadow"><svg viewBox="0 0 20 10"><path transform="translate(20 0) scale(-1 1)" d="M1 5 Q8 0 14 4 L19 1 L18 5 L19 9 L14 6 Q8 10 1 5 Z"/></svg></template>
+<template id="t-coin"><svg class="coin" viewBox="0 0 20 20"><g class="face">
+  <circle cx="10" cy="10" r="9" fill="var(--coin)" stroke="var(--coin-2)" stroke-width="1.6"/>
+  <text x="10" y="14" text-anchor="middle" font-size="11" font-weight="800" font-family="system-ui" fill="var(--coin-sym)">€</text></g></svg></template>
+<template id="t-bubble"><svg class="bubble" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="var(--bubble-fill)" stroke="var(--bubble)" stroke-width="1.4"/><circle cx="3.6" cy="3.6" r="1" fill="#fff"/></svg></template>
+<template id="t-diver"><svg class="diver" viewBox="0 0 40 40">
+  <path d="M30 24 L34 24 L34 4 L37 2" stroke="var(--snorkel)" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M6 40 Q6 10 20 9 Q34 10 34 40 Z" fill="var(--hood)"/>
+  <rect x="10" y="17" width="20" height="10" rx="3" fill="var(--mask)" stroke="var(--snorkel)" stroke-width="2"/></svg></template>
+<template id="t-sun"><svg class="sun" viewBox="0 0 60 34"><defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="var(--sun-1)"/><stop offset="1" stop-color="var(--sun-2)"/></linearGradient></defs>
+  <path d="M2 32 A28 28 0 0 1 58 32 Z" fill="url(#sg)"/></svg></template>
+
+{%- endmacro %}
