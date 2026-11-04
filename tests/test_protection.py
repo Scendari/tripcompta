@@ -26,8 +26,10 @@ from compta.web import create_app
 
 EXPECTED = {"Anne": (14500, 5500), "Bruno": (14500, 14500), "Chloé": (10000, 10000)}
 PASSWORD = "Bulles de Plongée 2026"
-SECRETS = [b"Anne", b"Bruno", "Chloé".encode(), "Gîte".encode(), b"Essence", b"SQLite format 3",
-           b"\xff\xd8\xff", b"%PDF", b"ticket"]                     # ce qui ne doit JAMAIS apparaître en clair
+# ce qui ne doit JAMAIS apparaître en clair (marqueurs d'au moins 5 octets : une suite plus courte apparaît par
+# hasard dans des données chiffrées, qui sont aléatoires)
+SECRETS = [b"Bruno", "Chloé".encode(), "Gîte".encode(), b"Essence", b"SQLite format 3", b"JFIF\x00", b"%PDF-",
+           b"ticket"]
 
 
 @pytest.fixture(autouse=True)
@@ -171,7 +173,7 @@ def test_round_trip_activate_unlock_remove(env):
     # arrêt : plus rien en clair sur l'ordinateur
     local = app.state.sync.local
     stop(app)
-    leaks = [p for p in local.rglob("*") if p.is_file() and any(s_ in p.read_bytes() for s_ in SECRETS[:6])]
+    leaks = [p for p in local.rglob("*") if p.is_file() and any(s_ in p.read_bytes() for s_ in SECRETS)]
     assert leaks == []
 
     # retirer la protection : tout redevient lisible, mêmes montants et justificatifs

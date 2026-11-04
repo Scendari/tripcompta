@@ -94,6 +94,15 @@ def _thumbnail(data: bytes, is_pdf: bool, size: int = 240) -> bytes:
     return out.getvalue()
 
 
+def _write_atomic(path: Path, data: bytes) -> None:
+    tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex[:8]}.tmp")
+    tmp.write_bytes(data)
+    try:
+        os.replace(tmp, path)
+    except PermissionError:                  # Windows : une autre demande vient de l'écrire et la lit déjà
+        tmp.unlink(missing_ok=True)
+
+
 def _capfirst(t):
     if not t:
         return t
@@ -2604,7 +2613,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             try:
                 data = _thumbnail(p_.read_bytes(), p_.suffix.lower() == ".pdf")
                 cache.parent.mkdir(exist_ok=True)
-                cache.write_bytes(data)
+                _write_atomic(cache, data)       # deux demandes simultanées : jamais une vignette à moitié écrite
             except Exception:
                 return Response(TRANSPARENT_PNG, media_type="image/png", headers={"Cache-Control": "no-store"})
         return FileResponse(cache, media_type="image/jpeg")
@@ -2723,7 +2732,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             try:
                 data = _thumbnail(src.read_bytes(), (rec.content_type or "").endswith("pdf") or src.suffix.lower() == ".pdf")
                 cache.parent.mkdir(exist_ok=True)
-                cache.write_bytes(data)
+                _write_atomic(cache, data)       # deux demandes simultanées : jamais une vignette à moitié écrite
             except Exception:      # fichier illisible : image transparente, la case affiche « PDF » / rien
                 return Response(TRANSPARENT_PNG, media_type="image/png", headers={"Cache-Control": "no-store"})
         return FileResponse(cache, media_type="image/jpeg")
