@@ -36,7 +36,8 @@ INSTALL_HELP = f"https://github.com/{REPO}/blob/main/INSTALLER.md"
 CHECK_EVERY = 24 * 3600
 SUMS = "SHA256SUMS.txt"
 PENDING = "en-cours.txt"
-APP_NAME = "Trip Compta"
+APP_NAME = "TripCompta"                  # nom des fichiers : TripCompta.app, TripCompta.exe
+OLD_APP_NAME = "Trip Compta"             # jusqu'à la 1.1 (installations faites avant le renommage)
 SCRIPTS = Path(__file__).parent / "scripts"
 
 
@@ -218,6 +219,7 @@ class Updater:
             out = work / "nouvelle"
             extract(archive, out)
             new = find_app(out, target)
+            exe_rel = new_exe_rel(new, exe_rel)
             archive.unlink(missing_ok=True)
             self.job["step"] = "redemarrage"
             (work / PENDING).write_text(info["version"], encoding="utf-8")   # la nouvelle version s'y reconnaîtra
@@ -338,12 +340,33 @@ def extract(archive: Path, dest: Path):
 
 
 def find_app(folder: Path, target: Path) -> Path:
-    """La nouvelle application dans l'archive dépliée : même nom que celle qui tourne (« Trip Compta.app » ou
-    le dossier « Trip Compta »)."""
-    for cand in (folder / target.name, folder / (APP_NAME + ".app"), folder / APP_NAME):
+    """La nouvelle application dans l'archive dépliée : « TripCompta.app » ou le dossier « TripCompta » (ou l'ancien
+    nom « Trip Compta », avant la 1.2)."""
+    for cand in (folder / target.name, folder / (APP_NAME + ".app"), folder / APP_NAME,
+                 folder / (OLD_APP_NAME + ".app"), folder / OLD_APP_NAME):
         if cand.exists():
             return cand
     raise UpdateError("Le fichier téléchargé ne contient pas l'application.")
+
+
+def new_exe_rel(new: Path, exe_rel: str) -> str:
+    """Le programme à relancer, dans la NOUVELLE application (son nom a pu changer : « Trip Compta » → « TripCompta »)."""
+    if (new / exe_rel).exists():
+        return exe_rel
+    plist = new / "Contents" / "Info.plist"
+    if plist.exists():
+        import plistlib
+        try:
+            exe = plistlib.loads(plist.read_bytes()).get("CFBundleExecutable")
+        except Exception:
+            exe = None
+        if exe and (new / "Contents" / "MacOS" / exe).exists():
+            return str(Path("Contents") / "MacOS" / exe)
+    suffix = Path(exe_rel).suffix
+    for name in (APP_NAME + suffix, OLD_APP_NAME + suffix):
+        if (new / name).exists():
+            return name
+    return exe_rel
 
 
 def install_location(executable: str | None = None, system: str | None = None, frozen: bool | None = None):

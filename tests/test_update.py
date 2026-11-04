@@ -257,7 +257,7 @@ def archive_bytes(name: str, folder: str) -> bytes:
 def install_env(tmp_path, monkeypatch):
     name = U.asset_name() or "TripCompta-linux.tar.gz"
     monkeypatch.setattr(U, "asset_name", lambda *a, **k: name)
-    folder = "Trip Compta.app" if name.startswith("TripCompta-mac") else "Trip Compta"
+    folder = "TripCompta.app" if name.startswith("TripCompta-mac") else "TripCompta"
     content = archive_bytes(name if not name.startswith("TripCompta-mac") else "x.zip", folder)
     target = tmp_path / "apps" / folder
     target.mkdir(parents=True)
@@ -451,3 +451,29 @@ def test_install_route_runs_job(client, monkeypatch):
     assert started and started[0]["port"] and callable(started[0]["quit_app"])
     assert c.get("/maj/etat").json() == dict(step="erreur", error="Test", percent=0, version="1.1.0")
     assert c.get("/maj/etat").json() == {"step": "aucune"}          # erreur vue une fois : on peut réessayer
+
+
+def test_renamed_app_found_and_relaunched(tmp_path):
+    """1.2 : « Trip Compta » devient « TripCompta » (fichiers sans espace). Une installation à l'ancien nom trouve la
+    nouvelle application dans l'archive et relance son programme sous son nouveau nom (remplacée au même endroit)."""
+    import plistlib
+    out = tmp_path / "nouvelle"
+    app = out / "TripCompta.app"
+    (app / "Contents" / "MacOS").mkdir(parents=True)
+    (app / "Contents" / "MacOS" / "TripCompta").write_text("x")
+    (app / "Contents" / "Info.plist").write_bytes(plistlib.dumps({"CFBundleExecutable": "TripCompta",
+                                                                   "CFBundleName": "Trip Compta"}))
+    new = U.find_app(out, Path("/Applications/Trip Compta.app"))
+    assert new == app
+    assert U.new_exe_rel(new, str(Path("Contents/MacOS/Trip Compta"))) == str(Path("Contents/MacOS/TripCompta"))
+    win = tmp_path / "w" / "TripCompta"
+    win.mkdir(parents=True)
+    (win / "TripCompta.exe").write_text("x")
+    assert U.find_app(tmp_path / "w", Path("C:/Users/x/Trip Compta")) == win
+    assert U.new_exe_rel(win, "Trip Compta.exe") == "TripCompta.exe"
+    assert U.new_exe_rel(win, "TripCompta.exe") == "TripCompta.exe"
+    old = tmp_path / "o" / "Trip Compta"                  # une archive d'avant la 1.2 reste lisible
+    old.mkdir(parents=True)
+    (old / "Trip Compta").write_text("x")
+    assert U.find_app(tmp_path / "o", Path("/opt/TripCompta")) == old
+    assert U.new_exe_rel(old, "TripCompta") == "Trip Compta"

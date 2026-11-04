@@ -65,16 +65,16 @@ jobs:
         include:
           - os: macos-14
             asset: TripCompta-mac-arm64.zip
-            exe: dist/Trip Compta.app/Contents/MacOS/Trip Compta
+            exe: dist/TripCompta.app/Contents/MacOS/TripCompta
           - os: macos-15-intel
             asset: TripCompta-mac-intel.zip
-            exe: dist/Trip Compta.app/Contents/MacOS/Trip Compta
+            exe: dist/TripCompta.app/Contents/MacOS/TripCompta
           - os: windows-latest
             asset: TripCompta-windows.zip
-            exe: dist/Trip Compta/Trip Compta.exe
+            exe: dist/TripCompta/TripCompta.exe
           - os: ubuntu-22.04
             asset: TripCompta-linux.tar.gz
-            exe: dist/Trip Compta/Trip Compta
+            exe: dist/TripCompta/TripCompta
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -99,14 +99,14 @@ jobs:
           python build_tools/smoke.py "${{ matrix.exe }}" "$V"
       - name: Emballer (Mac)
         if: runner.os == 'macOS'
-        run: ditto -c -k --sequesterRsrc --keepParent "dist/Trip Compta.app" "${{ matrix.asset }}"
+        run: ditto -c -k --sequesterRsrc --keepParent "dist/TripCompta.app" "${{ matrix.asset }}"
       - name: Emballer (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Compress-Archive -Path "dist/Trip Compta" -DestinationPath "${{ matrix.asset }}"
+        run: Compress-Archive -Path "dist/TripCompta" -DestinationPath "${{ matrix.asset }}"
       - name: Emballer (Linux)
         if: runner.os == 'Linux'
-        run: tar -czf "${{ matrix.asset }}" -C dist "Trip Compta"
+        run: tar -czf "${{ matrix.asset }}" -C dist "TripCompta"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}

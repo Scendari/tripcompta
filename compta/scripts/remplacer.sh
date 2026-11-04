@@ -5,9 +5,9 @@
 #
 #   remplacer.sh PID CIBLE NOUVELLE PROGRAMME PORT VERSION TRAVAIL [options de lancement…]
 #     PID        : l'application à attendre
-#     CIBLE      : ce qui est remplacé (« …/Trip Compta.app » sur Mac, le dossier « …/Trip Compta » sur Linux)
+#     CIBLE      : ce qui est remplacé (« …/TripCompta.app » sur Mac, le dossier « …/TripCompta » sur Linux)
 #     NOUVELLE   : la nouvelle version, déjà dépliée
-#     PROGRAMME  : le programme dans CIBLE (« Contents/MacOS/Trip Compta », « Trip Compta »)
+#     PROGRAMME  : le programme dans CIBLE (« Contents/MacOS/TripCompta », « TripCompta »)
 #     TRAVAIL    : dossier de travail (journal, résultat)
 PID=$1; TARGET=$2; NEW=$3; EXE_REL=$4; PORT=$5; VERSION=$6; WORK=$7
 shift 7

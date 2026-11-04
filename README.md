@@ -55,8 +55,8 @@ pip install -r requirements-dev.txt
 python build_tools/build.py
 ```
 
-Sur **Mac**, cela produit `dist/Trip Compta.app` ; sur Windows ou Linux, la même commande lancée **sur ce
-système** produit `dist/Trip Compta/` (PyInstaller ne fabrique que pour le système où il tourne). Une application
+Sur **Mac**, cela produit `dist/TripCompta.app` ; sur Windows ou Linux, la même commande lancée **sur ce
+système** produit `dist/TripCompta/` (PyInstaller ne fabrique que pour le système où il tourne). Une application
 fabriquée ainsi est une **version de développement** (« 1.0.0-dev (commit) ») : elle ne se met jamais à jour
 toute seule. Les versions publiées sont fabriquées par GitHub (voir « Publier une version »).
 
