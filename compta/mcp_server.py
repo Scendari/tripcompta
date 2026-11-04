@@ -262,7 +262,7 @@ def build_server(data_dir: Optional[str] = None, home: Optional[str] = None):
 
 def main():
     ap = argparse.ArgumentParser(description="Serveur MCP de Trip Compta (stdio)")
-    ap.add_argument("--data-dir", default=os.environ.get("COMPTA_DATA_DIR"))
+    ap.add_argument("--data-dir", default=os.environ.get("TRIPCOMPTA_DATA_DIR"))
     ap.add_argument("--home", help="Dossier synchronisé (justificatifs), si --data-dir est la copie de travail")
     a = ap.parse_args()
     build_server(a.data_dir, a.home).run("stdio")

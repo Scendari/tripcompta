@@ -417,7 +417,6 @@ def test_inbox_receipts(cloud_env):
 # ---------------------------------------------------------------- choisir le dossier, migration aller-retour
 def test_migration_round_trip_same_amounts(tmp_path, monkeypatch):
     monkeypatch.delenv("TRIPCOMPTA_DATA_DIR", raising=False)
-    monkeypatch.delenv("COMPTA_DATA_DIR", raising=False)
     monkeypatch.setenv("TRIPCOMPTA_CONFIG", str(tmp_path / "conf" / "reglages.json"))
     docs = tmp_path / "Mes Documents"
     monkeypatch.setenv("TRIPCOMPTA_DOCUMENTS", str(docs))

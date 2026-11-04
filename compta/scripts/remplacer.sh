@@ -22,7 +22,7 @@ open_app() {   # $1 = transmettre l'environnement (1/0), $2 = l'app .app, le res
   set -- "$app" --args --no-browser --port "$PORT" "$@"
   if [ "$withenv" = 1 ]; then
     # « open » ne transmet pas l'environnement : on redonne ce qui choisit le dossier des données et les réglages
-    for v in TRIPCOMPTA_CONFIG TRIPCOMPTA_DATA_DIR COMPTA_DATA_DIR TRIPCOMPTA_MAJ_API TRIPCOMPTA_NO_UPDATE_CHECK; do
+    for v in TRIPCOMPTA_CONFIG TRIPCOMPTA_DATA_DIR TRIPCOMPTA_MAJ_API TRIPCOMPTA_NO_UPDATE_CHECK; do
       eval "isset=\${$v+x}"
       if [ -n "$isset" ]; then eval "val=\$$v"; set -- --env "$v=$val" "$@"; fi
     done

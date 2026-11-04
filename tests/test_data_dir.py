@@ -1,4 +1,4 @@
-"""Dossier des données : nom TripCompta, ancien dossier « Compta Voyages » renommé, choix dans l'application."""
+"""Dossier des données : nom TripCompta, choix dans l'application."""
 import json
 import sqlite3
 
@@ -10,31 +10,14 @@ from compta.ops import Ops
 from compta.web import create_app
 
 
-def test_old_folder_renamed_once(tmp_path):
-    docs = tmp_path / "Documents"
-    (docs / "Compta Voyages" / "justificatifs").mkdir(parents=True)
-    (docs / "Compta Voyages" / "compta.db").write_bytes(b"BASE")
-    (docs / "Compta Voyages" / "justificatifs" / "t.jpg").write_bytes(b"IMG")
-    assert P.migrate_old_folder(docs) == docs / "TripCompta"
-    assert not (docs / "Compta Voyages").exists()
-    assert (docs / "TripCompta" / "compta.db").read_bytes() == b"BASE"
-    assert (docs / "TripCompta" / "justificatifs" / "t.jpg").read_bytes() == b"IMG"
-    assert (docs / "TripCompta" / "sauvegardes" / "avant-renommage-tripcompta.db").read_bytes() == b"BASE"
-    assert P.migrate_old_folder(docs) is None                       # une seule fois
-    # s'il existe déjà un dossier TripCompta, l'ancien n'est pas touché
-    (docs / "Compta Voyages").mkdir()
-    assert P.migrate_old_folder(docs) is None and (docs / "Compta Voyages").exists()
-
-
 def test_priorities(tmp_path, monkeypatch):
     monkeypatch.delenv("TRIPCOMPTA_DATA_DIR", raising=False)
-    monkeypatch.delenv("COMPTA_DATA_DIR", raising=False)
     monkeypatch.setenv("TRIPCOMPTA_CONFIG", str(tmp_path / "reglages.json"))
     monkeypatch.setattr(P, "documents_dir", lambda: tmp_path / "Docs")
     assert P.default_data_dir() == tmp_path / "Docs" / "TripCompta"            # par défaut
     P.write_config(data_dir=str(tmp_path / "Ailleurs"))
     assert P.default_data_dir() == tmp_path / "Ailleurs"                          # choisi dans l'appli
-    monkeypatch.setenv("COMPTA_DATA_DIR", str(tmp_path / "Env"))                  # ancienne variable : acceptée
+    monkeypatch.setenv("TRIPCOMPTA_DATA_DIR", str(tmp_path / "Env"))              # variable d'environnement : prioritaire
     assert P.default_data_dir() == tmp_path / "Env"
     assert P.looks_synced(tmp_path / "Dropbox" / "x") and not P.looks_synced(tmp_path / "Docs")
 
@@ -43,7 +26,6 @@ def test_priorities(tmp_path, monkeypatch):
 def chosen(tmp_path, monkeypatch):
     """Une installation dont le dossier a été choisi dans l'application ; la relance est simulée."""
     monkeypatch.delenv("TRIPCOMPTA_DATA_DIR", raising=False)
-    monkeypatch.delenv("COMPTA_DATA_DIR", raising=False)
     monkeypatch.setenv("TRIPCOMPTA_CONFIG", str(tmp_path / "reglages.json"))
     monkeypatch.setattr(P, "documents_dir", lambda: tmp_path / "Docs")
     P.write_config(data_dir=str(tmp_path / "a"))
@@ -118,7 +100,6 @@ def _folder_setup(tmp_path, monkeypatch):
     from compta import models as M
     from compta.db import Database
     monkeypatch.delenv("TRIPCOMPTA_DATA_DIR", raising=False)
-    monkeypatch.delenv("COMPTA_DATA_DIR", raising=False)
     monkeypatch.setenv("TRIPCOMPTA_CONFIG", str(tmp_path / "conf" / "reglages.json"))
     monkeypatch.setenv("TRIPCOMPTA_DOCUMENTS", str(tmp_path / "Mes Documents"))
     app = create_app()

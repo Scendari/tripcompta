@@ -6,7 +6,7 @@
 cd "$(dirname "$0")/.."
 was_running=0
 for port in {8765..8814}; do
-  if curl -s -m 1 "http://127.0.0.1:$port/ping" 2>/dev/null | grep -qE '"(tripcompta|compta-voyages)"'; then
+  if curl -s -m 1 "http://127.0.0.1:$port/ping" 2>/dev/null | grep -qE '"tripcompta"'; then
     curl -s -m 2 -X POST "http://127.0.0.1:$port/quitter" >/dev/null 2>&1
     was_running=1
     echo "Arrêté (port $port)"
@@ -14,7 +14,6 @@ for port in {8765..8814}; do
 done
 pkill -f "TripCompta.app/Contents/MacOS/TripCompta" 2>/dev/null
 pkill -f "Trip Compta.app/Contents/MacOS/Trip Compta" 2>/dev/null   # avant la 1.2
-pkill -f "Compta Voyages.app/Contents/MacOS/Compta Voyages" 2>/dev/null   # ancien nom
 # attendre que le port 8765 soit vraiment libéré (sinon l'appli démarrerait sur 8766 et l'onglet ouvert serait perdu)
 for i in {1..40}; do
   lsof -nP -iTCP:8765 -sTCP:LISTEN >/dev/null 2>&1 || break
@@ -30,7 +29,7 @@ else
   disown
 fi
 for i in {1..60}; do
-  if curl -s -m 1 "http://127.0.0.1:8765/ping" 2>/dev/null | grep -qE '"(tripcompta|compta-voyages)"'; then
+  if curl -s -m 1 "http://127.0.0.1:8765/ping" 2>/dev/null | grep -qE '"tripcompta"'; then
     echo "Relancé : http://127.0.0.1:8765/"
     exit 0
   fi

@@ -12,25 +12,10 @@ jour, la question « y a-t-il une nouvelle version ? », désactivable).
 
 ---
 
-## Lancer l'application
+## Lancer depuis le code source (développement)
 
-### Mac
-
-1. Installe Python 3 (une seule fois) : <https://www.python.org/downloads/>
-2. Double-clique sur **`Lancer Trip Compta.command`**.
-   - Le premier lancement installe ce qu'il faut (1 à 2 minutes).
-   - Si macOS bloque le fichier : clic droit → **Ouvrir** → **Ouvrir**.
-3. Le navigateur s'ouvre tout seul sur l'application. Pour l'arrêter : bouton **⏻ Arrêter** en haut à droite
-   en bas de l'accueil, ou ferme la fenêtre du Terminal.
-
-### Windows
-
-1. Installe Python 3 (une seule fois) : <https://www.python.org/downloads/> — coche **« Add python.exe to PATH »**.
-2. Double-clique sur **`Lancer Trip Compta.bat`**.
-   - Le premier lancement installe ce qu'il faut (1 à 2 minutes).
-3. Le navigateur s'ouvre tout seul. Pour arrêter : ferme la fenêtre noire (ou le bouton **⏻ Arrêter**).
-
-### En ligne de commande (les deux systèmes)
+Pour utiliser Trip Compta, installe plutôt l'application toute prête (voir [INSTALLER.md](INSTALLER.md)).
+Depuis le code source (Python 3.12 ou plus récent), l'application s'ouvre dans le navigateur :
 
 ```bash
 python3 -m venv .venv

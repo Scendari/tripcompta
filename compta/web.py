@@ -234,7 +234,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
     upd = updater or U.Updater()
     if data_dir:
         data_source = "lancement"
-    elif os.environ.get("TRIPCOMPTA_DATA_DIR") or os.environ.get("COMPTA_DATA_DIR"):
+    elif os.environ.get("TRIPCOMPTA_DATA_DIR"):
         data_source = "env"
     elif PATHS.read_config().get("data_dir"):
         data_source = "choisi"

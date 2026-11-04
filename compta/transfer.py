@@ -19,7 +19,6 @@ from . import models as M
 from . import services as S
 
 FORMAT = "tripcompta"
-OLD_FORMATS = ("compta-voyages",)
 VERSION = 1
 SETTING_KEYS = (S.ASSO_NAME_KEY, S.DEFAULTS_KEY, S.LIBRARY_KEY, S.SUBCATS_KEY)
 
@@ -117,7 +116,7 @@ def read_zip(content: bytes) -> tuple[dict, zipfile.ZipFile]:
     except (zipfile.BadZipFile, KeyError, ValueError):
         raise TransferError("Ce fichier n'est pas un export de Trip Compta (il faut le fichier .zip téléchargé "
                             "avec « Exporter le voyage »).")
-    if data.get("format") not in (FORMAT,) + OLD_FORMATS or not isinstance(data.get("voyages"), list):
+    if data.get("format") != FORMAT or not isinstance(data.get("voyages"), list):
         raise TransferError("Ce fichier n'est pas un export de Trip Compta.")
     if int(data.get("version") or 0) > VERSION:
         raise TransferError("Cet export vient d'une version plus récente de l'application : mets-la à jour d'abord.")

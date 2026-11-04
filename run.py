@@ -29,7 +29,7 @@ def running_instance(first: int = 8765, count: int = 50) -> str | None:
                 continue
         try:
             with urllib.request.urlopen(f"http://127.0.0.1:{port}/ping", timeout=1) as r:
-                if json.load(r).get("app") in ("tripcompta", "compta-voyages"):
+                if json.load(r).get("app") == "tripcompta":
                     return f"http://127.0.0.1:{port}/"
         except Exception:
             continue

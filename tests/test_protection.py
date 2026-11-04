@@ -52,7 +52,6 @@ def keyring_mem(monkeypatch):
 @pytest.fixture
 def env(tmp_path, monkeypatch, keyring_mem):
     monkeypatch.delenv("TRIPCOMPTA_DATA_DIR", raising=False)
-    monkeypatch.delenv("COMPTA_DATA_DIR", raising=False)
     monkeypatch.setenv("TRIPCOMPTA_CONFIG", str(tmp_path / "Réglages ordi" / "reglages.json"))
     docs = tmp_path / "Mes Documents"
     monkeypatch.setenv("TRIPCOMPTA_DOCUMENTS", str(docs))
