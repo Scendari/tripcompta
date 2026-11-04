@@ -1024,3 +1024,4 @@ label.check { display: inline-flex; align-items: center; gap: .4rem; font-weight
 @media (max-width: 640px) { .harbour { height: 100px; } .harbour .b1 { width: 72px; } .harbour .b2 { width: 56px; }
   .harbour .b3 { display: none; } .home-page { padding-bottom: 120px; } }
 @media print { .harbour { display: none; } .home-page { padding-bottom: 0; } }
+.ico-power { vertical-align: -.12em; }
