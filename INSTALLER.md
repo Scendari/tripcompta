@@ -92,14 +92,16 @@ ils te suivent sur tous tes ordinateurs, sans aucun serveur (rien n'est envoyé 
 
 1. Vérifie que l'application de ton cloud est installée sur l'ordinateur (le dossier Dropbox, Google Drive,
    OneDrive ou iCloud Drive apparaît dans le Finder ou l'Explorateur).
-2. Dans Trip Compta, sur l'accueil : **☁️ Où ranger mes voyages** (en bas).
-3. Choisis ton service dans la liste (ou « Autre dossier… » puis **Parcourir…**), garde **Y copier mes voyages**,
-   puis **Ranger mes voyages ici**. Tout est copié et vérifié ; Trip Compta redémarre tout seul.
+2. Dans Trip Compta : **⚙️ Réglages → Où sont mes voyages**.
+3. Dans **Changer de dossier**, choisis ton service dans la liste (ou « Autre dossier… » puis **Parcourir…**), garde
+   **Copier mes voyages dans ce dossier**, puis clique sur le bouton du même nom. Tout est copié et vérifié ; Trip Compta
+   redémarre tout seul.
 
 **Sur les autres ordinateurs**
 
 1. Installe Trip Compta, attends que ton cloud ait fini de synchroniser le dossier **TripCompta**.
-2. **☁️ Où ranger mes voyages** → choisis le même dossier → **Utiliser les voyages déjà dans ce dossier**.
+2. **⚙️ Réglages → Où sont mes voyages** → **Changer de dossier** → choisis le même dossier : Trip Compta
+   indique les voyages qu'il y trouve → **Ouvrir les voyages de ce dossier**.
 
 **Rien d'autre à régler** : Trip Compta travaille sur une copie posée sur ton ordinateur, et ton cloud envoie les
 changements. Seul cas à connaître : si ton cloud a retiré le fichier de l'ordinateur (disque presque plein, ou

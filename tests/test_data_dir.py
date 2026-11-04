@@ -98,7 +98,7 @@ def test_imposed_folder_and_open(tmp_path, monkeypatch):
     app = create_app(tmp_path / "d")                                  # imposé au lancement
     c = TestClient(app)
     page = c.get("/reglages/donnees").text
-    assert "imposé au lancement" in page and "Ranger mes voyages ici" not in page
+    assert "imposé au lancement" in page and 'value="ranger"' not in page
     assert "imposé au lancement" in c.post("/reglages/donnees", data={"dossier": "/tmp/x"}).text
     opened = []
     import subprocess
@@ -111,3 +111,87 @@ def test_imposed_folder_and_open(tmp_path, monkeypatch):
     assert 'href="/reglages"' in home and "Tes données sont dans" not in home     # plus de long chemin en bas
     reg = c.get("/reglages").text
     assert "Où sont mes voyages" in reg and 'href="/reglages/donnees"' in reg and 'href="/reglages/protection"' in reg
+
+
+# ---------------------------------------------------------------- « Changer de dossier » : dire ce qu'on va faire
+def _folder_setup(tmp_path, monkeypatch):
+    from compta import models as M
+    from compta.db import Database
+    monkeypatch.delenv("TRIPCOMPTA_DATA_DIR", raising=False)
+    monkeypatch.delenv("COMPTA_DATA_DIR", raising=False)
+    monkeypatch.setenv("TRIPCOMPTA_CONFIG", str(tmp_path / "conf" / "reglages.json"))
+    monkeypatch.setenv("TRIPCOMPTA_DOCUMENTS", str(tmp_path / "Mes Documents"))
+    app = create_app()
+    Ops(app.state.db).create_trip("Voyage d'ici")
+    full = tmp_path / "Mon Drive" / "TripCompta"                  # voyages rangés depuis un autre ordinateur
+    other = Database(full)
+    with other.Session() as s:
+        for n in ("Hendaye", "La Londe", "Banyuls", "Port-Cros"):
+            s.add(M.Trip(name=n))
+        s.commit()
+    other.engine.dispose()
+    empty = tmp_path / "Dropbox" / "TripCompta"
+    empty.mkdir(parents=True)
+    return app, full, empty
+
+
+def test_folder_info_says_what_is_inside(tmp_path, monkeypatch):
+    app, full, empty = _folder_setup(tmp_path, monkeypatch)
+    c = TestClient(app)
+    j = c.get("/reglages/dossier-info", params={"chemin": str(full)}).json()
+    assert j["ok"] and j["voyages"] == 4 and len(j["noms"]) == 3 and set(j["noms"]) <= {"Hendaye", "La Londe", "Banyuls", "Port-Cros"}
+    j = c.get("/reglages/dossier-info", params={"chemin": str(empty)}).json()
+    assert j["ok"] and j["existe"] and j["voyages"] is None
+    j = c.get("/reglages/dossier-info", params={"chemin": str(empty.parent / "Nouveau")}).json()
+    assert j["ok"] and not j["existe"]                           # sera créé
+    j = c.get("/reglages/dossier-info", params={"chemin": str(app.state.db.home)}).json()
+    assert j["actuel"]
+    assert c.get("/reglages/dossier-info", params={"chemin": "pas/absolu"}).json()["ok"] is False
+    page = c.get("/reglages/donnees").text
+    assert "Changer de dossier" in page and "Ranger mes voyages ici" not in page
+    assert 'data-cur-trips="1"' in page
+
+
+def test_folder_choice_explains_and_guards_in_browser(tmp_path, monkeypatch):
+    """Dans un vrai navigateur : le dossier choisi est inspecté, le bon choix présélectionné, la phrase dit ce qui va
+    se passer (et ce qui ne se passe pas), le bouton suit le choix ; copier par-dessus des voyages est impossible."""
+    pw = pytest.importorskip("playwright.sync_api")
+    import socket
+    import threading
+    import time
+    import uvicorn
+    app, full, empty = _folder_setup(tmp_path, monkeypatch)
+    with socket.socket() as so:
+        so.bind(("127.0.0.1", 0))
+        port = so.getsockname()[1]
+    srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
+    th = threading.Thread(target=srv.run, daemon=True)
+    th.start()
+    while not srv.started:
+        time.sleep(0.05)
+    try:
+        with pw.sync_playwright() as p:
+            b = p.chromium.launch()
+            pg = b.new_page()
+            pg.goto(f"http://127.0.0.1:{port}/reglages/donnees")
+            pg.fill("input[name=autre]", str(full))
+            pw.expect(pg.locator("[data-folder-status]")).to_contain_text("4 voyages")
+            assert pg.is_checked("input[name=mode][value=utiliser]")        # présélectionné
+            pw.expect(pg.locator("[data-go]")).to_have_text("Ouvrir les voyages de ce dossier")
+            what = pg.inner_text("[data-what-happens]")
+            assert "ouvrir les voyages de ce dossier" in what and "rien n'est effacé" in what
+            pg.check("input[name=mode][value=copier]")                       # copier par-dessus : refusé d'avance
+            assert "ne copie jamais par-dessus" in pg.inner_text("[data-what-happens]")
+            assert pg.is_disabled("[data-go]")
+            pg.fill("input[name=autre]", str(empty))
+            pw.expect(pg.locator("[data-folder-status]")).to_contain_text("vide")
+            assert pg.is_checked("input[name=mode][value=copier]")
+            pw.expect(pg.locator("[data-go]")).to_have_text("Copier mes voyages dans ce dossier")
+            what = pg.inner_text("[data-what-happens]")
+            assert "copier ton voyage" in what and "n'est pas touché" in what and pg.is_enabled("[data-go]")
+            pg.check("input[name=mode][value=utiliser]")                     # ouvrir un dossier vide : impossible
+            assert pg.is_disabled("[data-go]")
+            b.close()
+    finally:
+        srv.should_exit = True
+        th.join(5)

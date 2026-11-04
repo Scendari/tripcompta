@@ -754,6 +754,13 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         except OSError:
             return False
 
+    def _count_trips() -> int:
+        try:
+            with db.Session() as s_:
+                return s_.query(M.Trip).count()
+        except Exception:
+            return 0
+
     def _data_page(request, **ctx):
         cur = db.home
         default_dir = PATHS.documents_dir() / PATHS.FOLDER
@@ -771,11 +778,50 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
                       protected=sync is not None and sync.protected,
                       remembered=bool(sync is not None and sync.vault is not None and K.recall(sync.vault.id)),
                       can_remember=K.keyring_available(),
-                      can_restart=app.state.restart is not None, **ctx)
+                      can_restart=app.state.restart is not None, cur_trips=_count_trips(), **ctx)
 
     @app.get("/reglages/donnees", response_class=HTMLResponse)
     def data_dir_page(request: Request):
         return _data_page(request)
+
+    @app.get("/reglages/dossier-info")
+    def folder_info(chemin: str = ""):
+        """Ce que contient un dossier, AVANT de le choisir : voyages trouvés (nombre, noms), protégé, vide, à créer.
+        Lecture seule ; un fichier encore « dans le cloud » (pas téléchargé) n'est jamais ouvert."""
+        raw = (chemin or "").strip().strip('"').strip("'")
+        if raw == "__local__":
+            raw = str(PATHS.documents_dir() / PATHS.FOLDER)
+        p = Path(raw).expanduser() if raw else None
+        out = dict(chemin=str(p) if p else "", ok=False, existe=False, voyages=None, noms=[], protege=False,
+                   cloud_seulement=False, actuel=False)
+        if p is None or not p.is_absolute():
+            return out
+        try:
+            out["actuel"] = p.resolve() == db.home.resolve()
+        except OSError:
+            pass
+        out["existe"] = p.is_dir()
+        out["ok"] = p.is_dir() or p.parent.is_dir()
+        if not p.is_dir():
+            return out
+        if K.is_protected(p):
+            out["protege"] = True
+            return out
+        if (p / f".{C.DB}.icloud").exists() and not (p / C.DB).exists():
+            out["cloud_seulement"] = True
+            return out
+        if (p / C.DB).exists():
+            import sqlite3
+            try:
+                con = sqlite3.connect(f"file:{p / C.DB}?mode=ro", uri=True, timeout=2)
+                try:
+                    rows = con.execute("SELECT name FROM trips ORDER BY created DESC").fetchall()
+                finally:
+                    con.close()
+                out["voyages"], out["noms"] = len(rows), [r[0] for r in rows[:3]]
+            except Exception:
+                out["voyages"] = -1                      # des voyages, mais illisibles d'ici
+        return out
 
     @app.get("/reglages", response_class=HTMLResponse)
     def settings_page(request: Request):
@@ -870,7 +916,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             if f.get("mode") == "utiliser":   # reprendre les voyages déjà rangés sur cet ordinateur
                 if not (target / C.DB).exists():
                     return _data_page(request, error=f"Il n'y a pas encore de voyages Trip Compta dans « {target} ». "
-                                                      "Choisis « Y copier mes voyages ».", mode="utiliser")
+                                                      "Choisis « Copier mes voyages dans ce dossier ».", mode="utiliser")
                 PATHS.write_config(data_dir=None, partage=False)
                 return _restart_page(request, f"Trip Compta va utiliser les voyages rangés sur cet ordinateur, dans "
                                               f"« {target} ».")
@@ -907,14 +953,14 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         if f.get("mode") == "utiliser":
             if not has_data:
                 return _data_page(request, error="Il n'y a pas encore de voyages Trip Compta dans ce dossier (fichier "
-                                                  "« compta.db » introuvable). Choisis « Y copier mes voyages ».",
+                                                  "« compta.db » introuvable). Choisis « Copier mes voyages dans ce dossier ».",
                                   value=raw, mode="utiliser")
             PATHS.write_config(data_dir=str(target), partage=True)
             return _restart_page(request, f"Trip Compta va utiliser les voyages rangés dans « {target} ».")
         if has_data:
             return _data_page(request, error="Ce dossier contient déjà des voyages Trip Compta (sans doute rangés "
-                                              "depuis un autre ordinateur). Choisis « Utiliser les voyages déjà dans "
-                                              "ce dossier », ou un autre dossier.", value=raw)
+                                              "depuis un autre ordinateur). Choisis « Ouvrir les voyages de ce "
+                                              "dossier », ou un autre dossier.", value=raw)
         try:
             new_local = C.local_dir_for(target, PATHS.config_file().parent)
             _copy_voyages(target, target / C.RECEIPTS, new_local / "brouillons_ia")

@@ -497,7 +497,7 @@ def test_no_clear_copy_elsewhere_while_protected(env):
     cl.post("/deverrouiller", data={"mot_de_passe": PASSWORD})
     page = cl.get("/reglages/donnees").text.replace("&#39;", "'")
     assert "Sur <b>cet ordinateur</b>" in page and "protégés par un mot de passe" in page
-    assert "Ranger mes voyages ici" not in page and "Ranger mes voyages sur cet ordinateur" not in page
+    assert 'value="ranger"' not in page and "Ranger mes voyages sur cet ordinateur" not in page
     other = tmp / "Dropbox" / "TripCompta"
     other.parent.mkdir()
     for data in ({"action": "ranger", "dossier": "__autre__", "autre": str(other), "mode": "copier"},
