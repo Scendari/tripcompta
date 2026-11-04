@@ -888,10 +888,12 @@ class Ops:
         return self._write(f"ajout de la dépense « {libelle} » (IA)", fn, trip_id, simulation)
 
     def update_expense(self, trip_id, depense, libelle=None, categorie=None, montant_prevu=None, montant_reel=None,
-                       date=None, paye_par=None, pour=None, parts=None, simulation=False) -> dict:
+                       date=None, paye_par=None, pour=None, parts=None, simulation=False, note=None,
+                       sous_categorie=None, sauf=None, rembourse=None, rembourse_a=None) -> dict:
         def fn(s, t):
             e, changes = do_update_expense(s, t, depense, libelle, categorie, montant_prevu, montant_reel, date,
-                                           paye_par, pour, parts)
+                                           paye_par, pour, parts, note=note, sauf=sauf, rembourse=rembourse,
+                                           rembourse_a=rembourse_a, sous_categorie=sous_categorie)
             return dict(depense_id=e.id, message=f"Dépense « {e.label} » modifiée"
                         + (f" : {' ; '.join(changes)}." if changes else " (rien n'a changé)."))
         return self._write(f"modification de la dépense « {depense} » (IA)", fn, trip_id, simulation)

@@ -152,10 +152,16 @@ def build_server(data_dir: Optional[str] = None, home: Optional[str] = None):
                          montant_prevu: Optional[Union[float, str]] = None,
                          montant_reel: Optional[Union[float, str]] = None, date: Optional[str] = None,
                          paye_par: Optional[Ref] = None, pour: Optional[Union[str, list[str]]] = None,
-                         parts: Optional[dict[str, float]] = None, simulation: bool = False) -> dict:
-        """Modifie une dépense existante (désignée par son id ou son libellé). Seuls les champs donnés changent."""
+                         parts: Optional[dict[str, float]] = None, note: Optional[str] = None,
+                         sous_categorie: Optional[str] = None, sauf: Optional[list[str]] = None,
+                         rembourse: Optional[Union[float, str]] = None, rembourse_a: Optional[Ref] = None,
+                         simulation: bool = False) -> dict:
+        """Modifie une dépense existante (désignée par son id ou son libellé). Seuls les champs donnés changent :
+        note (remplace la note actuelle, "" l'efface), sous_categorie, sauf (personnes exclues), rembourse (montant
+        remboursé par le fournisseur, 0 pour l'enlever) et rembourse_a (qui l'a reçu)."""
         return ops.update_expense(voyage, depense, libelle, categorie, montant_prevu, montant_reel, date,
-                                  paye_par, pour, parts, simulation)
+                                  paye_par, pour, parts, simulation, note=note, sous_categorie=sous_categorie,
+                                  sauf=sauf, rembourse=rembourse, rembourse_a=rembourse_a)
 
     @mcp.tool()
     @_safe
