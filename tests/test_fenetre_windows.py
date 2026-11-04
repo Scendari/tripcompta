@@ -17,7 +17,7 @@ from compta import fenetre
 
 ROOT = Path(__file__).resolve().parent.parent
 
-pytestmark = pytest.mark.skipif(sys.platform != "win32" or os.environ.get("CI") or not fenetre.available(),
+pytestmark = pytest.mark.skipif(sys.platform != "win32" or bool(os.environ.get("CI")) or not fenetre.available(),
                                 reason="vraie fenêtre : Windows, hors GitHub")
 
 
