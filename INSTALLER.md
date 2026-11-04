@@ -96,15 +96,12 @@ ils te suivent sur tous tes ordinateurs, sans aucun serveur (rien n'est envoyé 
 1. Installe Trip Compta, attends que ton cloud ait fini de synchroniser le dossier **TripCompta**.
 2. **☁️ Où ranger mes voyages** → choisis le même dossier → **Utiliser les voyages déjà dans ce dossier**.
 
-**Réglages par service**
-
-| Service | À faire une fois |
-|---|---|
-| iCloud Drive (Mac) | Finder → clic droit sur le dossier TripCompta → **Toujours garder sur cet appareil** |
-| OneDrive (Windows / Mac) | Clic droit sur le dossier TripCompta → **Toujours conserver sur cet appareil** |
-| Google Drive pour ordinateur | Mac : clic droit sur le dossier TripCompta → **Actions rapides › Rendre disponible hors connexion** ; Windows : clic droit → **Accès hors connexion › Disponible hors connexion** (ne pas choisir « Retirer le téléchargement ») |
-| Dropbox | Clic droit → **Rendre disponible hors connexion** (si tu utilises « en ligne uniquement ») |
-| kDrive, Proton Drive, pCloud | Garde le dossier disponible hors connexion |
+**Rien d'autre à régler** : Trip Compta travaille sur une copie posée sur ton ordinateur, et ton cloud envoie les
+changements. Seul cas à connaître : si ton cloud a retiré le fichier de l'ordinateur (disque presque plein, ou
+« Retirer le téléchargement » / « Libérer de l'espace » choisi par erreur), Trip Compta te le dit et passe en lecture
+seule. Il suffit alors de le rendre de nouveau disponible : clic droit sur le dossier TripCompta →
+« Toujours garder sur cet appareil » (iCloud, OneDrive) ou « Rendre disponible hors connexion » (Google Drive,
+Dropbox), puis relancer Trip Compta.
 
 **À deux ordinateurs**
 

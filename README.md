@@ -96,8 +96,9 @@ les brouillons IA. L'app travaille sur une copie et, après chaque modification,
 - **Un seul ordinateur à la fois** peut modifier : les autres ouvrent les voyages en **lecture seule** (« ouverts
   sur « PC du club » depuis 14 h 02 ») et se mettent à jour quand on revient sur l'app. **⏻ Arrêter** libère la
   main ; si un ordinateur est resté allumé ou a planté, l'autre peut **Prendre la main** au bout de 3 minutes.
-- **iCloud Drive, OneDrive** : clic droit sur le dossier → « Toujours garder sur cet appareil » (sinon le fichier
-  peut n'exister que dans le cloud ; Trip Compta le signale).
+- **Fichier retiré de l'ordinateur par le cloud** (disque plein, « Libérer de l'espace »…) : Trip Compta le signale
+  et passe en lecture seule, sans lire le fichier (ce qui forcerait un téléchargement) ; « Toujours garder sur cet
+  appareil » / « Rendre disponible hors connexion » sur le dossier, puis relancer.
 - **Copies en conflit** (« compta (conflicted copy…).db », « compta (copie en conflit…).db », « compta-PC.db »…) :
   Trip Compta les signale ; tu choisis laquelle garder, l'autre est rangée dans « Anciennes versions ».
 - **Depuis un téléphone** : avec l'app de ton cloud, dépose les photos de tickets dans `Justificatifs à trier` ;
