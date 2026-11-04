@@ -270,7 +270,7 @@ def test_pull_keeps_unpublished_local_changes(cloud_env):
     kept = list((tmp / "copie PC-A" / "sauvegardes").glob("pas-encore-envoyee-*.db"))
     assert len(kept) == 1 and trip_names(kept[0]) == ["Pas envoyé"]
     page = TestClient(a2).get("/").text
-    assert "De B" in page and "pas-encore-envoyee" in page
+    assert "De B" in page and "pas-encore-envoyee" in page and "Rien n" in page
     a2.state.sync.stop()
 
 
@@ -762,3 +762,39 @@ def test_settings_page(cloud_env):
         srv.should_exit = True
         th.join(5)
         stop(a)
+
+
+def test_no_false_alarm_when_nothing_really_changed(cloud_env):
+    """La copie de travail a « bougé » sans vraie saisie (réécrite à l'identique, version de l'application) : la
+    version du dossier est reprise sans message ni copie de secours (fausse alerte vue en vrai le 4/11)."""
+    tmp, shared = cloud_env
+    a = make(tmp, shared, "PC-A", 101)
+    TestClient(a).post("/voyages", data={"name": "Publié"})
+    stop(a)
+    b = make(tmp, shared, "Mac-B", 202)
+    TestClient(b).post("/voyages", data={"name": "De B"})
+    stop(b)
+    local = tmp / "copie PC-A" / C.DB                            # rien de saisi ici : seulement « touchée »
+    con = sqlite3.connect(local)
+    con.execute("UPDATE settings SET value='9.9.9-autre' WHERE key='app_version'")
+    con.commit()
+    con.execute("VACUUM")
+    con.close()
+    a2 = make(tmp, shared, "PC-A", 303)
+    assert not list((tmp / "copie PC-A" / "sauvegardes").glob("pas-encore-envoyee-*"))
+    page = TestClient(a2).get("/").text
+    assert "De B" in page and "pas-encore-envoyee" not in page and "Attention" not in page
+    stop(a2)
+
+
+def test_failed_publish_is_retried(cloud_env, monkeypatch):
+    """Envoi raté (dossier bloqué un instant) : la saisie reste « à envoyer » et part à l'essai suivant."""
+    tmp, shared = cloud_env
+    a = make(tmp, shared, "PC-A", 101)
+    Ops(a.state.db).create_trip("Saisie importante")
+    real = C.atomic_copy
+    monkeypatch.setattr(C, "atomic_copy", lambda *x, **k: (_ for _ in ()).throw(PermissionError("bloqué")))
+    assert a.state.sync.publish() == "erreur" and a.state.sync.local_dirty()
+    monkeypatch.setattr(C, "atomic_copy", real)
+    assert a.state.sync.publish() == "ok" and trip_names(shared / C.DB) == ["Saisie importante"]
+    stop(a)

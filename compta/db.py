@@ -104,9 +104,10 @@ class Database:
                       receipts_in_home if receipts_in_home is not None else r)
 
     def _remember_version(self):
-        with self.engine.begin() as c:
+        with self.engine.begin() as c:              # écrire seulement si elle change (sinon la base « bouge » pour rien)
             c.exec_driver_sql("INSERT INTO settings (key, value) VALUES (?, ?) "
-                              "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (VERSION_KEY, self.app_version))
+                              "ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE value != excluded.value",
+                              (VERSION_KEY, self.app_version))
 
     # Colonnes ajoutées après la première version : on les crée dans les bases existantes.
     MIGRATIONS = {

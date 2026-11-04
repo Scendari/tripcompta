@@ -108,6 +108,21 @@ def is_valid_db(path: Path) -> bool:
         return False
 
 
+def same_content(a: Path, b: Path) -> bool:
+    """Les deux bases contiennent-elles les mêmes voyages ? (contenu, pas octets : une base réécrite à l'identique,
+    ou seulement marquée par la version de l'application qui l'a ouverte, n'est pas une « modification »)"""
+    def rows(p):
+        con = sqlite3.connect(f"file:{p}?mode=ro", uri=True)
+        try:
+            return {line for line in con.iterdump() if "'app_version'" not in line}
+        finally:
+            con.close()
+    try:
+        return rows(a) == rows(b)
+    except sqlite3.Error:
+        return False
+
+
 def sqlite_copy(src: Path, dst: Path) -> None:
     """Copie cohérente d'une base ouverte (API de sauvegarde de SQLite), sans journal laissé derrière."""
     s = sqlite3.connect(src)
@@ -422,11 +437,25 @@ class CloudSync:
         self._seen_sig = sig
         return h is not None and h != self._state().get("shared")
 
+    @property
+    def base_db(self) -> Path:
+        """La dernière version synchronisée (publiée ou reprise), pour savoir si la copie de travail a vraiment changé."""
+        return self.local / ".base.db"
+
+    def _remember_base(self, src: Path) -> None:
+        try:
+            shutil.copyfile(src, self.base_db)
+        except OSError:
+            pass
+
     def local_dirty(self) -> bool:
-        """La copie de travail contient-elle des modifications pas encore publiées ?"""
+        """La copie de travail contient-elle des modifications pas encore publiées ? (vraies saisies : une base
+        réécrite à l'identique, ou seulement marquée par la version de l'application, ne compte pas)"""
         if not self.local_db.exists():
             return False
-        return file_hash(self.local_db) != self._state().get("local")
+        if file_hash(self.local_db) == self._state().get("local"):
+            return False
+        return not (self.base_db.exists() and same_content(self.local_db, self.base_db))
 
     def _snapshot(self) -> Path:
         snap = self.local / ".envoi.db"
@@ -469,9 +498,10 @@ class CloudSync:
                 return False
         kept = None
         if self.local_db.exists() and self.local_dirty():
-            kept = self.keep_local_copy("pas-encore-envoyee")
+            kept = self.keep_local_copy("pas-encore-envoyee")     # de vraies saisies : gardées, jamais perdues
         if before_replace:
             before_replace()
+        self._remember_base(incoming)
         replace(incoming, self.local_db)
         for ext in ("-journal", "-wal", "-shm"):
             (self.local / f"{DB}{ext}").unlink(missing_ok=True)
@@ -479,9 +509,11 @@ class CloudSync:
         self._seen_sig = self._sig()
         self.pulled_at = self.clock()
         if kept:
-            self.notice = (f"La version du dossier partagé a été reprise. Tes dernières modifications faites ici "
-                           f"n'avaient pas pu être enregistrées dans le dossier : elles sont gardées dans "
-                           f"« {kept.name} » (sauvegardes de cet ordinateur).")
+            where = self.service or "le dossier"
+            self.notice = (f"Attention : des modifications faites sur cet ordinateur n'avaient pas pu être envoyées "
+                           f"dans {where}, et une autre version y est arrivée entre-temps. Trip Compta affiche "
+                           f"maintenant la version de {where}. Rien n'est perdu : tes modifications sont gardées dans "
+                           f"une copie de secours (« {kept.name} »).")
         return True
 
     def keep_local_copy(self, why: str) -> Path:
@@ -578,6 +610,7 @@ class CloudSync:
                 else:
                     hs = file_hash(snap)
                     atomic_copy(snap, self.shared_db)
+                self._remember_base(snap)            # seulement une fois l'envoi réussi
                 self._save_state(shared=hs, local=hl)
                 self._seen_sig = self._sig()
                 self.published_at = self.clock()
@@ -657,7 +690,7 @@ class CloudSync:
             except Exception:
                 pass
         for name in (DB, f"{DB}-journal", f"{DB}-wal", f"{DB}-shm", ".reception.db", ".envoi.db",
-                     ".verif-conflit.db", STATE):
+                     ".verif-conflit.db", ".base.db", ".protection.db", STATE):
             _unlink(self.local / name)
         for d in (self.local_receipts, self.local / ".vignettes", self.local / ".verrouille"):
             shutil.rmtree(d, ignore_errors=True)
