@@ -138,6 +138,8 @@ def test_real_window_discreet(tmp_path, end):
     assert r["lien_interne_nouvelle_fenetre"].endswith("/justificatifs")
     assert r["ouvert_dans_navigateur"][0] == "https://github.com/Scendari/tripcompta"
     assert r["ouvert_dans_navigateur"][1].startswith(f"http://127.0.0.1:{port}/")
+    assert r["reglages_navigateur_visible"] is True
+    assert r["reglages_navigateur_ouvre"].startswith(f"http://127.0.0.1:{port}/")
     assert len(r["enregistrer_sous"]) == 2 and r["enregistrer_sous"][0].endswith(".zip")
     assert r["enregistrer_sous"][1].startswith("Bilan_") and r["enregistrer_sous"][1].endswith(".pdf")
     sizes = r["fichiers_enregistres"]
@@ -245,3 +247,16 @@ def test_second_launch_brings_running_window_end_to_end(tmp_path, systeme):
         (tmp_path / "stop").write_text("1")
         first.wait(timeout=20)
         log.close()
+
+
+def test_open_in_browser_route_and_hidden_card(tmp_path):
+    """Réglages : la carte « Ouvrir dans le navigateur » est cachée par défaut (navigateur) ; la route ne marche que
+    dans la fenêtre."""
+    app = create_app(tmp_path / "d")
+    c = TestClient(app)
+    page = c.get("/reglages").text
+    assert "Ouvrir dans le navigateur" in page and "data-window-only hidden" in page
+    assert c.post("/fenetre/navigateur").status_code == 404
+    calls = []
+    app.state.fenetres = type("F", (), {"open_in_browser": lambda self: calls.append(1)})()
+    assert c.post("/fenetre/navigateur").json() == {"ok": True} and calls == [1]

@@ -138,9 +138,9 @@ def newer_data_app(err: NewerDatabaseError, updater) -> FastAPI:
     @app.post("/fenetre/{action}")
     def window_action(action: str):
         f = getattr(app.state, "fenetres", None)
-        if f is None or action not in ("nouvelle", "montrer"):
+        if f is None or action not in ("nouvelle", "montrer", "navigateur"):
             return JSONResponse({"ok": False}, status_code=404)
-        f.new_later() if action == "nouvelle" else f.show()
+        getattr(f, {"nouvelle": "new_later", "montrer": "show", "navigateur": "open_in_browser"}[action])()
         return {"ok": True}
 
     @app.get("/ping")
@@ -710,6 +710,15 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         if f is None:
             return JSONResponse({"ok": False}, status_code=404)
         f.new_later()
+        return {"ok": True}
+
+    @app.post("/fenetre/navigateur")
+    def window_to_browser():
+        """« Ouvrir dans le navigateur » (Réglages), quand Trip Compta tourne dans sa propre fenêtre."""
+        f = getattr(app.state, "fenetres", None)
+        if f is None:
+            return JSONResponse({"ok": False}, status_code=404)
+        f.open_in_browser()
         return {"ok": True}
 
     @app.post("/fenetre/montrer")

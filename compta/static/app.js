@@ -475,6 +475,10 @@
     input.focus();
     input.select();
   };
+  // éléments réservés à la fenêtre de l'app (ex. Réglages → « Ouvrir dans le navigateur ») ; pywebview arrive après
+  function showWindowOnly() { document.querySelectorAll("[data-window-only]").forEach((n) => { n.hidden = !inWindow(); }); }
+  showWindowOnly();
+  window.addEventListener("pywebviewready", showWindowOnly);
   document.addEventListener("keydown", (e) => {
     if (!inWindow() || !(e.metaKey || e.ctrlKey) || e.altKey) return;
     const k = e.key.toLowerCase();

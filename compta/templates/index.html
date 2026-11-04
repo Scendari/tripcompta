@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% from "_paperboat.html" import harbour %}
+{% from "_paperboat.html" import harbour, sea_life %}
+{% block bodyclass %}sea-page{% endblock %}
 {% block page %}
 <div class="home-page">
 {% macro new_trip_form(first=false, panel=false) -%}
@@ -82,5 +83,11 @@ document.querySelectorAll('.home-actions [data-toggle-row]').forEach(function (b
 </div>
 {% endif %}
 </div>
-{{ harbour() }}
 {% endblock %}
+{% block outside %}
+{{ harbour() }}
+{% set settled = cards and cards|selectattr('0.participants')|list|length == cards|length
+   and cards|rejectattr('1.to_collect')|list|length == cards|length and cards|rejectattr('1.to_refund')|list|length == cards|length %}
+{{ sea_life(settled) }}
+{% endblock %}
+{% block scripts %}<script src="/static/mer.js?v={{ STATIC_V }}"></script>{% endblock %}

@@ -178,6 +178,14 @@ def scenario(f):
         menu_item("Ouvrir dans le navigateur")
         wait(lambda: len(opened) >= 2)
         RES["ouvert_dans_navigateur"] = list(opened)
+        # Réglages → « Ouvrir dans le navigateur » (visible seulement dans la fenêtre ; Windows n'a plus de menu)
+        w.load_url(f.base + "reglages")
+        wait(lambda: (w.get_current_url() or "").endswith("/reglages"))
+        time.sleep(0.8)
+        RES["reglages_navigateur_visible"] = w.evaluate_js("!document.querySelector('[data-window-only]').hidden")
+        n_open = len(opened)
+        w.evaluate_js("document.querySelector('[data-window-only]').click()")
+        RES["reglages_navigateur_ouvre"] = wait(lambda: len(opened) > n_open) and opened[-1]
 
         # téléchargements : ZIP et bilan PDF (Content-Disposition: attachment) -> « Enregistrer sous… »
         w.load_url(f.base + f"v/{tid}/export")
