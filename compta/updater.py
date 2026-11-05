@@ -186,8 +186,8 @@ class Updater:
         if loc is None:
             return False, "L'application ne tourne pas depuis une version installée."
         target, _ = loc
-        if sys.platform == "win32":
-            return True, ""                      # l'installeur installe pour l'utilisateur (pas de droits admin)
+        if (asset_name() or "").endswith(".exe"):
+            return True, ""                      # Windows : l'installeur installe pour l'utilisateur (sans droits admin)
         if "/AppTranslocation/" in target.as_posix():  # Mac : app ouverte depuis Téléchargements, isolée par macOS
             return False, ("Trip Compta tourne depuis le dossier où tu l'as téléchargée : macOS l'empêche de se "
                            "remplacer. Glisse-la dans le dossier Applications, puis relance-la.")
