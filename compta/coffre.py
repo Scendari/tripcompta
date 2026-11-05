@@ -61,6 +61,10 @@ class Coffre:
         self.published_at: float | None = None
         self.mutex = threading.RLock()
         self.before_replace = None               # rappel : refermer la base avant de remplacer / effacer la copie
+        self.on_conflict = None                  # rappel : la version du dossier a été reprise (rouvrir la base)
+        self._seen_mtime = None
+        self._stop = threading.Event()
+        self._thread = None
 
     # ------------------------------------------------------------------ chemins
     @property
@@ -250,6 +254,38 @@ class Coffre:
             finally:
                 snap.unlink(missing_ok=True)
 
+    def publish_if_changed(self) -> str | None:
+        """La copie de travail a été modifiée par un autre programme (l'IA, via le serveur MCP) : on l'enregistre
+        dans le dossier sans attendre (sinon un plantage la perdrait : la copie en clair est effacée au démarrage
+        suivant). Un simple coup d'œil à la date du fichier ; None si rien n'a bougé."""
+        if self.vault is None:
+            return None
+        try:
+            m = os.stat(self.local_db).st_mtime_ns
+        except OSError:
+            return None
+        if m == self._seen_mtime:
+            return None
+        self._seen_mtime = m
+        r = self.publish()
+        if r == "conflit" and self.on_conflict:
+            self.on_conflict()
+        return r
+
+    def watch(self, every: float = 3.0) -> None:
+        """Toutes les quelques secondes, tant que l'application tourne : publish_if_changed()."""
+        if self._thread is not None:
+            return
+
+        def loop():
+            while not self._stop.wait(every):
+                try:
+                    self.publish_if_changed()
+                except Exception:
+                    pass
+        self._thread = threading.Thread(target=loop, daemon=True, name="tripcompta-coffre")
+        self._thread.start()
+
     # ------------------------------------------------------------------ justificatifs
     def _receipt_role(self, name: str) -> str:
         return f"justificatif:{name}"
@@ -399,6 +435,7 @@ class Coffre:
 
     def stop(self) -> None:
         """En quittant : rien en clair ne reste sur l'ordinateur."""
+        self._stop.set()
         if self.vault is not None:
             self.lock()
 

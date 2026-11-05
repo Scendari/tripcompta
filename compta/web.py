@@ -345,8 +345,11 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     app.state.startup_notices = [n for n in (db.recovered_notice(), writer_notice(db)) if n]
     if vault_box is not None:
         vault_box.before_replace = lambda: db.engine.dispose()
+        vault_box.on_conflict = lambda: db.after_replace()
         import atexit
         atexit.register(vault_box.stop)
+        if (coffre or {}).get("watch", True):
+            vault_box.watch()                    # saisies de l'IA (autre programme) : enregistrées sans attendre
     if updater is None:
         upd.start_background()
     # « Défaire » est proposé dans le message qui suit une action, et ne vaut que pour CETTE action :
@@ -1162,6 +1165,9 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         # jusqu'au redémarrage : verrouillé, avec une base vide d'attente (surtout rien de recréé en clair dans le dossier)
         vault_box = app.state.coffre = CF.Coffre(F, local, host=opts.get("host"))
         vault_box.before_replace = lambda: db.engine.dispose()
+        vault_box.on_conflict = lambda: db.after_replace()
+        if opts.get("watch", True):
+            vault_box.watch()
         vault_box._flag_locked(True)
         db.reopen(local / ".verrouille", receipts_in_home=False)
         return vault
