@@ -152,9 +152,9 @@ def divers(tmp_path):
       Plongées 800 pour Anne, Bruno, Chloé, David       → 200 chacun
       Stage 1 000 pour Eva seule (le cas extrême)
       Covoit 300 pour Anne, Bruno, Chloé                → 100 chacun
-    Médianes sur les 5 plongeurs : Logement [100 ×5] = 100 ; Plongée [200, 200, 200, 200, 1000] = 200 ;
-    Transport [0, 0, 100, 100, 100] = 100 → total 400 € (25 / 50 / 25 %).
-    Si Zoé comptait : Transport [0, 0, 0, 100, 100, 100] = 50. Si Félix comptait : 7 valeurs, Transport = 0."""
+    Médianes sur les 6 participants (Zoé comprise : les rôles ne comptent pas) : Logement [100 ×6] = 100 ;
+    Plongée [0, 200, 200, 200, 200, 1000] = 200 ; Transport [0, 0, 0, 100, 100, 100] = 50
+    → total 350 € (57 / 29 / 14 %). Si Félix comptait : 7 valeurs, Transport = 0."""
     app = create_app(tmp_path / "d")
     ops = Ops(app.state.db)
     tid = ops.create_trip("Sortie test")["voyage_id"]
@@ -176,15 +176,15 @@ def test_typical_diver_by_hand(divers):
     assert shares == {"Anne": 40000, "Bruno": 40000, "Chloé": 40000, "David": 30000, "Eva": 110000,
                       "Zoé": 10000, "Félix": 0}
     D = V["diver"]
-    assert D["n"] == 5 and D["total"] == 400
+    assert D["n"] == 6 and D["total"] == 350
     assert [(x["name"], x["euros"], x["pct"]) for x in D["rows"]] == [
-        ("Plongée", 200, 50), ("Logement", 100, 25), ("Transport", 100, 25)]
+        ("Plongée", 200, 57), ("Logement", 100, 29), ("Transport", 50, 14)]
     assert D["text"].splitlines() == [
-        "Combien a coûté « Sortie test » pour un plongeur (environ) :",
-        "- Plongée : 200 €", "- Logement : 100 €", "- Transport : 100 €",
-        "Total : environ 400 €", "(montant médian sur 5 plongeurs, désistements non comptés)"]
+        "Combien a coûté « Sortie test » pour un participant (environ) :",
+        "- Plongée : 200 €", "- Logement : 100 €", "- Transport : 50 €",
+        "Total : environ 350 €", "(montant médian sur 6 participants, désistements non comptés)"]
     page = TestClient(app).get(f"/v/{tid}/en-images").text
-    assert "Coût moyen pour un participant" in page and "≈ 400 €" in page
+    assert "Coût moyen pour un participant" in page and "≈ 350 €" in page
     assert "Eva" not in page.split('id="v2b"')[1].split("</section>")[0]      # personne n'est nommé
 
 
@@ -194,11 +194,11 @@ def test_typical_diver_even_count_and_rounding():
 
 
 def test_typical_diver_hidden_when_too_few(tmp_path):
-    """Moins de 3 plongeurs : la médiane dévoilerait la part de quelqu'un, pas d'encadré."""
+    """Moins de 3 participants : la médiane dévoilerait la part de quelqu'un, pas d'encadré."""
     app = create_app(tmp_path / "d")
     ops = Ops(app.state.db)
     tid = ops.create_trip("Petit")["voyage_id"]
-    ops.add_participants(tid, ["Anne", "Bruno", {"nom": "Zoé", "accompagnant": True}])
+    ops.add_participants(tid, ["Anne", {"nom": "Zoé", "accompagnant": True}])
     ops.add_expense(tid, "Gîte", categorie="Logement", montant_reel="300")
     with app.state.db.Session() as s:
         t = s.get(M.Trip, tid)

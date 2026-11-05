@@ -13,7 +13,7 @@
   {% if known %}
   <form method="post" action="/v/{{ trip.id }}/participants/reprendre" class="known" data-known>
     <h3>Déjà venus sur un autre voyage</h3>
-    <p class="hint">Coche les personnes à reprendre : leur nom, leur téléphone, leur e-mail et « plongeur ou accompagnant » sont recopiés.</p>
+    <p class="hint">Coche les personnes à reprendre : leur nom, leur téléphone, leur e-mail et « plongeur ou accompagnant » (si ces rôles existent dans ce voyage) sont recopiés.</p>
     <div class="known-tools">
       <input type="search" placeholder="Chercher un nom…" aria-label="Chercher un nom" data-known-filter>
       {% for kt in known_trips %}<button type="button" class="btn small ghost" data-known-trip="{{ kt.id }}">Tout le groupe « {{ kt.name }} » ({{ kt.people|length }})</button>{% endfor %}
@@ -150,13 +150,13 @@
 
 {% endblock %}
 
-{# Pastilles : rôles (plongeur / accompagnant + rôles d'équipe), famille (une seule), groupes (plusieurs) #}
+{# Pastilles : rôles (étiquettes, plusieurs), famille (une seule), groupes (plusieurs) #}
 {% macro person_chips(p, k) -%}
 <div class="field wide"><span class="label-like">Rôles</span>
   <input type="hidden" name="roles_form" value="1">
   <div class="choice small" data-none-group>
     <label><input type="checkbox" data-none {{ 'checked' if not p or not p.role_list }}> Aucun</label>
-    {% for rk, v in trip_roles.items() %}<label title="{{ ROLE_TITLES.get(rk, '') }}"><input type="checkbox" name="r_{{ rk }}" value="1" {% if rk in ('plongeur', 'accompagnant') %}data-pair="plonge" {% endif %}{{ 'checked' if p and rk in p.role_list }}> {{ v }}</label>{% endfor %}
+    {% for rk, v in trip_roles.items() %}<label title="{{ ROLE_TITLES.get(rk, '') }}"><input type="checkbox" name="r_{{ rk }}" value="1" {{ 'checked' if p and rk in p.role_list }}> {{ v }}</label>{% endfor %}
   </div></div>
 <div class="field wide"><span class="label-like">Famille</span>
   <div class="choice small" data-family-pick>

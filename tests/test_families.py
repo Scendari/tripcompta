@@ -349,6 +349,12 @@ def test_browser_family_screens(fam_server):
         pg.check('#add-form input[name="r_accompagnant"]')
         pg.click("#add-form button:has-text('Ajouter')")
         assert "dans la famille Lebrun" in pg.locator(".flash").inner_text()
+        # proposition : les dépenses de tout le monde et celle des accompagnants (pas les plongées), pré-cochées
+        assert pg.locator("h1", has_text="L'ajouter aussi à ces dépenses ?").is_visible()
+        items = pg.locator(".join-item input")
+        assert items.count() == 3 and all(items.nth(i).is_checked() for i in range(3))
+        assert "Plongées" not in pg.locator(".join-form").inner_text()
+        pg.click("text=Pas maintenant")
         assert pg.locator("tr.family-row", has_text="Famille Lebrun").count() == 1
         # Nouvelle dépense : pastilles de rôle / famille dans « Pour qui ? »
         pg.goto(f"{base}/v/{tid}/depenses/nouvelle")

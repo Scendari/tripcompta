@@ -17,8 +17,9 @@ Deux situations :
 - Un **voyage** a des **participants** et des **dépenses**.
 - Un participant peut être **accompagnant** : il vient au voyage mais ne plonge pas (il partage le
   logement, les repas, le transport, mais pas les plongées). Les autres sont les **plongeurs**.
-- Rôles dans le groupe : un **organisateur** (un seul), des **co-organisateurs**, un ou plusieurs **DP**
-  (directeurs de plongée). Ce sont des participants ; une même personne peut cumuler (organisateur et DP).
+- Rôles dans le groupe : un **organisateur** (un seul), des **co-organisateurs**, et les rôles propres au
+  voyage (DP, moniteur, conducteur…). Ce sont des **étiquettes** : elles servent à s'y retrouver et à désigner
+  vite des personnes dans « pour » ; elles ne changent aucun montant. Une même personne peut en cumuler.
   Le voyage peut avoir ses **propres rôles** (conducteur, photographe…) : déclare-les dans
   `"voyage": {"roles_du_voyage": ["Conducteur"]}`, puis `"roles": ["Conducteur"]` sur les participants.
   Un rôle sert aussi dans `pour` (`"pour": "Conducteur"` ou `"conducteurs"` = tous les conducteurs).
@@ -43,7 +44,7 @@ Deux situations :
   qu'il doit).
 - **Montant pas encore connu** : `"a_venir": true` sans montant. La dépense est notée (qui a payé, pour qui) et
   signalée dans les alertes ; elle compte pour 0 € jusqu'à ce qu'on donne le montant.
-- **Pour qui** : `"tous"`, un **rôle** (`"plongeurs"`, `"accompagnants"`, `"DP"`…), une liste de
+- **Pour qui** : `"tous"`, un **rôle** (`"plongeurs"`, `"accompagnants"`, `"DP"` s'il existe dans le voyage…), une liste de
   prénoms (on peut y mettre `"famille Lebrun"` = tous ses membres, un rôle ou un groupe), ou des **parts inégales** (`"parts": {"Luc": 6, "Hugo": 4}`
   = nombre de plongées, de nuits, demi-part `0.5`…). Le montant est réparti au prorata des parts.
 - **Versements** : argent donné par un participant à l'asso (acompte, solde). **Remboursements** :
@@ -152,8 +153,7 @@ Deux situations :
     "fin": "2027-05-16",
     "organisateur": "Stéphane",
     "co_organisateurs": ["Marie"],
-    "dp": ["Luc"],
-    "roles_du_voyage": ["Conducteur"],
+    "roles_du_voyage": ["Conducteur", "DP"],
     "asso": "Club Subaqua",
     "caisse": "asso",
     "note": "Club : Port-Cros Plongée. Départ de Lyon."
@@ -228,7 +228,7 @@ On n'y met que ce qui change. Les noms de dépenses et de personnes sont ceux de
   "voyage_id": 2,
   "participants": [{"nom": "Zoé Lebrun", "famille": "Lebrun", "accompagnant": true}],
   "participants_a_modifier": [
-    {"participant": "Luc", "roles": ["dp"]},
+    {"participant": "Luc", "roles": ["DP"]},
     {"participant": "Hugo", "accompagnant": true, "telephone": "06 11 22 33 44"}
   ],
   "depenses": [
@@ -277,15 +277,16 @@ On n'y met que ce qui change. Les noms de dépenses et de personnes sont ceux de
 - `voyage.roles_du_voyage` : rôles propres au voyage (`["Conducteur", "Photographe"]`), à déclarer avant de les
   utiliser dans `roles` ou `pour`. `voyage.caisse` : `"asso"` ou le participant qui tient la caisse.
 - `voyage.organisateur` : son nom tel qu'écrit dans `participants` (s'il ne vient pas au voyage, son nom) ;
-  `voyage.co_organisateurs` et `voyage.dp` : listes de prénoms de participants (DP = directeur de plongée).
-  On peut aussi mettre `"roles": ["organisateur", "dp"]` sur un participant.
+  `voyage.co_organisateurs` : liste de prénoms de participants. On peut aussi mettre
+  `"roles": ["organisateur", "DP"]` sur un participant (un rôle propre au voyage, comme « DP », doit être
+  déclaré dans `voyage.roles_du_voyage`).
 - `familles` (facultatif) : `{"nom": "Lebrun", "paie": "Paul Lebrun"}` pour dire qui paie pour la
   famille (sinon, le premier membre).
 - **Noms** : exactement ceux de la liste `participants` (accents et majuscules indifférents) ; avec prénom et
   nom, le nom complet partout.
   Pour un versement ou un remboursement, `participant` peut être `"Famille Lebrun"`.
 - `paye_par` : `"asso"`, un nom, ou plusieurs payeurs `{"Paul Lebrun": "900", "asso": "300"}`.
-  `pour` : `"tous"`, un rôle (`"plongeurs"`, `"accompagnants"`, `"organisateurs"`, `"DP"`), un groupe de
+  `pour` : `"tous"`, un rôle (`"plongeurs"`, `"accompagnants"`, `"organisateurs"`, ou un rôle du voyage), un groupe de
   `"groupes"`, ou une liste (prénoms, `"famille Lebrun"`, rôles, groupes). C'est la liste des personnes qui est
   enregistrée : quelqu'un ajouté plus tard n'entre pas tout seul dans une dépense déjà saisie. `sauf` : personnes ou groupes à retirer. Pour des parts inégales, utilise
   `parts` à la place de `pour` (une personne absente de `parts` ne paie rien).

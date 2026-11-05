@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div class="grow"><h1>L'ajouter aussi à ces dépenses ?</h1>
+<p class="muted">Ces dépenses concernaient exactement {{ 'ces personnes' if rows|length > 1 else 'ce groupe de personnes' }}. Décoche celles qui ne {{ 'les' if rows|length > 1 else 'le' }} concernent pas (par exemple une sortie qui a eu lieu avant son arrivée).</p></div></div>
+<form method="post" action="/v/{{ trip.id }}/rejoindre" class="join-form">
+  <input type="hidden" name="next" value="{{ next_url }}">
+  {% for row in rows %}
+  <section class="card join-person">
+    <h3 style="margin-top:0">{{ row.p.name }}{% if row.whys %} <span class="muted small" style="font-weight:normal">· maintenant dans {% for w in row.whys %}« {{ w }} »{{ ', ' if not loop.last }}{% endfor %}</span>{% endif %}</h3>
+    <div class="check-col">
+      {% for it in row['items'] %}
+      <label class="join-item"><input type="checkbox" name="add" value="{{ row.p.id }}.{{ it.e.id }}" checked>
+        <span><b>{{ it.e.label }}</b>{% if it.e.date %} <span class="muted small">· {{ it.e.date|date }}</span>{% endif %}
+        <span class="muted small">· {{ it.total|money }} pour {{ it.n }} pers.{% if it.why %} ({{ it.why }}){% endif %}</span></span></label>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+  <div class="row" style="gap:.5rem;justify-content:flex-end">
+    <a class="btn ghost" href="{{ next_url }}">Pas maintenant</a>
+    <button class="btn">Ajouter</button>
+  </div>
+</form>
+{% endblock %}

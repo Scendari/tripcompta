@@ -1,4 +1,5 @@
-"""Rôles dans le groupe : organisateur (un seul), co-organisateurs, DP (directeurs de plongée)."""
+"""Rôles dans le groupe : organisateur (un seul), co-organisateurs ; « DP » (directeur de plongée) n'est plus
+qu'une étiquette ordinaire du voyage (« perso:DP »), sans place à part."""
 import re
 import sqlite3
 
@@ -26,15 +27,20 @@ def demo(tmp_path):
     return TestClient(app), app, tid, P
 
 
+DP = "perso:DP"
+
+
 def team(app, tid):
     with app.state.db.Session() as s:
         t = s.get(M.Trip, tid)
-        return {r: sorted(p.name for p in S.with_role(t, r)) for r in S.TEAM_ROLES}
+        out = {r: sorted(p.name for p in S.with_role(t, r)) for r in S.TEAM_ROLES}
+        out["dp"] = sorted(p.name for p in S.with_role(t, DP))
+        return out
 
 
 def test_parse_roles():
-    assert S.parse_roles("Organisateur, DP") == ["organisateur", "dp"]
-    assert S.parse_roles(["directeur de plongée", "Co-organisatrice"]) == ["co-organisateur", "dp"]
+    assert S.parse_roles("Organisateur, DP") == ["organisateur", DP]
+    assert S.parse_roles(["directeur de plongée", "Co-organisatrice"]) == ["co-organisateur", DP]
     assert S.parse_roles(["co_organisateur", "orga"]) == ["organisateur", "co-organisateur"]
     assert S.parse_roles("") == []
     with pytest.raises(ValueError, match="Rôle inconnu : « trésorier »"):
@@ -47,13 +53,13 @@ def test_demo_team_everywhere(demo):
     dash = clean(c.get(f"/v/{tid}").text)
     m = re.search(r'id="team">(.*?)<h2 class="sec-sep">Les comptes', dash, re.S)
     txt = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", m.group(1))).replace(" ,", ",")
-    assert "Équipe Stéphane organisateur · avec Marie" in txt and "DP : Luc, Thierry" in txt
+    assert "Équipe Stéphane organisateur · avec Marie" in txt and "DP" not in txt   # DP : plus dans l'Équipe
     parts = c.get(f"/v/{tid}/participants").text
-    assert 'title="Directeur de plongée">DP</span>' in parts and 'role-organisateur' in parts
+    assert 'class="pill role role-perso" title="">DP</span>' in parts and 'role-organisateur' in parts
     fiche = c.get(f"/v/{tid}/p/{P['Thierry']}").text                   # onglet Comptes, filtré
-    assert 'title="Directeur de plongée">DP</span>' in fiche
+    assert 'role-perso" title="">DP</span>' in fiche
     edit = parts.split(f'id="pe{P["Thierry"]}"')[1].split("</tr>")[0]       # ligne « Modifier » de la liste
-    assert 'name="r_dp" value="1" checked' in edit
+    assert 'name="r_perso:DP" value="1" checked' in edit
     # dans « Qui a payé ? », l'organisateur puis la co-organisatrice en tête
     form = c.get(f"/v/{tid}/depenses/nouvelle").text
     opts = re.findall(r'<option value="\d+" >([^<]+)</option>', form.split('id="payer_sel"')[1].split("</select>")[0])
@@ -66,12 +72,14 @@ def test_roles_form_single_organizer_and_undo(demo):
             f"dp_{P['Stéphane']}": "1"}
     r = c.post(f"/v/{tid}/roles", data=data, follow_redirects=True)
     assert "Équipe enregistrée" in r.text
-    assert team(app, tid) == {"organisateur": ["Marie"], "co-organisateur": ["Stéphane"], "dp": ["Hugo", "Stéphane"]}
+    # l'ancien formulaire « Équipe » : dp_ ajoute l'étiquette DP, sans retirer celle des autres (ce n'est plus l'équipe)
+    assert team(app, tid) == {"organisateur": ["Marie"], "co-organisateur": ["Stéphane"],
+                              "dp": ["Hugo", "Luc", "Stéphane", "Thierry"]}
     c.post("/annuler")
     assert team(app, tid)["organisateur"] == ["Stéphane"]
     # depuis la fiche : nommer Julien organisateur le retire à Stéphane (un seul organisateur)
     c.post(f"/v/{tid}/participants/{P['Julien']}", data={"name": "Julien", "roles_form": "1",
-                                                          "r_organisateur": "1", "r_dp": "1"})
+                                                          "r_organisateur": "1", "r_perso:DP": "1"})
     assert team(app, tid)["organisateur"] == ["Julien"] and "Julien" in team(app, tid)["dp"]
     # enlever tous ses rôles
     c.post(f"/v/{tid}/participants/{P['Julien']}", data={"name": "Julien", "roles_form": "1"})
@@ -90,12 +98,12 @@ def test_trip_edit_form_and_pdf(demo):
     text = clean("\n".join(doc[i].get_textpage().get_text_range() for i in range(len(doc))))
     flat = re.sub(r"\s+", " ", text)
     assert "Organisé par Stéphane" in flat and "Co-organisation : Marie" in flat
-    assert "Directeurs de plongée (DP) : Luc, Thierry" in flat
-    assert "Stéphane (org.)" in flat and "Thierry (DP)" in flat and "Marie (co-org.)" in flat
-    assert "DP = directeur de plongée" in flat
+    assert "plongée (DP)" not in flat and "Thierry (" not in flat     # DP : plus d'en-tête ni d'abréviation
+    assert "Stéphane (org.)" in flat and "Marie (co-org.)" in flat
+    assert "org. = organisateur, co-org. = co-organisateur" in flat
     # sans organisateur désigné : le nom libre du voyage est utilisé
     c.post(f"/v/{tid}/roles", data={})
-    assert team(app, tid) == {"organisateur": [], "co-organisateur": [], "dp": []}
+    assert team(app, tid) == {"organisateur": [], "co-organisateur": [], "dp": ["Luc", "Thierry"]}
     assert 'id="t_organizer"' in c.get(f"/v/{tid}").text
     doc = pdfium.PdfDocument(c.get(f"/v/{tid}/export.pdf").content)
     assert "Organisé par Stéphane" in clean(doc[0].get_textpage().get_text_range())
@@ -108,7 +116,9 @@ def test_ops_and_import(tmp_path):
             "participants": ["Anne", {"nom": "Bob", "roles": ["co-organisateur"]}, "Chloé"]}
     r = ops.import_trip(data)
     eq = r["apercu"]["equipe"]
-    assert eq == {"organisateur": None, "co_organisateurs": ["Anne", "Bob"], "dp": ["Anne", "Bob"]}
+    assert eq == {"organisateur": None, "co_organisateurs": ["Anne", "Bob"]}
+    roles = {p["nom"]: p["roles"] for p in r["apercu"]["participants"]}
+    assert "DP" in roles["Anne"] and "DP" in roles["Bob"] and "DP" not in roles["Chloé"]   # l'ancien « dp » : étiquette
     assert r["apercu"]["organisateur"] == "Bernard"            # ne participe pas : reste un simple nom
     tid = r["voyage_id"]
     ops.set_roles(tid, "Chloé", ["organisateur"])
@@ -121,7 +131,7 @@ def test_ops_and_import(tmp_path):
         ops.set_roles(tid, "Bob", ["trésorier"])
     with pytest.raises(OpsError) as e:
         ops.import_trip({"voyage": {"nom": "x", "dp": ["Zoé"]}, "participants": ["A"]}, simulation=True)
-    assert "dp « Zoé »" in e.value.errors[0] and "Faut-il l'ajouter" in e.value.errors[0]
+    assert "DP « Zoé »" in e.value.errors[0] and "Faut-il l'ajouter" in e.value.errors[0]
     with pytest.raises(OpsError, match="A : Rôle inconnu"):
         ops.import_trip({"voyage": {"nom": "x"}, "participants": [{"nom": "A", "roles": "chef"}]}, simulation=True)
 
@@ -132,8 +142,9 @@ def test_api_and_ai_texts(tmp_path):
     tid = c.post("/api/import", json={"donnees": {"voyage": {"nom": "x"}, "participants": ["A", "B"]}}).json()["voyage_id"]
     r = c.put(f"/api/voyages/{tid}/participants/B/roles", json={"roles": ["dp", "organisateur"]})
     assert r.status_code == 200 and "Organisateur, DP" in r.json()["message"]
-    assert "DP (directeur de plongée) :" in importer.template() and "Co-organisateur(s) :" in importer.template()
-    assert '"co_organisateurs"' in importer.guide() and '"dp"' in importer.guide()
+    assert "Autres rôles utiles pour ce voyage (DP" in importer.template() and "Co-organisateur(s) :" in importer.template()
+    assert "DP (directeur de plongée) :" not in importer.template()          # plus de case DP à part
+    assert '"co_organisateurs"' in importer.guide() and '"dp"' not in importer.guide()
 
 
 def test_old_database_gets_roles_column(tmp_path):
@@ -153,7 +164,8 @@ def test_old_database_gets_roles_column(tmp_path):
     ops = Ops(Database(d))
     assert ops.trip(1)["participants"][0]["roles"] == [] and ops.trip(1)["organisateur"] == "Luc"
     ops.set_roles(1, "Luc", ["organisateur", "dp"])
-    assert ops.trip(1)["equipe"] == {"organisateur": "Luc", "co_organisateurs": [], "dp": ["Luc"]}
+    assert ops.trip(1)["equipe"] == {"organisateur": "Luc", "co_organisateurs": []}
+    assert ops.trip(1)["participants"][0]["roles"] == ["organisateur", "DP"]
 
 
 def test_browser_roles_card(tmp_path):
@@ -181,7 +193,7 @@ def test_browser_roles_card(tmp_path):
             pg.on("pageerror", lambda e: errors.append(str(e)))
             pg.goto(base + "/participants")
             assert pg.locator("#roles").count() == 0                      # plus de carte « Rôles » à part
-            for name, role in (("Camille", "r_organisateur"), ("Hugo", "r_dp")):
+            for name, role in (("Camille", "r_organisateur"), ("Hugo", '"r_perso:DP"')):
                 row = pg.locator("tr", has=pg.locator(".name-btn b", has_text=name)).first
                 row.locator("button", has_text="Modifier").click()
                 edit = pg.locator("tr.edit-row:visible")
@@ -190,7 +202,7 @@ def test_browser_roles_card(tmp_path):
                 assert "modifié" in pg.locator(".flash").inner_text()
             row = pg.locator("tr", has=pg.locator(".name-btn b", has_text="Camille")).first
             assert row.locator(".role-organisateur").is_visible()
-            assert pg.locator("tr", has=pg.locator(".name-btn b", has_text="Hugo")).first.locator(".role-dp").is_visible()
+            assert pg.locator("tr", has=pg.locator(".name-btn b", has_text="Hugo")).first.locator(".role-perso", has_text="DP").is_visible()
             pg.goto(base)
             assert "Camille organisateur" in re.sub(r"\s+", " ", pg.locator("#team").inner_text())
             for w in (390, 768):

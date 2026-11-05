@@ -87,7 +87,8 @@ def seed_demo(db: Database, replace: bool = True) -> int:
         s.flush()
         P = {p.name: p.id for p in t.participants}
         C = {c.name: c.id for c in t.categories}
-        roles = {"Stéphane": "organisateur", "Marie": "co-organisateur", "Thierry": "dp", "Luc": "dp"}
+        roles = {"Stéphane": "organisateur", "Marie": "co-organisateur", "Thierry": "perso:DP", "Luc": "perso:DP"}
+        t.roles_conf = '{"perso": ["DP"], "masques": []}'          # « DP » : une étiquette ordinaire de ce voyage
         for p in t.participants:
             p.roles = ",".join(x for x in ("plongeur", roles.get(p.name, "")) if x)
         everyone = {n: 1 for n in PEOPLE}

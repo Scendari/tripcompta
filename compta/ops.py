@@ -118,7 +118,7 @@ def category_id(s, t: M.Trip, name) -> int:
     for c in t.categories:
         if E.sort_key(c.name) == E.sort_key(name):
             return c.id
-    c = M.Category(name=name, audience=S.guess_audience(name), position=len(t.categories))
+    c = M.Category(name=name, audience="", position=len(t.categories))
     t.categories.append(c)
     s.flush()
     return c.id
@@ -248,14 +248,13 @@ def trip_detail(t: M.Trip, mode=E.ACTUAL) -> dict:
     out["caisse"] = S.cashier(t).name if S.cashier(t) else "asso"
     out["mode_de_calcul"] = "réel" if mode == E.ACTUAL else "prévu"
     out["categories"] = [c.name for c in t.categories]
-    out["categories_public"] = {c.name: S.audience_of(c) for c in t.categories}
     out["participants"] = []
     for p in t.participants:
         ps = r.people[p.id]
         out["participants"].append(dict(
             id=p.id, nom=p.name, telephone=p.phone, email=p.email, note=p.note,
             famille=p.family.name if p.family else None, accompagnant=bool(p.companion),
-            roles=[r if r in S.ROLES else S.role_label(r) for r in p.role_list if r not in S.FIXED_ROLES],  # plongeur / acc. : « accompagnant »
+            roles=[r if r in S.ROLES else S.role_label(r) for r in p.role_list if r not in (S.DIVER, S.COMPANION)],  # plongeur / acc. : « accompagnant »
             desiste=p.id in wd, sa_part=to_euros(ps.share), a_verse=to_euros(ps.paid),
             a_avance=to_euros(ps.advanced), rembourse_par_asso=to_euros(ps.refunded),
             reste=None if p.family else to_euros(ps.balance),
@@ -263,8 +262,7 @@ def trip_detail(t: M.Trip, mode=E.ACTUAL) -> dict:
                        "doit encore" if ps.balance > 0 else "l'asso lui doit" if ps.balance < 0 else "à jour"),
         ))
     out["equipe"] = dict(organisateur=next(iter(x.name for x in S.with_role(t, S.ORGANIZER)), None),
-                         co_organisateurs=[x.name for x in S.with_role(t, S.CO_ORGANIZER)],
-                         dp=[x.name for x in S.with_role(t, S.DP)])
+                         co_organisateurs=[x.name for x in S.with_role(t, S.CO_ORGANIZER)])
     out["familles"] = [dict(nom=a.name, membres=[m.name for m in a.members], paie=r.people[a.referent].name,
                             sa_part=to_euros(a.share), deja_donne=to_euros(a.paid + a.advanced - a.refunded),
                             reste=to_euros(a.balance)) for a in r.accounts if a.is_family]
@@ -358,9 +356,10 @@ def _truthy(v) -> bool:
 
 def do_add_participants(s, t, noms, inclure_dans_depenses_communes=True, famille=None, accompagnant=False):
     """noms : liste de prénoms, ou de dicts {nom, telephone, email, note, famille, accompagnant}.
-    Les nouveaux sont ajoutés aux dépenses de groupe existantes (sauf les accompagnants pour la plongée)."""
+    Les nouveaux sont ajoutés aux dépenses existantes de tout le monde, et à celles qui concernaient exactement les
+    membres d'une étiquette, d'un groupe ou d'une famille qu'ils rejoignent."""
     existing = {E.sort_key(p.name) for p in t.participants}
-    shared = S.shared_expenses(t)
+    before = S.label_members(t)
     added, skipped = [], []
     for n in noms:
         info = n if isinstance(n, dict) else {"nom": n}
@@ -387,15 +386,20 @@ def do_add_participants(s, t, noms, inclure_dans_depenses_communes=True, famille
             rs = S.parse_roles(info.get("roles") or [], t)
         except ValueError as e:
             raise OpsError(f"{name} : {e}")
-        if S.DIVER not in rs and S.COMPANION not in rs:   # par défaut : plongeur, sauf accompagnant
-            rs.append(S.COMPANION if comp else S.DIVER)
+        if S.DIVER not in rs and S.COMPANION not in rs:   # par défaut : plongeur, sauf accompagnant (s'ils existent ici)
+            dflt = S.COMPANION if comp else S.DIVER
+            if dflt in S.trip_roles(t):
+                rs.append(dflt)
         S.set_roles(t, p, rs)
         existing.add(E.sort_key(name))
         added.append(p)
-        if inclure_dans_depenses_communes:
-            for e in shared:
-                if S.default_join(e, comp, t):
-                    e.shares.append(M.ExpenseShare(participant_id=p.id, weight=1.0))
+    if inclure_dans_depenses_communes and added:
+        mine = {p.id for p in added}
+        exps = {e.id: e for e in t.expenses}
+        for sug in S.join_suggestions(t, before):
+            if sug["pid"] in mine:
+                exps[sug["eid"]].shares.append(M.ExpenseShare(participant_id=sug["pid"], weight=1.0))
+        s.flush()
     return added, skipped
 
 

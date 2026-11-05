@@ -330,9 +330,6 @@
     if (!box || ev.target.type !== "checkbox") return;
     const none = box.querySelector("input[data-none]");
     const others = Array.from(box.querySelectorAll("input[type=checkbox]:not([data-none])"));
-    if (ev.target.dataset.pair && ev.target.checked) {          // Plongeur / Accompagnant : l'un ou l'autre
-      box.querySelectorAll(`input[data-pair="${ev.target.dataset.pair}"]`).forEach((c) => { if (c !== ev.target) c.checked = false; });
-    }
     if (ev.target === none) { if (none.checked) others.forEach((c) => { c.checked = false; }); else if (!others.some((c) => c.checked)) none.checked = true; }
     else none.checked = !others.some((c) => c.checked);
   });

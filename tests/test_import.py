@@ -259,7 +259,7 @@ def test_update_preview_then_save_then_undo(demo_app):
     assert deps["Péage A7 aller-retour — voiture de Luc"]["paye_par"] == "Marie"
     assert deps["Pot de fin"]["reel"] == 45.0 and "Zoé" in deps["Pot de fin"]["pour"]
     hugo = next(p for p in d["participants"] if p["nom"] == "Hugo")
-    assert hugo["roles"] == ["dp"] and hugo["telephone"] == "06 00"
+    assert hugo["roles"] == ["DP"] and hugo["telephone"] == "06 00"           # l'étiquette DP du voyage
     assert next(p for p in d["participants"] if p["nom"] == "Zoé")["accompagnant"]
     resto_prevu = next(e for e in before["depenses"] if e["libelle"] == "Restaurant de clôture")["prevu"]
     tuba = next(e for e in before["depenses"] if e["libelle"] == "Sortie palmes-masque-tuba")
