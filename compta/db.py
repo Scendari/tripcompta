@@ -16,6 +16,7 @@ from .models import Base
 UNDO_KEEP = 30
 BACKUP_KEEP = 10
 VERSION_KEY = "app_version"
+WRITER_KEY = "dernier_ecrivain"        # {"ordinateur", "quand"} : le dernier ordinateur qui a modifié les voyages
 
 
 class NewerDatabaseError(Exception):
@@ -26,6 +27,82 @@ class NewerDatabaseError(Exception):
         self.stored, self.current, self.path = stored, current, path
         super().__init__(f"Ces données ont été utilisées par Trip Compta {stored}, plus récente que cette version "
                          f"({current}).")
+
+
+class DamagedDatabaseError(Exception):
+    """La base est abîmée et aucune sauvegarde lisible ne permet de la reprendre."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        super().__init__(f"Le fichier des voyages « {path} » est abîmé, et aucune sauvegarde lisible n'a été trouvée.")
+
+
+class DataUnavailableError(Exception):
+    """Le fichier des voyages est là mais pas lisible maintenant (pas encore téléchargé du cloud, disque ou dossier
+    synchronisé déconnecté…) : ce n'est PAS une base abîmée, on ne touche à rien."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        super().__init__(f"Le fichier des voyages « {path} » n'est pas disponible pour l'instant.")
+
+
+def db_state(path: Path) -> str:
+    """« ok », « abimee » (lisible mais abîmée, ou pas une base SQLite) ou « indisponible » (fichier encore dans le
+    cloud, disque débranché, accès refusé…). Lecture seule, rien n'est créé à côté."""
+    from .cloud import cloud_only
+    try:
+        if cloud_only(path):
+            return "indisponible"
+        with open(path, "rb") as fh:             # lisible ? (sinon : indisponible, pas abîmé)
+            head = fh.read(16)
+    except OSError:
+        return "indisponible"
+    if head and head != b"SQLite format 3\x00":
+        return "abimee"
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            row = con.execute("PRAGMA quick_check").fetchone()
+        finally:
+            con.close()
+    except sqlite3.DatabaseError as e:
+        msg = str(e).lower()
+        if "unable to open" in msg or "disk i/o" in msg or "locked" in msg or "readonly" in msg:
+            return "indisponible"
+        return "abimee"
+    return "ok" if row and row[0] == "ok" else "abimee"
+
+
+def db_intact(path: Path) -> bool:
+    """Vérification complète (integrity_check) : pour choisir une sauvegarde à reprendre."""
+    if db_state(path) != "ok":
+        return False
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro&immutable=1", uri=True)
+        try:
+            ok = con.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+            # une vraie base Trip Compta (pas un fichier SQLite quelconque)
+            return ok and bool(con.execute("SELECT 1 FROM sqlite_master WHERE name='trips'").fetchone())
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return False
+
+
+def human_when(d: dt.datetime, now: dt.datetime | None = None) -> str:
+    """« il y a 3 min », « aujourd'hui à 14 h 02 », « hier à 18 h 30 », « le 03/11 à 9 h 05 »."""
+    now = now or dt.datetime.now()
+    secs = (now - d).total_seconds()
+    if 0 <= secs < 60:
+        return "il y a moins d'une minute"
+    if 0 <= secs < 3600:
+        return f"il y a {int(secs // 60)} min"
+    hm = f"{d.hour} h {d.minute:02d}"
+    if d.date() == now.date():
+        return f"aujourd'hui à {hm}"
+    if d.date() == now.date() - dt.timedelta(days=1):
+        return f"hier à {hm}"
+    return f"le {d:%d/%m/%Y} à {hm}" if d.year != now.year else f"le {d:%d/%m} à {hm}"
 
 
 def stored_version(path: Path) -> str | None:
@@ -80,6 +157,15 @@ class Database:
         except OSError:
             pass
         self.path = self.dir / "compta.db"
+        # base abîmée (coupure pendant un enregistrement, cloud qui l'a mal recopiée…) : on reprend la sauvegarde
+        # lisible la plus récente ; le fichier abîmé est gardé à côté, jamais effacé
+        self.recovered = None
+        if self.path.exists() and self.path.stat().st_size:
+            state = db_state(self.path)
+            if state == "indisponible":
+                raise DataUnavailableError(self.path)
+            if state == "abimee":
+                self.recovered = self._recover()
         self.engine = create_engine(f"sqlite:///{self.path}", connect_args={"check_same_thread": False})
 
         @event.listens_for(self.engine, "connect")
@@ -108,6 +194,30 @@ class Database:
             c.exec_driver_sql("INSERT INTO settings (key, value) VALUES (?, ?) "
                               "ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE value != excluded.value",
                               (VERSION_KEY, self.app_version))
+
+    # ---------------------------------------------------------- dernier ordinateur qui a écrit
+    def mark_writer(self):
+        """Note dans la base quel ordinateur la modifie (appelé avec chaque instantané « Annuler », donc à chaque
+        modification, et après Défaire / Rétablir). Hors de l'instantané : « Défaire » n'annule que l'action."""
+        from .cloud import computer_name
+        value = json.dumps({"ordinateur": computer_name(),
+                            "quand": dt.datetime.now().isoformat(timespec="seconds")}, ensure_ascii=False)
+        try:
+            with self.engine.begin() as c:
+                c.exec_driver_sql("INSERT INTO settings (key, value) VALUES (?, ?) "
+                                  "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (WRITER_KEY, value))
+        except Exception:                          # jamais au prix de l'action elle-même
+            pass
+
+    def last_writer(self) -> dict | None:
+        try:
+            with self.engine.connect() as c:
+                row = c.exec_driver_sql("SELECT value FROM settings WHERE key=?", (WRITER_KEY,)).fetchone()
+            w = json.loads(row[0]) if row else None
+            w["quand"] = dt.datetime.fromisoformat(w["quand"])
+            return w
+        except Exception:
+            return None
 
     # Colonnes ajoutées après la première version : on les crée dans les bases existantes.
     MIGRATIONS = {
@@ -226,12 +336,40 @@ class Database:
         c.exec_driver_sql("INSERT INTO settings (key, value) VALUES ('fixed_shares', '1')")
 
     # ---------------------------------------------------------- sauvegardes
+    def _recover(self) -> dict:
+        """Remplace la base abîmée par la copie lisible la plus récente (instantanés « Annuler » et sauvegardes du
+        jour), et renvoie {"damaged": fichier gardé, "when": date de la copie reprise}."""
+        candidates = [p for d in (self.undo_dir, self.backups_dir) for p in d.glob("*.db")]
+        candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        good = next((p for p in candidates if db_intact(p)), None)
+        if good is None:
+            raise DamagedDatabaseError(self.path)
+        now = dt.datetime.now()
+        damaged = self.dir / f"compta (abîmée {now:%Y-%m-%d %Hh%M}).db"
+        n = 2
+        while damaged.exists():
+            damaged = self.dir / f"compta (abîmée {now:%Y-%m-%d %Hh%M} {n}).db"
+            n += 1
+        os.replace(self.path, damaged)
+        for side in ("-journal", "-wal", "-shm"):    # ce qui accompagnait la base abîmée ne vaut plus rien
+            Path(f"{self.path}{side}").unlink(missing_ok=True)
+        self._copy(good, self.path)
+        return dict(damaged=damaged, when=dt.datetime.fromtimestamp(good.stat().st_mtime))
+
+    def recovered_notice(self) -> str | None:
+        if not self.recovered:
+            return None
+        return (f"Le fichier de tes voyages était abîmé : Trip Compta a repris la dernière copie intacte "
+                f"({human_when(self.recovered['when'])}). Ce qui a été saisi après est perdu. Le fichier abîmé est "
+                f"gardé à côté : « {self.recovered['damaged'].name} ».")
+
     def daily_backup(self) -> Path | None:
         if not self.path.exists():
             return None
         target = self.backups_dir / f"compta-{dt.date.today().isoformat()}.db"
-        if not target.exists():
-            self._copy(self.path, target)
+        if target.exists():
+            return target
+        self._copy(self.path, target)
         backups = sorted(self.backups_dir.glob("compta-*.db"))
         for old in backups[:-BACKUP_KEEP]:
             old.unlink()
@@ -252,6 +390,7 @@ class Database:
         self._push(self.undo_dir, label)
         for f in self.redo_dir.glob("*"):
             f.unlink()
+        self.mark_writer()
 
     def _push(self, folder: Path, label: str):
         stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
@@ -279,6 +418,7 @@ class Database:
         snap.unlink()
         snap.with_suffix(".json").unlink(missing_ok=True)
         self.after_replace()
+        self.mark_writer()
 
     def after_replace(self):
         """La base a été remplacée sur le disque (Annuler, version reprise du dossier synchronisé) : on la rouvre

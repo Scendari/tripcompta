@@ -23,7 +23,8 @@ from sqlalchemy.orm import Session
 from . import engine as E
 from . import models as M
 from . import services as S
-from .db import Database, NewerDatabaseError, stored_version
+from .db import (Database, DamagedDatabaseError, DataUnavailableError, NewerDatabaseError, human_when,
+                 stored_version)
 
 HERE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(HERE / "templates"))
@@ -123,10 +124,8 @@ templates.env.filters["capfirst"] = _capfirst
 templates.env.filters["caisse"] = lambda t: _label(S.caisse_label(t))   # nom de la caisse d'un voyage donné
 
 
-def newer_data_app(err: NewerDatabaseError, updater) -> FastAPI:
-    """La base a été ouverte par une version plus récente : on n'y touche pas, on explique quoi faire."""
-    from . import updater as U
-    from . import version as V
+def _bare_app(updater) -> tuple[FastAPI, str]:
+    """Application réduite (données pas ouvertes) : fenêtre, ping, quitter, fichiers statiques."""
     app = FastAPI(title="Trip Compta", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.db = None
     app.state.port = None                 # donnés par run.py (pour relancer après une mise à jour)
@@ -155,6 +154,44 @@ def newer_data_app(err: NewerDatabaseError, updater) -> FastAPI:
         return HTMLResponse("<!doctype html><meta charset=utf-8><title>Trip Compta</title>"
                             "<body style='font-family:system-ui;text-align:center;padding:4rem'>"
                             "<h1>Trip Compta est arrêté.</h1><p>Tu peux fermer cet onglet.</p></body>")
+    return app, boot
+
+
+def _bare_page(request, updater, name, code=200, **ctx):
+    return templates.TemplateResponse(request, name, dict(
+        request=request, trip=None, msg=None, asso_name="", app_version=updater.label, update_banner=None,
+        STATIC_V=templates.env.globals["STATIC_V"], **ctx), status_code=code)
+
+
+def data_problem_app(err: Exception, updater, restart=None) -> FastAPI:
+    """Le fichier des voyages est indisponible (pas encore téléchargé, dossier déconnecté) ou abîmé sans sauvegarde
+    lisible : on n'y touche pas, on explique quoi faire, et on propose de réessayer."""
+    app, _ = _bare_app(updater)
+    app.state.restart = restart
+    damaged = isinstance(err, DamagedDatabaseError)
+
+    @app.post("/reessayer", response_class=HTMLResponse)
+    def retry(request: Request):
+        r = app.state.restart
+        if r is None:
+            return _bare_page(request, updater, "data_problem.html", 503, err=err, damaged=damaged, retry=False)
+        import threading
+        threading.Timer(0.3, r).start()
+        return _bare_page(request, updater, "restart.html", can_restart=True,
+                          message="Trip Compta essaie de nouveau d'ouvrir tes voyages.")
+
+    @app.get("/{rest:path}", response_class=HTMLResponse)
+    def explain(request: Request, rest: str = ""):
+        return _bare_page(request, updater, "data_problem.html", 503, err=err, damaged=damaged,
+                          folder=str(Path(err.path).parent), retry=app.state.restart is not None)
+    return app
+
+
+def newer_data_app(err: NewerDatabaseError, updater) -> FastAPI:
+    """La base a été ouverte par une version plus récente : on n'y touche pas, on explique quoi faire."""
+    from . import updater as U
+    from . import version as V
+    app, _ = _bare_app(updater)
 
     checked = []
 
@@ -166,10 +203,7 @@ def newer_data_app(err: NewerDatabaseError, updater) -> FastAPI:
         return a if a and V.base(a["version"]) and V.base(a["version"]) >= V.base(err.stored) else None
 
     def page(request, name, code=200, **ctx):
-        return templates.TemplateResponse(request, name, dict(
-            request=request, err=err, page=U.RELEASES_PAGE, help=U.INSTALL_HELP, trip=None, msg=None,
-            asso_name="", app_version=updater.label, update_banner=None, STATIC_V=templates.env.globals["STATIC_V"],
-            **ctx), status_code=code)
+        return _bare_page(request, updater, name, code, err=err, page=U.RELEASES_PAGE, help=U.INSTALL_HELP, **ctx)
 
     @app.post("/maj/installer")
     def update_install(request: Request):
@@ -208,6 +242,34 @@ def newer_data_app(err: NewerDatabaseError, updater) -> FastAPI:
         ok, why = updater.installable() if a else (False, "")
         return page(request, "newer_data.html", 409, available=a, installable=ok, why=why)
     return app
+
+
+def writer_notice(db, me: str | None = None, now: dt.datetime | None = None) -> str | None:
+    """À l'ouverture : les voyages ont été modifiés en dernier sur un autre ordinateur ? Avertissement s'il y a moins
+    d'une heure (Trip Compta y est peut-être encore ouvert) ; sinon simple information, une fois par ordinateur
+    (qui alterne portable et fixe ne doit pas voir le même message à chaque lancement)."""
+    from . import paths as PATHS
+    from .cloud import computer_name
+    w = db.last_writer()
+    me = me or computer_name()
+    if not w or not w.get("ordinateur") or w["ordinateur"] == me:
+        return None
+    now = now or dt.datetime.now()
+    other = w["ordinateur"]
+    seen = PATHS.read_config().get("ecrivains_vus") or {}
+    key = str(db.home)
+    recent = dt.timedelta(0) <= now - w["quand"] < dt.timedelta(hours=1)
+    if not recent and seen.get(key) == other:
+        return None
+    try:
+        PATHS.write_config(ecrivains_vus={**seen, key: other})
+    except OSError:
+        pass
+    when = human_when(w["quand"], now)
+    if recent:
+        return (f"Tes voyages ont été modifiés {when} sur « {other} ». Si Trip Compta est encore ouvert là-bas, "
+                f"ferme-le avant de continuer : sinon, les changements d'un ordinateur effaceraient ceux de l'autre.")
+    return f"Dernière modification de tes voyages : sur « {other} », {when}."
 
 
 def _hm(value) -> str:
@@ -270,6 +332,10 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         if sync is not None:
             sync.release()
         return newer_data_app(err, upd)
+    except (DataUnavailableError, DamagedDatabaseError) as err:
+        if sync is not None:
+            sync.release()
+        return data_problem_app(err, upd, restart)
     if sync is None or not sync.locked:
         db.daily_backup()
         with db.Session() as s_:                 # centimes d'arrondi : un tirage pour les dépenses qui n'en ont pas
@@ -285,6 +351,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
     app.state.argv = []
     app.state.update_notice = None if upd.dev else upd.startup_notice()
     app.state.sync = sync
+    app.state.startup_notices = [n for n in (db.recovered_notice(), writer_notice(db)) if n]
     if sync is not None:
         sync.before_wipe = lambda: db.engine.dispose()
     if updater is None:
@@ -411,6 +478,18 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         return txt
 
     @app.middleware("http")
+    async def daily_backup(request, call_next):
+        """Sauvegarde du jour aussi quand Trip Compta reste ouvert plusieurs jours (une copie par jour au plus)."""
+        response = await call_next(request)
+        if (request.method in ("POST", "PUT", "PATCH", "DELETE") and response.status_code < 400
+                and not (sync is not None and sync.locked)):
+            try:
+                db.daily_backup()
+            except Exception:
+                pass
+        return response
+
+    @app.middleware("http")
     async def cloud_sync(request, call_next):
         if sync is None:
             return await call_next(request)
@@ -491,6 +570,8 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             app.state.update_notice = upd.failure_notice()
         if app.state.update_notice and not ctx.get("msg"):
             ctx["msg"], app.state.update_notice = app.state.update_notice, None
+        if app.state.startup_notices and not ctx.get("msg"):
+            ctx["msg"] = app.state.startup_notices.pop(0)
         return templates.TemplateResponse(request, name, ctx)
 
     def cloud_status() -> dict | None:
