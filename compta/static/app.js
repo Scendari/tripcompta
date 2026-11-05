@@ -472,7 +472,7 @@
     input.focus();
     input.select();
   };
-  // éléments réservés à la fenêtre de l'app (ex. Réglages → « Ouvrir dans le navigateur ») ; pywebview arrive après
+  // éléments réservés à la fenêtre de l'app (data-window-only) ; pywebview arrive après
   function showWindowOnly() { document.querySelectorAll("[data-window-only]").forEach((n) => { n.hidden = !inWindow(); }); }
   showWindowOnly();
   window.addEventListener("pywebviewready", showWindowOnly);

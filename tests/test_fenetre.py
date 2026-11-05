@@ -134,16 +134,14 @@ def test_real_window_discreet(tmp_path, end):
     assert "erreur" not in r, r.get("erreur")
     assert r["visible"] is False and r["app_au_premier_plan"] is False and r["toujours_invisible"]
     assert r["menu_fichier"][0] == ["Nouvelle fenêtre", "n"] and r["menu_fichier"][1] == ["Rechercher dans la page…", "f"]
-    assert r["menu_fichier"][3][0] == "Ouvrir dans le navigateur"
+    assert len(r["menu_fichier"]) == 2                             # plus d'« Ouvrir dans le navigateur »
     assert r["cmd_n_menu"] == 2 and r["ctrl_n_page"] == 3 and r["une_fenetre_fermee_app_continue"]
     assert r["cmd_f_barre"] == "tc-find" and r["cmd_f_trouve"] == "Gîte" and r["cmd_f_introuvable"] is True
     assert r["retour"]
     assert r["formulaire_fenetre"] is True                        # la fenêtre passe le contrôle d'origine
     assert r["lien_interne_nouvelle_fenetre"].endswith("/justificatifs")
-    assert r["ouvert_dans_navigateur"][0] == "https://github.com/Scendari/tripcompta"
-    assert r["ouvert_dans_navigateur"][1].startswith(f"http://127.0.0.1:{port}/")
-    assert r["reglages_navigateur_visible"] is True
-    assert r["reglages_navigateur_ouvre"].startswith(f"http://127.0.0.1:{port}/")
+    assert r["ouvert_dans_navigateur"] == ["https://github.com/Scendari/tripcompta"]   # lien externe seulement
+    assert r["reglages_sans_navigateur"] is True
     assert len(r["enregistrer_sous"]) == 2 and r["enregistrer_sous"][0].endswith(".zip")
     assert r["enregistrer_sous"][1].startswith("Bilan_") and r["enregistrer_sous"][1].endswith(".pdf")
     sizes = r["fichiers_enregistres"]
@@ -253,20 +251,16 @@ def test_second_launch_brings_running_window_end_to_end(tmp_path, systeme):
         log.close()
 
 
-def test_open_in_browser_route_and_hidden_card(tmp_path):
-    """Réglages : la carte « Ouvrir dans le navigateur » est cachée par défaut (navigateur) ; la route ne marche que
-    dans la fenêtre."""
-    app = create_app(tmp_path / "d")
-    c = TestClient(app)
-    page = c.get("/reglages").text
-    assert "Ouvrir dans le navigateur" in page and "data-window-only hidden" in page
-    assert c.post("/fenetre/navigateur").status_code == 404
-    calls = []
-    app.state.fenetres = type("F", (), {"open_in_browser": lambda self: calls.append(1)})()
-    assert c.post("/fenetre/navigateur").json() == {"ok": True} and calls == [1]
+def test_no_open_in_browser_anymore(tmp_path):
+    """Plus d'« Ouvrir dans le navigateur » (risques : deux affichages, fichiers enregistrés par le navigateur) ;
+    le navigateur n'est plus qu'un repli quand la fenêtre ne peut pas s'ouvrir."""
+    from fastapi.testclient import TestClient
+    from compta.web import create_app
+    c = TestClient(create_app(tmp_path / "d"))
+    assert "Ouvrir dans le navigateur" not in c.get("/reglages").text
+    assert c.post("/fenetre/navigateur").status_code in (404, 405)
 
 
-@pytest.mark.skipif(not fenetre.available(), reason="pywebview absent")
 def test_window_impossible_falls_back_to_browser(tmp_path, monkeypatch):
     """La fenêtre ne peut pas s'ouvrir (PC Windows : .NET refuse Python.Runtime.dll ; ou WebView2
     absent) : pas de plantage, Trip Compta s'ouvre dans le navigateur et explique pourquoi."""

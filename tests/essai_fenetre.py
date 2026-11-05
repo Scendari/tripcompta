@@ -187,17 +187,12 @@ def scenario(f):
         w.evaluate_js("var b=document.createElement('a');b.href='https://github.com/Scendari/tripcompta';"
                       "b.target='_blank';document.body.appendChild(b);b.click();")
         wait(lambda: opened)
-        menu_item("Ouvrir dans le navigateur")
-        wait(lambda: len(opened) >= 2)
         RES["ouvert_dans_navigateur"] = list(opened)
-        # Réglages → « Ouvrir dans le navigateur » (visible seulement dans la fenêtre ; Windows n'a plus de menu)
+        # plus d'« Ouvrir dans le navigateur » : ni dans le menu, ni dans les Réglages
         w.load_url(f.base + "reglages")
         wait(lambda: (w.get_current_url() or "").endswith("/reglages"))
         time.sleep(0.8)
-        RES["reglages_navigateur_visible"] = w.evaluate_js("!document.querySelector('[data-window-only]').hidden")
-        n_open = len(opened)
-        w.evaluate_js("document.querySelector('[data-window-only]').click()")
-        RES["reglages_navigateur_ouvre"] = wait(lambda: len(opened) > n_open) and opened[-1]
+        RES["reglages_sans_navigateur"] = w.evaluate_js("!document.body.innerText.includes('Ouvrir dans le navigateur')")
 
         # téléchargements : ZIP et bilan PDF (Content-Disposition: attachment) -> « Enregistrer sous… »
         w.load_url(f.base + f"v/{tid}/export")

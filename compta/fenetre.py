@@ -122,11 +122,6 @@ class Fenetres:
         import webview
         return webview.active_window() or (webview.windows[-1] if webview.windows else None)
 
-    def open_in_browser(self):
-        w = self.current()
-        cur = w.get_current_url() if w else None
-        webbrowser.open(cur if cur and self.is_ours(cur) else self.base)
-
     def pick_folder(self):
         """Choix d'un dossier devant la fenêtre (Windows : le sélecteur moderne de l'Explorateur). None si annulé."""
         import webview
@@ -172,11 +167,9 @@ def save_to_downloads(url: str):
 
 
 def _menu(f: Fenetres):
-    from webview.menu import Menu, MenuAction, MenuSeparator
+    from webview.menu import Menu, MenuAction
     return [Menu("Fichier", [MenuAction("Nouvelle fenêtre", f.new_later),
-                             MenuAction("Rechercher dans la page…", f.find),
-                             MenuSeparator(),
-                             MenuAction("Ouvrir dans le navigateur", f.open_in_browser)])]
+                             MenuAction("Rechercher dans la page…", f.find)])]
 
 
 def _mac_hooks(f: Fenetres, arreter):
