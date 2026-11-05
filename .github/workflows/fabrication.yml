@@ -9,7 +9,8 @@ on:
       - "build_tools/**"
       - "requirements*.txt"
       - "compta/crypto.py"
-      - "compta/cloud.py"
+      - "compta/coffre.py"
+      - "compta/dossier.py"
       - ".github/workflows/fabrication.yml"
   workflow_dispatch:
 
