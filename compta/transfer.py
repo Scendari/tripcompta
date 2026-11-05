@@ -340,7 +340,7 @@ def _temp_gisele(s, t: M.Trip) -> None:
     s.add(picnic)
     s.flush()
     for pid in sorted(old):
-        picnic.shares.append(M.ExpenseShare(participant_id=pid, weight=2.0 if pid == first else 1.0))
+        picnic.shares.append(M.ExpenseShare(participant_id=pid, weight=1.0, fixed=1100 if pid == first else None))
     picnic.checks.append(M.ExpenseCheck(participant_id=g.id, reason="groupe covoit"))
     S.store_draws(t)
     s.flush()

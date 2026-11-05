@@ -2156,6 +2156,13 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
                      counts=_json.dumps({str(k): v for k, v in S.cent_counts(r_, skip=e.id if e else None).items()}))
         if inf and inf["drawn"] and e:
             amounts = {p: r_.share(p, e.id) for p in weights}          # exactement ce que donne le calcul
+        # plus de « parts » : une part ≠ 1 (dépense d'avant, ou IA sans montant connu) s'affiche comme un montant
+        # fixé 🔒 ; enregistrer la dépense la convertit pour de bon
+        equal = E.split_exact(total, {p: 1 for p in weights}) if total else {}
+        for p, w in list(weights.items()):
+            if w != 1 and p not in fixed and p in amounts and abs(amounts[p] - equal.get(p, -10)) > 1:
+                fixed[p] = amounts[p]
+            weights[p] = 1.0
         return dict(trip=t, e=e, weights=weights, linked=linked, groups=S.trip_groups(t),
                     who_roles=who_roles, who_families=who_families, who_groups=who_groups, payers=payers, subcats=subcats,
                     split_mode=split_mode, amounts=amounts, fixed=fixed, cents=cents)
@@ -2485,6 +2492,9 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
                 rec = await _store_receipt(s, t, up)
                 s.add(M.ReceiptLink(receipt_id=rec.id, expense_id=e.id))
         e.checks.clear()                         # « à vérifier » : la dépense vient d'être revue
+        s.flush()
+        s.refresh(e)
+        S.normalize_shares(e)                    # un montant tapé égal à la répartition : pas de cadenas
         s.commit()
         if f.get("again"):
             return back(f"/v/{tid}/depenses/nouvelle", f"« {label} » enregistrée. Dépense suivante :")
@@ -2821,6 +2831,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         if cur is None:
             cur = M.Withdrawal(trip_id=tid, participant_id=p.id)
             s.add(cur)
+            S.flag_withdrawal(t, p.id, w.kept, w.absorber)   # montants fixés 🔒 dans ses dépenses : « à vérifier »
         cur.date = S.parse_date(w.date)
         cur.absorber = w.absorber
         cur.kept = ",".join(str(x) for x in sorted(w.kept))

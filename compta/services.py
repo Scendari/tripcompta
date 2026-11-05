@@ -431,6 +431,39 @@ def label_sets(trip: M.Trip) -> list:
     return out
 
 
+def normalize_shares(e: M.Expense) -> bool:
+    """Pas de « parts » : chacun a soit la part égale, soit un montant fixé 🔒. Des parts venues de l'IA ou d'un
+    import (« compte double », plongées, nuits, demi-part) deviennent des montants :
+    - le nombre de parts le plus courant devient la part normale : ces personnes restent libres et se partagent le
+      reste (elles reprennent aussi la part de quelqu'un qui se désiste) ;
+    - les autres reçoivent le montant que leurs parts donnaient, fixé 🔒 (sauf s'il vaut la part égale).
+    Mêmes montants qu'avant la conversion. Les montants déjà fixés ne sont pas touchés. Sans montant réel (dépense au
+    prévu ou à venir), les parts attendent qu'il le soit (l'IA donne souvent le réel plus tard).
+    Renvoie True si quelque chose a changé."""
+    from collections import Counter
+    shares = list(e.shares)
+    total = e.net()
+    if not shares or e.actual is None or total <= 0 or all(x.weight == 1 for x in shares):
+        return False
+    fixed = {x.participant_id: x.fixed for x in shares if x.fixed is not None}
+    free = {x.participant_id: x.weight for x in shares if x.fixed is None}
+    amounts = E.split_exact(max(total - sum(fixed.values()), 0), free) if free else {}
+    equal = E.split_exact(total, {x.participant_id: 1 for x in shares})
+    count = Counter(w for w in free.values())
+    base = min(count, key=lambda w: (-count[w], w)) if count else 1
+    for x in shares:
+        if x.fixed is None and x.weight != base:
+            c = amounts.get(x.participant_id, 0)
+            x.fixed = None if abs(c - equal[x.participant_id]) <= 1 else c
+        x.weight = 1.0
+    return True
+
+
+def normalize_trip(trip: M.Trip) -> int:
+    """normalize_shares sur toutes les dépenses du voyage ; renvoie le nombre de dépenses changées."""
+    return sum(1 for e in trip.expenses if normalize_shares(e))
+
+
 def flag_checks(trip: M.Trip, suggestions: list) -> int:
     """Dépenses à parts personnalisées où quelqu'un vient d'entrer dans un ensemble allumé : marquées « à vérifier »
     (une fois par dépense et par personne). Renvoie le nombre de marques ajoutées."""
@@ -445,15 +478,41 @@ def flag_checks(trip: M.Trip, suggestions: list) -> int:
     return n
 
 
+WITHDRAWAL = "désistement"                 # raison d'une dépense « à vérifier » après un désistement
+
+
+def flag_withdrawal(trip: M.Trip, pid: int, kept, absorber: str) -> int:
+    """Désistement repris par le groupe : sa part est répartie entre les montants libres. Dans une dépense qui a des
+    montants fixés 🔒, ceux-ci ne bougent pas : la dépense est marquée « à vérifier ». Renvoie le nombre de marques."""
+    if absorber != E.GROUP:
+        return 0
+    kept = {int(x) for x in kept or []}
+    n = 0
+    for e in trip.expenses:
+        ids = {x.participant_id for x in e.shares}
+        if e.id in kept or pid not in ids or not any(x.fixed is not None for x in e.shares if x.participant_id != pid):
+            continue
+        if not any(c.participant_id == pid and c.reason == WITHDRAWAL for c in e.checks):
+            e.checks.append(M.ExpenseCheck(participant_id=pid, reason=WITHDRAWAL))
+            n += 1
+    return n
+
+
 def checks_of(trip: M.Trip) -> dict:
-    """{expense_id: [(check, nom)]} : dépenses « à vérifier » (personnes encore là, et pas encore dans la dépense)."""
+    """{expense_id: [(check, nom, sans_libre)]} : dépenses « à vérifier » : quelqu'un a rejoint un groupe (personne
+    encore là, pas encore dans la dépense), ou s'est désisté (sans_libre : plus personne pour reprendre sa part)."""
     names = {p.id: p.name for p in trip.participants}
     out: dict = {}
     for e in trip.expenses:
         inside = {x.participant_id for x in e.shares}
         for c in e.checks:
-            if c.participant_id in names and c.participant_id not in inside:
-                out.setdefault(e.id, []).append((c, names[c.participant_id]))
+            if c.participant_id not in names:
+                continue
+            if c.reason == WITHDRAWAL:
+                no_free = not any(x.fixed is None for x in e.shares if x.participant_id != c.participant_id)
+                out.setdefault(e.id, []).append((c, names[c.participant_id], no_free))
+            elif c.participant_id not in inside:
+                out.setdefault(e.id, []).append((c, names[c.participant_id], False))
     return out
 
 
@@ -483,7 +542,7 @@ def join_suggestions(trip: M.Trip, before: dict) -> list:
         if not inside:
             continue
         covered = set().union(*inside.values())
-        custom = any(x.weight != 1 or x.fixed is not None for x in shares)
+        custom = any(x.fixed is not None or x.weight != 1 for x in shares)     # (parts : converties en 🔒)
         for k in inside:
             for pid in sorted(after[k][1] - old[k]):
                 if pid not in names or pid in ids or (pid, e.id) in seen:
@@ -649,8 +708,10 @@ def alerts(trip: M.Trip, result: E.Result) -> list[dict]:
     if checks:
         n = len(checks)
         out.append(dict(level="error",
-                        text=f"{n} dépense{'s' if n > 1 else ''} à vérifier : la part d'un nouveau membre de groupe est "
-                             f"à ajouter à la main",
+                        text=f"{n} dépense{'s' if n > 1 else ''} à vérifier : "
+                             + ("des montants fixés sont à revoir après un désistement"
+                                if all(c.reason == WITHDRAWAL for v in checks.values() for c, *_ in v)
+                                else "la part d'un nouveau membre de groupe est à ajouter à la main"),
                         link=f"/v/{tid}/depenses"))
     no_receipt = [e for e in trip.expenses if e.actual is not None and not e.receipt_links]
     if no_receipt:
