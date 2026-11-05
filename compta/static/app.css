@@ -942,6 +942,7 @@ label.check { display: inline-flex; align-items: center; gap: .4rem; font-weight
 .setting-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .15rem; }
 .setting-body b { font-size: 1.02rem; }
 .setting-state { font-size: .92rem; overflow-wrap: anywhere; }
+.setting-state.one-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .setting-hint { font-size: .82rem; color: var(--muted); }
 .setting-go { flex: none; color: var(--teal-strong); font-weight: 600; font-size: .9rem; white-space: nowrap; }
 .warn-text { color: var(--amber); font-weight: 600; } .ok-text { color: var(--ok); font-weight: 600; }

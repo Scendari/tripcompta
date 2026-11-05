@@ -286,7 +286,8 @@ def test_settings_page(env):
     cl = TestClient(a)
     assert 'href="/reglages"' in cl.get(f"/v/{tid}").text
     page = clean(cl.get("/reglages").text)
-    assert "Où sont mes voyages" in page and str(shared) in page and "Non protégés" in page
+    assert "Où sont mes voyages" in page and str(shared) in page and "Non protégés" in page   # complet au survol
+    assert "…/Mon Drive é/TripCompta · enregistré automatiquement" in page                    # sa fin, sur une ligne
     assert "un seul ordinateur à la fois" in page and "enregistré automatiquement à" in page
     stop(a)
 
