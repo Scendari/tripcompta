@@ -679,3 +679,37 @@ def test_working_copy_without_history_never_overwrites(env, keyring_mem):
     assert K.Vault.decrypt(app.state.coffre.vault, good, "base") == \
         K.Vault.decrypt(app.state.coffre.vault, (folder / K.DB_FILE).read_bytes(), "base")
     stop(app)
+
+
+def test_ai_writes_are_saved_within_seconds(env, keyring_mem):
+    """L'IA (serveur MCP, autre programme) écrit dans la copie de travail : l'application l'enregistre chiffrée dans
+    le dossier en quelques secondes, sans attendre une saisie dans l'app. Un plantage juste après ne la perd pas,
+    même sans clé mémorisée (la copie en clair est alors effacée au démarrage)."""
+    tmp, folder = env
+    tid, files, key = protect(env)
+    app = create_app()
+    TestClient(app).post("/deverrouiller", data={"mot_de_passe": PASSWORD})
+    box = app.state.coffre
+    from compta.db import Database
+    Ops(Database(box.local)).create_trip("Saisi par l'IA")       # comme le serveur MCP
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        v = box.vault
+        tmp_db = tmp / "verif.db"
+        v.decrypt_file(folder / K.DB_FILE, tmp_db, "base")
+        con = sqlite3.connect(tmp_db)
+        names = [r_[0] for r_ in con.execute("SELECT name FROM trips")]
+        con.close()
+        if "Saisi par l'IA" in names:
+            break
+        time.sleep(0.3)
+    assert "Saisi par l'IA" in names
+    box._stop.set()                                              # « plantage » : pas d'arrêt propre
+    app.state.db.engine.dispose()
+    app2 = create_app()                                          # sans clé mémorisée : verrouillé, copie effacée
+    assert app2.state.coffre.locked and not (box.local / C.DB).exists()
+    TestClient(app2).post("/deverrouiller", data={"mot_de_passe": PASSWORD})
+    with app2.state.db.Session() as s_:
+        assert "Saisi par l'IA" in [t.name for t in s_.query(M.Trip).all()]
+    assert no_clear_text(folder) == []
+    stop(app2)
