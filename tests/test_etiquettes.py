@@ -317,7 +317,7 @@ def test_custom_shares_are_flagged_until_reviewed(env):
     lst = c.get(f"/v/{tid}/depenses").text
     assert re.search(r'<tr id="e%d" class="[^"]*to-check' % E["Pique-nique"], lst)
     t = clean(re.sub(r"<[^>]+>", " ", lst))
-    assert "2 dépenses à vérifier" in t and "À vérifier : Gisèle a rejoint « groupe Minibus »" in t
+    assert "2 dépenses à vérifier" in t and "Gisèle a rejoint « groupe Minibus » : ajoute sa part" in t
     assert "2 dépenses à vérifier" in clean(re.sub(r"<[^>]+>", " ", c.get(f"/v/{tid}").text))
     assert any("à vérifier" in a["text"] for a in _alerts(app, tid))
     # un envoi trafiqué ne l'ajoute pas aux parts personnalisées
@@ -371,3 +371,23 @@ def test_organizer_is_a_label_like_the_others(env):
     r = c.post(f"/v/{tid}/roles/co-organisateur", data={"members": [P["Anne"], P["Bob"]]}, follow_redirects=True)
     assert (P["Bob"], E["Repérage"]) in proposal(r)
     assert "Co-organisateurs" in clean(r.text)
+
+
+def test_check_texts_and_see_button(env):
+    """Textes courts (la part à ajouter à la main) ; « Voir » mène à la page Dépenses, et disparaît sur elle."""
+    app, ops, tid, c, P, E = _gisele_env(env)
+    ops.add_expense(tid, "Autre", montant_reel="1", pour=["Anne"])     # (sans effet)
+    # une seule dépense à vérifier : on retire le resto (parts inégales, aussi concerné)
+    with app.state.db.Session() as s_:
+        s_.delete(s_.get(M.Expense, E["Resto"]))
+        s_.commit()
+    c.post(f"/v/{tid}/groupes", data={"name": "Minibus", "old_name": "Minibus",
+                                     "members": [P["Bob"], P["Chloé"], P["Gisèle"]]})
+    page = clean(re.sub(r"<[^>]+>", " ", c.get(f"/v/{tid}").text))
+    assert ("1 dépense à vérifier : Gisèle a rejoint « groupe Minibus » ; ajoute sa part à la main si cette "
+            "dépense concerne Gisèle.") in page
+    assert f'href="/v/{tid}/depenses">Voir</a>' in c.get(f"/v/{tid}").text
+    lst = c.get(f"/v/{tid}/depenses").text
+    assert ">Voir</a>" not in lst                                           # déjà sur la page Dépenses
+    assert ("Gisèle a rejoint « groupe Minibus » : ajoute sa part à la main si cette dépense concerne Gisèle."
+            in clean(re.sub(r"<[^>]+>", " ", lst)))

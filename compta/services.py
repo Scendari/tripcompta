@@ -649,9 +649,9 @@ def alerts(trip: M.Trip, result: E.Result) -> list[dict]:
     if checks:
         n = len(checks)
         out.append(dict(level="error",
-                        text=f"{n} dépense{'s' if n > 1 else ''} à vérifier : quelqu'un a rejoint un groupe, mais les "
-                             f"parts sont personnalisées",
-                        link=f"/v/{tid}/depenses#a-verifier"))
+                        text=f"{n} dépense{'s' if n > 1 else ''} à vérifier : la part d'un nouveau membre de groupe est "
+                             f"à ajouter à la main",
+                        link=f"/v/{tid}/depenses"))
     no_receipt = [e for e in trip.expenses if e.actual is not None and not e.receipt_links]
     if no_receipt:
         n = len(no_receipt)

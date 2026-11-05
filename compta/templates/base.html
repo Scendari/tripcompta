@@ -29,8 +29,11 @@
   </form>
 </header>
 {% if checks and trip and not request.url.path.startswith('/v/' ~ trip.id ~ '/rejoindre') %}
-<div class="folder-banner danger" role="alert"><span>⚠️ <b>{{ checks|length }} dépense{{ 's' if checks|length > 1 }} à vérifier</b> : quelqu'un a rejoint un groupe allumé dans {{ 'ces dépenses' if checks|length > 1 else 'cette dépense' }}, mais les parts y sont personnalisées. Ajoute-le à la main, ou indique que c'est bon.</span>
-  <a class="btn small" href="/v/{{ trip.id }}/depenses#a-verifier">Voir</a></div>
+{% set one = checks.values()|list|first if checks|length == 1 else None %}
+<div class="folder-banner danger" role="alert"><span>⚠️ <b>{{ checks|length }} dépense{{ 's' if checks|length > 1 }} à vérifier</b> :
+  {%- if one and one|length == 1 %} {{ one[0][1] }} a rejoint « {{ one[0][0].reason }} » ; ajoute sa part à la main si cette dépense concerne {{ one[0][1] }}.
+  {%- else %} de nouveaux membres de groupe y sont peut-être concernés ; ajoute leur part à la main.{% endif %}</span>
+  {% if request.url.path != '/v/' ~ trip.id ~ '/depenses' %}<a class="btn small" href="/v/{{ trip.id }}/depenses">Voir</a>{% endif %}</div>
 {% endif %}
 {% if dossier and dossier.conflicts %}
 <div class="folder-banner warn" role="status"><span>⚠️ {{ 'Une autre version' if dossier.conflicts == 1 else dossier.conflicts ~ ' autres versions' }} de tes voyages {{ 'est apparue' if dossier.conflicts == 1 else 'sont apparues' }} dans le dossier (Trip Compta ouvert sur deux ordinateurs en même temps ?). Rien n'est perdu.</span>
