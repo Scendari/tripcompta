@@ -1,4 +1,4 @@
-"""Protection des voyages par un mot de passe (crypto.py, cloud.py) : chiffrement de la base et des justificatifs,
+"""Protection des voyages par un mot de passe (crypto.py, coffre.py) : chiffrement de la base et des justificatifs,
 déverrouillage, clé de secours, changement de mot de passe, retrait, fichiers abîmés, plantage, deux ordinateurs,
 trousseau.
 
@@ -17,7 +17,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from compta import cloud as C
+from compta import coffre as CF
+from compta import dossier as C
 from compta import crypto as K
 from compta import models as M
 from compta import services as S
@@ -97,7 +98,7 @@ def no_clear_text(folder: Path) -> list:
     """Fichiers du dossier qui contiennent quelque chose de lisible (hors verrou, LISEZMOI, clé, à trier)."""
     bad = []
     for f in folder.rglob("*"):
-        if not f.is_file() or f.name in (C.LOCK, K.README, K.KEY_FILE) or C.INBOX in f.parts:
+        if not f.is_file() or f.name in (K.README, K.KEY_FILE) or C.INBOX in f.parts:
             continue
         data = f.read_bytes()
         hits = [s_ for s_ in SECRETS if s_ in data]
@@ -121,8 +122,8 @@ def confirm(cl, key, n, wrong=False):
 
 
 def stop(app):
-    if app.state.sync is not None:
-        app.state.sync.stop()
+    if app.state.coffre is not None:
+        app.state.coffre.stop()
     app.state.db.engine.dispose()
 
 
@@ -145,7 +146,7 @@ def test_round_trip_activate_unlock_remove(env):
     tmp, folder = env
     tid, files, key = protect(env)
     # le dossier : seulement des fichiers chiffrés
-    names = {p.name for p in folder.iterdir()} - {C.INBOX, C.LOCK}
+    names = {p.name for p in folder.iterdir()} - {C.INBOX}
     assert names == {K.KEY_FILE, K.DB_FILE, K.README, C.RECEIPTS}      # plus d'historique ni de sauvegardes ici
     assert all(p.name.endswith(K.SUFFIX) for p in (folder / C.RECEIPTS).iterdir())
     assert len(list((folder / C.RECEIPTS).iterdir())) == 2
@@ -153,16 +154,16 @@ def test_round_trip_activate_unlock_remove(env):
     assert "mot de passe" in (folder / K.README).read_text(encoding="utf-8")
 
     app = create_app()                                           # redémarrage : verrouillé
-    assert app.state.sync.locked
+    assert app.state.coffre.locked
     cl = TestClient(app)
     r = cl.get("/", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/deverrouiller"
     assert "Mot de passe de tes voyages" in cl.get("/deverrouiller").text
     assert cl.get("/api/voyages").status_code == 423
     r = cl.post("/deverrouiller", data={"mot_de_passe": "mauvais mot de passe"})
-    assert "Mot de passe incorrect" in r.text and app.state.sync.locked
+    assert "Mot de passe incorrect" in r.text and app.state.coffre.locked
     r = cl.post("/deverrouiller", data={"mot_de_passe": PASSWORD}, follow_redirects=True)
-    assert "Voyages déverrouillés" in r.text and not app.state.sync.locked
+    assert "Voyages déverrouillés" in r.text and not app.state.coffre.locked
     assert amounts(app, tid) == EXPECTED
     assert receipts_bytes(app, tid) == files                     # octet pour octet
     assert "🔒 Verrouiller" in cl.get("/").text and "protégé par mot de passe" in cl.get("/").text
@@ -170,7 +171,7 @@ def test_round_trip_activate_unlock_remove(env):
     cl.post("/voyages", data={"name": "Voyage secret"})
     assert no_clear_text(folder) == [] and b"Voyage secret" not in (folder / K.DB_FILE).read_bytes()
     # arrêt : plus rien en clair sur l'ordinateur
-    local = app.state.sync.local
+    local = app.state.coffre.local
     stop(app)
     leaks = [p for p in local.rglob("*") if p.is_file() and any(s_ in p.read_bytes() for s_ in SECRETS)]
     assert leaks == []
@@ -183,13 +184,14 @@ def test_round_trip_activate_unlock_remove(env):
     assert "Mot de passe actuel incorrect" in r.text and K.is_protected(folder)
     r = cl.post("/protection/retirer", data={"actuel": PASSWORD})
     assert "protection est retirée" in r.text
-    assert app.state.sync.publish() == "inchangé"               # battement avant le redémarrage : rien à faire
+    assert app.state.coffre is None                              # directement dans le dossier, jusqu'au redémarrage
+    assert "Voyage secret" in cl.get("/").text
     assert not [p_ for p_ in folder.iterdir() if p_.name.startswith("compta (")]   # pas de fausse copie en conflit
     stop(app)
     assert not K.is_protected(folder) and (folder / C.DB).exists() and not (folder / K.DB_FILE).exists()
     assert not list((folder / C.RECEIPTS).glob(f"*{K.SUFFIX}"))
     app = create_app()
-    assert not app.state.sync.locked and not app.state.sync.protected
+    assert app.state.coffre is None
     assert amounts(app, tid) == EXPECTED and receipts_bytes(app, tid) == files
     assert "Voyage secret" in TestClient(app).get("/").text
     stop(app)
@@ -259,7 +261,7 @@ def test_damaged_or_truncated_files_are_refused(env):
     app = create_app()
     cl = TestClient(app)
     r = cl.post("/deverrouiller", data={"mot_de_passe": PASSWORD})
-    assert "abîmés ou incomplets" in r.text and app.state.sync.locked
+    assert "abîmés ou incomplets" in r.text and app.state.coffre.locked
     (folder / K.DB_FILE).write_bytes(good)                       # le cloud a fini de synchroniser
     r = cl.post("/deverrouiller", data={"mot_de_passe": PASSWORD}, follow_redirects=True)
     assert "Voyages déverrouillés" in r.text and amounts(app, tid) == EXPECTED
@@ -302,12 +304,11 @@ def test_crash_while_unlocked_wipes_working_copy_next_start(env):
     tid, files, key = protect(env)
     app = create_app()
     TestClient(app).post("/deverrouiller", data={"mot_de_passe": PASSWORD})
-    local = app.state.sync.local
+    local = app.state.coffre.local
     assert (local / C.DB).exists()
     app.state.db.engine.dispose()                                # « plantage » : pas d'arrêt propre
-    app.state.sync.release()
     app2 = create_app()                                          # redémarrage : copie en clair effacée
-    assert app2.state.sync.locked and not (local / C.DB).exists() and not (local / C.RECEIPTS).exists()
+    assert app2.state.coffre.locked and not (local / C.DB).exists() and not (local / C.RECEIPTS).exists()
     stop(app2)
 
 
@@ -316,20 +317,20 @@ def test_remember_on_this_computer(env, keyring_mem):
     tmp, folder = env
     tid, files, key = protect(env, remember=True)
     app = create_app()                                           # le trousseau donne la clé : pas d'écran
-    assert not app.state.sync.locked and amounts(app, tid) == EXPECTED
+    assert not app.state.coffre.locked and amounts(app, tid) == EXPECTED
     cl = TestClient(app)
     assert "Cet ordinateur se souvient du mot de passe" in cl.get("/reglages/protection").text
     assert "cet ordinateur se souvient du mot de passe" in cl.get("/reglages").text
     r = cl.post("/verrouiller", follow_redirects=True)           # verrouiller sans quitter
-    assert "Mot de passe de tes voyages" in r.text and app.state.sync.locked
-    assert not (app.state.sync.local / C.DB).exists()
+    assert "Mot de passe de tes voyages" in r.text and app.state.coffre.locked
+    assert not (app.state.coffre.local / C.DB).exists()
     with pytest.raises(OpsError, match="verrouillé"):
         Ops(app.state.db).create_trip("Par l'IA")
     cl.post("/deverrouiller", data={"mot_de_passe": PASSWORD})   # sans cocher : oublié
     assert keyring_mem == {}
     stop(app)
     app = create_app()
-    assert app.state.sync.locked
+    assert app.state.coffre.locked
     stop(app)
 
 
@@ -337,13 +338,13 @@ def test_ai_server_locked(env):
     tmp, folder = env
     tid, files, key = protect(env)
     app = create_app()
-    local = app.state.sync.local
-    assert (local / C.LOCKED_FLAG).exists()
+    local = app.state.coffre.local
+    assert (local / CF.LOCKED_FLAG).exists()
     from compta.mcp_server import build_server
     build_server(str(local))                                     # ne crée aucune base
     assert not (local / C.DB).exists()
     TestClient(app).post("/deverrouiller", data={"mot_de_passe": PASSWORD})
-    assert not (local / C.LOCKED_FLAG).exists()
+    assert not (local / CF.LOCKED_FLAG).exists()
     page = TestClient(app).get(f"/v/{tid}/ia").text
     assert '"--home"' not in page.replace("&#34;", '"').replace("&quot;", '"')   # justificatifs en local
     stop(app)
@@ -351,49 +352,126 @@ def test_ai_server_locked(env):
 
 # ---------------------------------------------------------------- deux ordinateurs, justificatifs à trier
 def test_two_computers_on_a_protected_folder(tmp_path, monkeypatch, keyring_mem):
+    """Un dossier protégé dans le cloud, deux ordinateurs (chacun sa copie de travail), sans verrou entre eux :
+    chacun à son tour, puis les deux en même temps — jamais une saisie écrasée en silence, rien en clair."""
     monkeypatch.setenv("TRIPCOMPTA_CONFIG", str(tmp_path / "conf" / "r.json"))
     shared = tmp_path / "Mon Drive é" / "TripCompta"
     shared.mkdir(parents=True)
 
-    def make(who, pid):
-        return create_app(cloud=dict(shared=shared, local=tmp_path / f"copie {who}", identity=dict(host=who, pid=pid),
-                                     background=False))
-    a = make("PC-A", 101)
+    def make(who):
+        monkeypatch.setenv("TRIPCOMPTA_ORDINATEUR", who)
+        return create_app(shared, coffre=dict(local=tmp_path / f"copie {who}", host=who))
+
+    def names(app):
+        with app.state.db.Session() as s_:
+            return sorted(t.name for t in s_.query(M.Trip).all())
+
+    a = make("PC-A")
     tid = seed(a)
-    a.state.sync.publish()
     files = add_receipts(a, tid)
     ca = TestClient(a)
     key, n, _ = activate(ca)
     assert "maintenant protégés" in confirm(ca, key, n).text
     stop(a)
     assert no_clear_text(shared) == []
-    a = make("PC-A", 102)
+
+    # chacun son tour
+    a = make("PC-A")
     ca = TestClient(a)
     ca.post("/deverrouiller", data={"mot_de_passe": PASSWORD})
-    b = make("Mac-B", 202)
-    assert b.state.sync.locked
+    ca.post("/voyages", data={"name": "Saisi sur A"})
+    stop(a)
+    b = make("Mac-B")
+    cb = TestClient(b)
+    assert b.state.coffre.locked
+    cb.post("/deverrouiller", data={"mot_de_passe": PASSWORD})
+    assert names(b) == ["Saisi sur A", "Sortie test"]
+    assert amounts(b, tid) == EXPECTED and receipts_bytes(b, tid) == files
+    cb.post("/voyages", data={"name": "Saisi sur B"})
+    stop(b)
+    a = make("PC-A")
+    ca = TestClient(a)
+    ca.post("/deverrouiller", data={"mot_de_passe": PASSWORD})
+    assert names(a) == ["Saisi sur A", "Saisi sur B", "Sortie test"]
+    assert "sur « Mac-B »" in ca.get("/").text                 # modifiés il y a peu sur l'autre ordinateur
+
+    # en même temps : B enregistre après A → la version de B n'écrase rien, elle est déposée à côté
+    b = make("Mac-B")
     cb = TestClient(b)
     cb.post("/deverrouiller", data={"mot_de_passe": PASSWORD})
-    assert not b.state.sync.locked and b.state.sync.readonly     # déverrouillé, mais A a la main
-    assert amounts(b, tid) == EXPECTED and receipts_bytes(b, tid) == files
-    ca.post("/voyages", data={"name": "Saisi sur A"})
-    assert "Saisi sur A" in cb.get("/").text                     # reprise et déchiffrement
-    r = cb.post("/voyages", data={"name": "x"}, headers={"referer": "http://t/"}, follow_redirects=True)
-    assert "Lecture seule" in r.text
-    r = cb.post("/reglages/prendre-la-main", headers={"referer": "http://t/"}, follow_redirects=True)
-    assert "Tu as la main" in r.text
-    cb.post("/voyages", data={"name": "Saisi sur B"})
-    a.state.sync.beat()
-    assert a.state.sync.readonly and "Saisi sur B" in ca.get("/").text
+    ca.post("/voyages", data={"name": "A en même temps"})
+    cb.post("/voyages", data={"name": "B en même temps"})
+    assert "A en même temps" in names(b) and "B en même temps" not in names(b)   # B suit la version du dossier
+    page = cb.get("/").text
+    assert "modifiés sur un autre ordinateur pendant que tu travaillais" in page
+    conflicts = b.state.coffre.conflicts()
+    assert len(conflicts) == 1 and conflicts[0]["name"].startswith("voyages (version de Mac-B ") and conflicts[0]["valid"]
+    assert "Une autre version de tes voyages est apparue" in cb.get("/").text
+    # récupérer la saisie de B : exporter l'autre version, l'importer à côté
+    r = cb.get("/reglages/conflit/export", params={"nom": conflicts[0]["name"]})
+    assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
+    r = cb.post("/importer", files={"fichier": ("autre.zip", r.content, "application/zip")}, follow_redirects=True)
+    token = re.search(r'action="/importer/([^"]+)"', r.text).group(1)
+    cb.post(f"/importer/{token}", data={})
+    assert "B en même temps" in names(b)
+    cb.post("/reglages/conflit", data={"nom": conflicts[0]["name"]})
+    assert b.state.coffre.conflicts() == []
     assert no_clear_text(shared) == []
+
     # justificatifs à trier : chiffrés au rangement, original supprimé
     from PIL import Image
+    n_before = len(list((shared / C.RECEIPTS).glob(f"*{K.SUFFIX}")))   # 2 + les 2 du voyage importé
+    assert n_before == 4
     Image.new("RGB", (20, 20), (1, 2, 3)).save(shared / C.INBOX / "IMG_0001.jpg")
     r = cb.post(f"/v/{tid}/justificatifs/a-trier", data={"nom": ["IMG_0001.jpg"]}, follow_redirects=True)
     assert "ajouté" in r.text and not (shared / C.INBOX / "IMG_0001.jpg").exists()
     assert not (shared / C.INBOX / C.INBOX_DONE).exists()
-    assert len(list((shared / C.RECEIPTS).glob(f"*{K.SUFFIX}"))) == 3 and no_clear_text(shared) == []
+    assert len(list((shared / C.RECEIPTS).glob(f"*{K.SUFFIX}"))) == n_before + 1 and no_clear_text(shared) == []
     stop(a)
+    stop(b)
+
+
+def test_stale_working_copy_never_overwrites_the_folder(tmp_path, monkeypatch, keyring_mem):
+    """B a des changements pas encore enregistrés (écrits par l'IA, puis plantage), A enregistre entre-temps. Au
+    redémarrage de B (clé mémorisée) : la version de A est reprise, celle de B déposée à côté — rien d'écrasé."""
+    monkeypatch.setenv("TRIPCOMPTA_CONFIG", str(tmp_path / "conf" / "r.json"))
+    shared = tmp_path / "Dropbox" / "TripCompta"
+    shared.mkdir(parents=True)
+
+    def make(who):
+        monkeypatch.setenv("TRIPCOMPTA_ORDINATEUR", who)
+        return create_app(shared, coffre=dict(local=tmp_path / f"copie {who}", host=who))
+
+    a = make("PC-A")
+    tid = seed(a)
+    ca = TestClient(a)
+    key, n, _ = activate(ca, remember=True)
+    confirm(ca, key, n)
+    stop(a)
+    a, b = make("PC-A"), make("Mac-B")                         # clé mémorisée : déverrouillés tout de suite
+    assert not a.state.coffre.locked and not b.state.coffre.locked
+    Ops(b.state.db).create_trip("Saisi par l'IA sur B")         # pas enregistré dans le dossier…
+    b.state.db.engine.dispose()                                  # …et B plante
+    TestClient(a).post("/voyages", data={"name": "Saisi sur A"})
+    stop(a)
+    b = make("Mac-B")
+    with b.state.db.Session() as s_:
+        got = sorted(t.name for t in s_.query(M.Trip).all())
+    assert got == ["Saisi sur A", "Sortie test"]                 # la version du dossier (A)
+    conflicts = b.state.coffre.conflicts()
+    assert len(conflicts) == 1 and conflicts[0]["valid"]
+    assert "pas encore enregistrés" in TestClient(b).get("/").text
+    v = b.state.coffre.vault
+    tmp = tmp_path / "verif.db"
+    v.decrypt_file(shared / conflicts[0]["name"], tmp, "base")
+    con = sqlite3.connect(tmp)
+    assert sorted(r_[0] for r_ in con.execute("SELECT name FROM trips")) == ["Saisi par l'IA sur B", "Sortie test"]
+    con.close()
+    v.decrypt_file(shared / K.DB_FILE, tmp, "base")              # et le dossier a bien gardé la saisie de A
+    con = sqlite3.connect(tmp)
+    assert "Saisi sur A" in [r_[0] for r_ in con.execute("SELECT name FROM trips")]
+    con.close()
+    assert no_clear_text(shared) == []
     stop(b)
 
 
@@ -556,7 +634,7 @@ def test_ai_drafts_follow_the_unlocked_folder(env):
     cl = TestClient(app)
     cl.post("/deverrouiller", data={"mot_de_passe": PASSWORD})
     cl.post(f"/v/{tid}/ia/brouillon/mise-a-jour", json={"texte": "Nom du voyage : Sortie test\\nUne note"})
-    local = app.state.sync.local
+    local = app.state.coffre.local
     assert list((local / "brouillons_ia").glob(f"voyage-{tid}-*")) and not (local / ".verrouille" / "brouillons_ia").exists()
     stop(app)
 

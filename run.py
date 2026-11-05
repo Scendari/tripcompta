@@ -154,12 +154,11 @@ def main():
     ap.add_argument("--mcp", action="store_true", help="Démarre le serveur MCP (stdio) pour une IA")
     ap.add_argument("--fenetre", action="store_true", help="Dans sa propre fenêtre (même depuis le code source)")
     ap.add_argument("--navigateur", action="store_true", help="Dans le navigateur, même pour l'application fabriquée")
-    ap.add_argument("--home", help=argparse.SUPPRESS)          # MCP : dossier synchronisé (voir compta/cloud.py)
     a = ap.parse_args()
 
     if a.mcp:  # ne rien écrire sur la sortie standard : c'est le canal MCP
         from compta.mcp_server import build_server
-        build_server(a.data_dir, a.home).run("stdio")
+        build_server(a.data_dir).run("stdio")
         return
 
     _quiet_streams()

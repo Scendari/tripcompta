@@ -311,7 +311,7 @@
     let boot = null, down = false;
     async function tick() {
       try {
-        const r = await fetch("/ping?vu=1", { cache: "no-store" });   // « vu » : un onglet est ouvert (cloud.py)
+        const r = await fetch("/ping", { cache: "no-store" });
         const j = await r.json();
         if (boot && j.boot !== boot) {
           const dirty = document.querySelector("form[data-dirty]");

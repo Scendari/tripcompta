@@ -48,7 +48,7 @@ def test_move_data_to_another_folder(chosen):
     import time; time.sleep(0.8)
     assert calls == ["relance"]
     conf = json.loads((tmp / "reglages.json").read_text())
-    assert conf["data_dir"] == str(tmp / "b") and conf["partage"] is True   # dossier protégé (verrou…)
+    assert conf["data_dir"] == str(tmp / "b") and "partage" not in conf     # ouvert directement
     con = sqlite3.connect(tmp / "b" / "compta.db")
     assert con.execute("SELECT name FROM trips").fetchall() == [("Sortie",)]
     assert (tmp / "b" / "justificatifs" / "1_x.jpg").read_bytes() == b"IMG"
@@ -71,7 +71,7 @@ def test_change_errors(chosen):
     assert "va utiliser les voyages" in post(dossier=str(tmp / "plein"), mode="utiliser")
     assert "de nouveau rangés sur cet ordinateur" in post(action="defaut")
     conf = json.loads((tmp / "reglages.json").read_text())
-    assert conf["data_dir"] is None and conf["partage"] is False
+    assert conf["data_dir"] is None and "partage" not in conf
     con = sqlite3.connect(tmp / "Docs" / "TripCompta" / "compta.db")      # les voyages y ont été copiés
     assert con.execute("SELECT name FROM trips").fetchall() == [("Sortie",)]
 
