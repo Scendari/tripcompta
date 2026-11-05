@@ -23,11 +23,19 @@ def running_instance(first: int = 8765, count: int = 50) -> str | None:
     s'ouvrirait en lecture seule (verrou du dossier synchronisé) et on ne saurait plus laquelle utiliser."""
     import json
     import urllib.request
-    for port in range(first, first + count):
+    from concurrent.futures import ThreadPoolExecutor
+
+    def listening(port: int) -> bool:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(0.05)
-            if s.connect_ex(("127.0.0.1", port)) != 0:
-                continue
+            return s.connect_ex(("127.0.0.1", port)) == 0
+
+    # tous les ports à la fois : sous Windows, chaque port fermé coûte le délai entier (50 ports l'un après
+    # l'autre ≈ 3 s de plus à chaque ouverture)
+    ports = list(range(first, first + count))
+    with ThreadPoolExecutor(max_workers=count) as pool:
+        open_ports = [p for p, ok in zip(ports, pool.map(listening, ports)) if ok]
+    for port in open_ports:
         try:
             with urllib.request.urlopen(f"http://127.0.0.1:{port}/ping", timeout=1) as r:
                 if json.load(r).get("app") == "tripcompta":
