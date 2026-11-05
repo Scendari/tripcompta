@@ -691,7 +691,9 @@ def test_ai_writes_are_saved_within_seconds(env, keyring_mem):
     TestClient(app).post("/deverrouiller", data={"mot_de_passe": PASSWORD})
     box = app.state.coffre
     from compta.db import Database
-    Ops(Database(box.local)).create_trip("Saisi par l'IA")       # comme le serveur MCP
+    ai_db = Database(box.local)
+    Ops(ai_db).create_trip("Saisi par l'IA")                     # comme le serveur MCP
+    ai_db.engine.dispose()
     deadline = time.time() + 10
     while time.time() < deadline:
         v = box.vault
@@ -713,3 +715,21 @@ def test_ai_writes_are_saved_within_seconds(env, keyring_mem):
         assert "Saisi par l'IA" in [t.name for t in s_.query(M.Trip).all()]
     assert no_clear_text(folder) == []
     stop(app2)
+
+
+def test_start_even_if_working_copy_is_held_open(env, monkeypatch):
+    """Windows : l'IA (serveur MCP) garde la copie de travail ouverte, Trip Compta redémarre : il démarre quand même
+    (verrouillé) au lieu de planter sur un fichier qu'il ne peut pas effacer."""
+    tmp, folder = env
+    tid, files, key = protect(env)
+    from compta import dossier
+    real = dossier._unlink
+
+    def held(p, tries=8):
+        if p.name == C.DB:
+            raise PermissionError(32, "utilisé par un autre processus")
+        return real(p, tries)
+    monkeypatch.setattr(CF, "_unlink", held)
+    app = create_app()
+    assert app.state.coffre.locked
+    stop(app)
