@@ -249,7 +249,7 @@ def writer_notice(db, me: str | None = None, now: dt.datetime | None = None) -> 
     d'une heure (Trip Compta y est peut-être encore ouvert) ; sinon simple information, une fois par ordinateur
     (qui alterne portable et fixe ne doit pas voir le même message à chaque lancement)."""
     from . import paths as PATHS
-    from .cloud import computer_name
+    from .dossier import computer_name
     w = db.last_writer()
     me = me or computer_name()
     if not w or not w.get("ordinateur") or w["ordinateur"] == me:

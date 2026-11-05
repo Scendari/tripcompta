@@ -134,7 +134,7 @@ def test_unavailable_file_is_never_renamed(tmp_path, monkeypatch):
     f = tmp_path / "voyages"
     seed(f, ["Hendaye"])
     before = (f / "compta.db").read_bytes()
-    from compta import cloud
+    from compta import dossier as cloud
     monkeypatch.setattr(cloud, "cloud_only", lambda p: True)          # « disponible en ligne seulement »
     assert D.db_state(f / "compta.db") == "indisponible"
     restarted = []

@@ -101,7 +101,7 @@ class Vault:
                 f.write(self.encrypt(Path(src).read_bytes(), role))
                 f.flush()
                 os.fsync(f.fileno())
-            from .cloud import replace
+            from .dossier import replace
             replace(tmp, dst)
         finally:
             tmp.unlink(missing_ok=True)
@@ -111,7 +111,7 @@ class Vault:
         tmp = dst.with_name(f".{dst.name}.{uuid.uuid4().hex[:8]}.tmp")
         try:
             tmp.write_bytes(data)
-            from .cloud import replace
+            from .dossier import replace
             replace(tmp, dst)
         finally:
             tmp.unlink(missing_ok=True)
@@ -148,7 +148,7 @@ def create(folder: Path, password: str, recovery: str, n: int | None = None) -> 
 def write_key_file(folder: Path, data: dict) -> None:
     tmp = Path(folder) / f".{KEY_FILE}.tmp"
     tmp.write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
-    from .cloud import replace
+    from .dossier import replace
     replace(tmp, Path(folder) / KEY_FILE)
     (Path(folder) / README).write_text(README_TEXT, encoding="utf-8")
 
