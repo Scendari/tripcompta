@@ -23,7 +23,7 @@ jobs:
           python -m pip install -r requirements.txt pyinstaller
       - name: Fabriquer l'application
         run: python build_tools/build.py
-      - name: MSIX : emballer, installer, mesurer
+      - name: "MSIX : emballer, installer, mesurer"
         shell: bash
         run: |
           V="$(python -c 'from compta import __version__; print(__version__)')-dev"
