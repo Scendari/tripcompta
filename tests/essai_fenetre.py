@@ -165,6 +165,18 @@ def scenario(f):
         # retour arrière
         w.evaluate_js("history.back()")
         RES["retour"] = wait(lambda: (w.get_current_url() or "").endswith(":%d/" % port))
+        time.sleep(0.5)
+
+        # un formulaire envoyé depuis la fenêtre passe le contrôle d'origine (web.request_refusal)
+        w.evaluate_js("(function(){var f=document.createElement('form');f.method='post';f.action='/voyages';"
+                      "var i=document.createElement('input');i.name='name';i.value='Créé dans la fenêtre';"
+                      "f.appendChild(i);document.body.appendChild(f);f.submit();})()")
+        wait(lambda: "/v/" in (w.get_current_url() or ""))
+        from compta import models as _M
+        with app.state.db.Session() as _s:
+            RES["formulaire_fenetre"] = _s.query(_M.Trip).filter_by(name="Créé dans la fenêtre").count() == 1
+        w.load_url(f.base)
+        wait(lambda: (w.get_current_url() or "").endswith(":%d/" % port))
 
         # lien interne target=_blank -> nouvelle fenêtre de l'app ; lien externe -> navigateur
         n = len(webview.windows)

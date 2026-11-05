@@ -123,6 +123,56 @@ templates.env.filters["capfirst"] = _capfirst
 templates.env.filters["caisse"] = lambda t: _label(S.caisse_label(t))   # nom de la caisse d'un voyage donné
 
 
+# ---------------------------------------------------------------------- seules les pages de Trip Compta
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", "testserver"}     # testserver : le client des essais (TestClient)
+WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def _host_name(netloc: str) -> str:
+    """« 127.0.0.1:8765 » → « 127.0.0.1 » ; « [::1]:8765 » → « ::1 »."""
+    netloc = (netloc or "").strip().lower()
+    if netloc.startswith("["):
+        return netloc[1:].split("]", 1)[0]
+    return netloc.rsplit(":", 1)[0] if netloc.count(":") == 1 else netloc
+
+
+def request_refusal(method: str, headers) -> tuple[int, str] | None:
+    """Trip Compta n'écoute que sur cet ordinateur, mais un site ouvert dans le navigateur pourrait lui envoyer des
+    requêtes (formulaire caché, script) ou se faire passer pour lui (« DNS rebinding »). Refusé :
+    - toute requête dont l'adresse demandée (Host) n'est pas cet ordinateur ;
+    - une modification venue d'une autre page que Trip Compta (Origin, ou à défaut Sec-Fetch-Site du navigateur).
+    Les programmes sans navigateur (IA via l'API, relance de Trip Compta) n'envoient ni l'un ni l'autre : acceptés."""
+    host = headers.get("host") or ""
+    if _host_name(host) not in LOCAL_HOSTS:
+        return 400, "Adresse refusée : Trip Compta ne répond qu'à cet ordinateur (127.0.0.1)."
+    if method.upper() not in WRITE_METHODS:
+        return None
+    origin = headers.get("origin")
+    if origin is not None:
+        from urllib.parse import urlsplit
+        o = urlsplit(origin)
+        if origin == "null" or o.scheme != "http" or o.netloc.lower() != host.lower():
+            return 403, "Requête refusée : elle ne vient pas d'une page de Trip Compta."
+        return None
+    if (headers.get("sec-fetch-site") or "").lower() in ("cross-site", "same-site"):
+        return 403, "Requête refusée : elle ne vient pas d'une page de Trip Compta."
+    return None
+
+
+def install_guard(app: FastAPI) -> None:
+    """À ajouter en dernier : le plus extérieur, il passe avant tout le reste."""
+    @app.middleware("http")
+    async def only_trip_compta(request, call_next):
+        refused = request_refusal(request.method, request.headers)
+        if refused:
+            code, why = refused
+            if request.url.path.startswith("/api/"):
+                return JSONResponse({"detail": why}, status_code=code)
+            return HTMLResponse(f"<!doctype html><meta charset=utf-8><title>Trip Compta</title><p>{why}</p>",
+                                status_code=code)
+        return await call_next(request)
+
+
 def _bare_app(updater) -> tuple[FastAPI, str]:
     """Application réduite (données pas ouvertes) : fenêtre, ping, quitter, fichiers statiques."""
     app = FastAPI(title="Trip Compta", docs_url=None, redoc_url=None, openapi_url=None)
@@ -183,6 +233,7 @@ def data_problem_app(err: Exception, updater, restart=None) -> FastAPI:
     def explain(request: Request, rest: str = ""):
         return _bare_page(request, updater, "data_problem.html", 503, err=err, damaged=damaged,
                           folder=str(Path(err.path).parent), retry=app.state.restart is not None)
+    install_guard(app)
     return app
 
 
@@ -240,6 +291,7 @@ def newer_data_app(err: NewerDatabaseError, updater) -> FastAPI:
         a = fitting()
         ok, why = updater.installable() if a else (False, "")
         return page(request, "newer_data.html", 409, available=a, installable=ok, why=why)
+    install_guard(app)
     return app
 
 
@@ -3327,6 +3379,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
                         headers={"Content-Disposition":
                                  f"attachment; filename*=UTF-8''{quote('Justificatifs_' + _slug(t.name))}.zip"})
 
+    install_guard(app)
     return app
 
 
