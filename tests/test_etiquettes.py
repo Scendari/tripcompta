@@ -384,12 +384,11 @@ def test_check_texts_and_see_button(env):
     c.post(f"/v/{tid}/groupes", data={"name": "Minibus", "old_name": "Minibus",
                                      "members": [P["Bob"], P["Chloé"], P["Gisèle"]]})
     page = clean(re.sub(r"<[^>]+>", " ", c.get(f"/v/{tid}").text))
-    assert ("1 dépense à vérifier : Gisèle a rejoint « groupe Minibus » ; ajoute sa part à la main si cette "
-            "dépense concerne Gisèle.") in page
+    assert ("1 dépense à vérifier : Gisèle a rejoint « groupe Minibus » ; ajoute sa part à la main si besoin.") in page
     assert f'href="/v/{tid}/depenses">Voir</a>' in c.get(f"/v/{tid}").text
     lst = c.get(f"/v/{tid}/depenses").text
     assert ">Voir</a>" not in lst                                           # déjà sur la page Dépenses
-    assert ("Gisèle a rejoint « groupe Minibus » : ajoute sa part à la main si cette dépense concerne Gisèle."
+    assert ("Gisèle a rejoint « groupe Minibus » : ajoute sa part à la main si besoin."
             in clean(re.sub(r"<[^>]+>", " ", lst)))
 
 
