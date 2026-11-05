@@ -95,6 +95,12 @@ def test_real_window_discreet_windows(tmp_path):
                 break
             except Exception:
                 time.sleep(0.25)
+        for _ in range(240):                                     # la fenêtre (« Chargement… ») précède le serveur
+            try:
+                urllib.request.urlopen(base + "ping", timeout=1).read()
+                break
+            except Exception:
+                time.sleep(0.25)
         pids = _app_pid(p.pid)
         watch.pids.update(pids)
         wins = [w for pid in pids for w in _windows(pid)]
@@ -108,7 +114,9 @@ def test_real_window_discreet_windows(tmp_path):
             # Playwright détourne les téléchargements : on rend la main à WebView2 (donc au code de l'application)
             b.new_browser_cdp_session().send("Browser.setDownloadBehavior", {"behavior": "default"})
             page = b.contexts[0].pages[0]
-            page.goto(base)
+            # la fenêtre passe seule de « Chargement… » à l'application
+            page.wait_for_url(lambda u: u.startswith(base), timeout=30000)
+            page.wait_for_load_state()
             page.wait_for_function("() => !!window.pywebview")
             assert page.evaluate("document.visibilityState") == "visible"   # WebView2 dessine
             assert page.screenshot(timeout=10000)

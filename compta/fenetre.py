@@ -64,7 +64,7 @@ class Fenetres:
     def is_ours(self, url: str) -> bool:
         return str(url).startswith(self.base)
 
-    def new(self, url: str | None = None):
+    def new(self, url: str | None = None, html: str | None = None):
         import webview
         n = len(webview.windows)
         x, y = (None, None) if not n else (80 + 30 * n, 60 + 30 * n)
@@ -73,8 +73,9 @@ class Fenetres:
             # Windows : une fenêtre masquée ne dessine pas (WebView2 en pause) -> visible mais HORS de l'écran,
             # sans activation ni bouton dans la barre des tâches (voir _win_discreet)
             x, y, hidden = OFFSCREEN_X - 40 * n, 100, False
-        w = webview.create_window(TITLE, url or self.base, width=1280, height=860, min_size=(820, 560),
-                                  x=x, y=y, text_select=True, zoomable=True, hidden=hidden, focus=not DISCRETE)
+        w = webview.create_window(TITLE, None if html else (url or self.base), html=html, width=1280, height=860,
+                                  min_size=(820, 560), x=x, y=y, text_select=True, zoomable=True, hidden=hidden,
+                                  focus=not DISCRETE)
         if sys.platform == "win32" and not DISCRETE:
             w.events.shown += lambda: _win_front()     # sinon elle s'ouvre souvent derrière l'Explorateur
         if not self._watched:
@@ -87,6 +88,8 @@ class Fenetres:
         fabriquée (build_tools/smoke.py --fenetre) vérifie ainsi la vraie fenêtre, WebView2 compris. Avec
         TRIPCOMPTA_ESSAI_FENETRE (essais seulement) : la page crée aussi un voyage, comme un clic (contrôle d'origine)."""
         try:
+            if not self.is_ours(w.get_current_url() or ""):     # « Chargement… » (run_early) : pas encore l'app
+                return
             info = w.evaluate_js("document.title + '\\n' + navigator.userAgent") or ""
             title, _, ua = str(info).partition("\n")
             engine = "WebView2" if "Edg/" in ua else "WebKit" if "AppleWebKit" in ua else ua[:60]
@@ -446,6 +449,9 @@ def open_app_window(url: str) -> str:
     """Repli quand la vraie fenêtre est impossible : Windows → Edge « en mode application » (une fenêtre sans barre
     d'adresse ni onglets, presque comme la vraie) ; sinon, ou sans Edge → le navigateur par défaut. Renvoie
     « edge » ou « navigateur »."""
+    if DISCRETE:                               # essais : rien ne doit s'ouvrir sur l'écran de l'utilisateur
+        print(f"(essai) aurait ouvert : {url}", flush=True)
+        return "navigateur"
     if sys.platform == "win32":
         edge = edge_path()
         if edge:
@@ -539,3 +545,103 @@ def run(app, host: str, port: int, log_level: str = "warning", on_start=None) ->
         sys.stdout.flush()
         sys.stderr.flush()
         os._exit(0)
+
+
+LOADING_HTML = """<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Trip Compta</title><style>
+:root { --bg: #faf9f5; --text: #22201b; --muted: #6b665c; --teal: #1f8a7a; }
+@media (prefers-color-scheme: dark) { :root { --bg: #07111f; --text: #e8f4f8; --muted: #8ab0c8; --teal: #1fada8; } }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); display: flex; align-items: center; justify-content: center;
+       font: 16px/1.4 "Segoe UI", system-ui, sans-serif; cursor: progress; }
+.box { text-align: center; }
+h1 { margin: 0 0 1.2rem; font-size: 1.6rem; font-weight: 600; }
+.dots { display: inline-flex; gap: .5rem; }
+.dots i { width: .6rem; height: .6rem; border-radius: 50%; background: var(--teal); animation: b 1s infinite ease-in-out; }
+.dots i:nth-child(2) { animation-delay: .15s; } .dots i:nth-child(3) { animation-delay: .3s; }
+p { color: var(--muted); margin: 1rem 0 0; }
+@keyframes b { 0%, 80%, 100% { opacity: .25; transform: scale(.8); } 40% { opacity: 1; transform: scale(1); } }
+</style></head><body><div class="box"><h1>Trip Compta</h1><div class="dots"><i></i><i></i><i></i></div>
+<p>Chargement…</p></div></body></html>"""
+
+FAILED_HTML = """<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Trip Compta</title></head>
+<body style="font: 16px/1.5 'Segoe UI', sans-serif; max-width: 40rem; margin: 4rem auto; padding: 0 1rem">
+<h1>Trip Compta n'a pas pu démarrer</h1><p>Le détail est dans le fichier tripcompta.log, à côté des réglages :</p>
+<pre style="white-space: pre-wrap; font-size: 13px">{}</pre></body></html>"""
+
+
+def run_early(prepare, host: str, port: int, log_level: str = "warning") -> None:
+    """Windows : la fenêtre s'ouvre tout de suite sur « Chargement… » ; prepare() (bibliothèques, base, création de
+    l'app) et le serveur démarrent pendant ce temps, puis la fenêtre va sur l'app. WebView2 (un autre processus) se
+    lance ainsi en même temps que Python, au lieu d'après (~1 s de moins). Même suite que run() ensuite."""
+    import html as _html
+    import traceback
+    import webview
+
+    base = f"http://{host}:{port}/"
+    box, ready = {}, threading.Event()
+    f = Fenetres(base, None)
+
+    def boot():
+        try:
+            import uvicorn
+            app = prepare()
+            # avant que le serveur réponde : un 2e lancement qui le trouve doit pouvoir ramener CETTE fenêtre
+            # (sinon il ouvrirait Edge à côté)
+            f.app = app
+            app.state.fenetres = f
+            server = uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level=log_level))
+            th = threading.Thread(target=server.run, daemon=True, name="serveur")
+            th.start()
+            box.update(app=app, server=server, th=th)
+            _ready(base)
+        except Exception:
+            traceback.print_exc()
+            sys.stdout.flush()
+            box["error"] = traceback.format_exc()
+        finally:
+            ready.set()
+    threading.Thread(target=boot, daemon=True, name="demarrage").start()
+
+    webview.settings["ALLOW_DOWNLOADS"] = True
+    webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True
+
+    def fallback(why):
+        ready.wait()
+        if "app" not in box:
+            raise SystemExit(1)
+        return _browser_instead(box["app"], base, box["th"], why)
+    try:
+        _win_hooks(f)                          # charge .NET (pythonnet) : peut échouer sur certains PC
+    except Exception:
+        return fallback("dotnet")
+    if DISCRETE:
+        _win_discreet()
+    w = f.new(html=LOADING_HTML)
+
+    started = []
+
+    def after_start():
+        started.append(True)
+        ready.wait()
+        if "error" in box:
+            w.load_html(FAILED_HTML.format(_html.escape(box["error"])))
+            return
+        w.load_url(base)
+    storage = None
+    if DISCRETE:                               # essais : un dossier WebView2 à part (voir run())
+        import tempfile
+        storage = tempfile.mkdtemp(prefix="tripcompta-webview2-")
+    try:
+        webview.start(after_start, private_mode=False, storage_path=storage, menu=[])
+    except Exception:
+        if started:
+            raise
+        return fallback("webview")
+    ready.wait(timeout=30)                     # fermée pendant « Chargement… » : laisser finir l'ouverture de la base
+    if "app" in box:
+        (getattr(box["app"].state, "arreter", None) or (lambda: None))()   # enregistre et rend la main
+        box["server"].should_exit = True
+        box["th"].join(timeout=5)
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(0)
