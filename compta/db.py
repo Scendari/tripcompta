@@ -49,7 +49,7 @@ class DataUnavailableError(Exception):
 def db_state(path: Path) -> str:
     """« ok », « abimee » (lisible mais abîmée, ou pas une base SQLite) ou « indisponible » (fichier encore dans le
     cloud, disque débranché, accès refusé…). Lecture seule, rien n'est créé à côté."""
-    from .cloud import cloud_only
+    from .dossier import cloud_only
     try:
         if cloud_only(path):
             return "indisponible"
@@ -199,7 +199,7 @@ class Database:
     def mark_writer(self):
         """Note dans la base quel ordinateur la modifie (appelé avec chaque instantané « Annuler », donc à chaque
         modification, et après Défaire / Rétablir). Hors de l'instantané : « Défaire » n'annule que l'action."""
-        from .cloud import computer_name
+        from .dossier import computer_name
         value = json.dumps({"ordinateur": computer_name(),
                             "quand": dt.datetime.now().isoformat(timespec="seconds")}, ensure_ascii=False)
         try:
