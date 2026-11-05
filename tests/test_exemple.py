@@ -35,9 +35,10 @@ def test_open_example_complete_and_exact(tmp_path):
     assert name == "Hendaye 2026 – démo" and r.headers["location"].startswith(f"/v/{tid}")
     with app.state.db.Session() as s:
         t = s.get(M.Trip, tid)
-        assert len(t.participants) == 17 and len(t.expenses) == 13 and len(t.receipts) == 17
+        # TEMPORAIRE (démo Gisèle, voir transfer._temp_gisele) : 17 + 1 participants, 13 + 1 dépenses, + 66 €
+        assert len(t.participants) == 18 and len(t.expenses) == 14 and len(t.receipts) == 17
         assert t.asso_name == "CaisseClub"
-        assert S.compute_trip(t).total_cost == 851310                               # 8 513,10 € (site promo)
+        assert S.compute_trip(t).total_cost == 851310 + 6600                        # 8 513,10 € (site promo)
         for rec in t.receipts:
             assert (app.state.db.receipts_dir / rec.stored_name).exists()
     page = c.get(f"/v/{tid}").text
@@ -76,7 +77,7 @@ def test_remove_and_reset(tmp_path):
     new_id, _ = demo(app)
     with app.state.db.Session() as s:
         names = [p.name for p in s.get(M.Trip, new_id).participants]
-        assert "Essai à moi" not in names and len(names) == 17                    # remis à neuf
+        assert "Essai à moi" not in names and len(names) == 18                    # remis à neuf (TEMPORAIRE : + Gisèle)
     r = c.post(f"/v/{new_id}/exemple/retirer", follow_redirects=False)
     assert r.headers["location"].startswith("/?") and "&d=" in r.headers["location"]   # retiré (et « Défaire »)
     assert demo(app) is None

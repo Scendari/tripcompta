@@ -42,10 +42,10 @@ def env(tmp_path):
 
 
 def proposal(r):
-    """La page « L'ajouter aussi… » : {(pid, eid)} proposés (tous pré-cochés)."""
+    """La page « L'ajouter aussi… » : {(pid, eid)} proposés (rien n'est coché d'avance)."""
     assert "L'ajouter aussi à ces dépenses ?" in clean(r.text)
-    items = re.findall(r'name="add" value="(\d+)\.(\d+)" checked', r.text)
-    assert len(items) == r.text.count('name="add"')                          # tout est pré-coché
+    items = re.findall(r'name="add" value="(\d+)\.(\d+)"', r.text)
+    assert "checked" not in "".join(re.findall(r'<input type="checkbox" name="add"[^>]*>', r.text))
     return {(int(a), int(b)) for a, b in items}
 
 
@@ -64,8 +64,8 @@ def test_newcomer_diver_gets_everyone_and_divers_expenses(env):
     assert proposal(r) == {(jid, E["Gîte"]), (jid, E["Bateau"])}           # pas le Musée, pas le Resto (inégal)
     page = clean(re.sub(r"<[^>]+>", " ", r.text))
     assert "Julie · maintenant dans « tout le monde », « Plongeurs »" in page
-    assert "Gîte" in page and "400,00 € pour 4 pers. (tout le monde)" in page
-    assert "Bateau" in page and "300,00 € pour 3 pers. (Plongeurs)" in page
+    assert "Gîte" in page and "400,00 € · 4 → 5 personnes (tout le monde)" in page
+    assert "Bateau" in page and "300,00 € · 3 → 4 personnes (Plongeurs)" in page
     before = shares(app, tid)
     assert before["Gîte"] == ["Anne", "Bob", "Chloé", "Zoé"]                # rien n'est ajouté avant de valider
     # décocher le bateau (sortie avant son arrivée) : seul le gîte
@@ -255,3 +255,107 @@ def test_cash_lines_undated_first_then_newest(env):
     # les dépenses sans date (payées par l'asso) sont aussi en haut, avant toutes les lignes datées
     first_dated = table.index("Versement de Chloé")
     assert table.index("Paiement : Gîte") < first_dated
+
+
+# ---------------------------------------------------------------- groupes allumés, réunions, « à vérifier »
+def _gisele_env(env):
+    """Groupe Minibus = Bob, Chloé. Dépenses : Péage (Minibus), Ferry (Minibus + Accompagnants : Bob, Chloé, Zoé),
+    Café (Minibus + Anne, ajoutée à la main), Pique-nique (Minibus, parts inégales). Gisèle, déjà au voyage."""
+    app, ops, tid, c, P, E = env
+    c.post(f"/v/{tid}/groupes", data={"name": "Minibus", "members": [P["Bob"], P["Chloé"]]})
+    ops.add_participants(tid, ["Gisèle"], inclure_dans_depenses_communes=False)
+    ops.add_expense(tid, "Péage", montant_reel="12", pour=["Bob", "Chloé"])
+    ops.add_expense(tid, "Ferry", montant_reel="30", pour=["Bob", "Chloé", "Zoé"])
+    ops.add_expense(tid, "Café", montant_reel="9", pour=["Anne", "Bob", "Chloé"])
+    ops.add_expense(tid, "Pique-nique", montant_reel="40", parts={"Bob": 2, "Chloé": 1})
+    d = ops.trip(tid)
+    P = {p["nom"]: p["id"] for p in d["participants"]}
+    E = {x["libelle"]: x["id"] for x in d["depenses"]}
+    return app, ops, tid, c, P, E
+
+
+def test_joining_a_group_proposes_every_expense_where_it_is_lit(env):
+    """Gisèle rejoint le Minibus : toute dépense où le Minibus est allumé est proposée, RIEN n'est coché ; l'origine
+    est indiquée (réunion de groupes comprise), « contient aussi Anne » pour un ajout fait à la main."""
+    app, ops, tid, c, P, E = _gisele_env(env)
+    r = c.post(f"/v/{tid}/groupes", data={"name": "Minibus", "old_name": "Minibus",
+                                         "members": [P["Bob"], P["Chloé"], P["Gisèle"]]}, follow_redirects=True)
+    g = P["Gisèle"]
+    # le Minibus est allumé partout où Bob et Chloé sont : aussi dans le Gîte, le Bateau et le Café (avec Anne)
+    assert proposal(r) == {(g, E["Péage"]), (g, E["Ferry"]), (g, E["Café"]), (g, E["Gîte"]), (g, E["Bateau"])}
+    page = clean(re.sub(r"<[^>]+>", " ", r.text))
+    assert "Gisèle · maintenant dans « groupe Minibus »" in page
+    assert "12,00 € · 2 → 3 personnes (groupe Minibus)" in page
+    assert "30,00 € · 3 → 4 personnes (groupe Minibus + Accompagnants)" in page
+    assert "9,00 € · 3 → 4 personnes (groupe Minibus) contient aussi Anne" in page   # Café : Anne en plus
+    assert "Tout cocher" in page and 'data-go disabled' in r.text                # rien de coché : Ajouter grisé
+    # le pique-nique et le resto (parts inégales) : pas de case, mais « à vérifier »
+    assert "2 dépenses à vérifier" in page and "À vérifier plus tard" in page and "Pique-nique" in page
+    assert not re.search(rf'value="{g}\.{E["Pique-nique"]}"', r.text)
+
+
+def test_group_plus_someone_added_by_hand(env):
+    """Une dépense « Minibus + Paul » (Paul ajouté à la main) : le Minibus y est allumé, elle est proposée avec
+    « contient aussi Paul »."""
+    app, ops, tid, c, P, E = _gisele_env(env)
+    ops.add_participants(tid, ["Paul"], inclure_dans_depenses_communes=False)
+    ops.add_expense(tid, "Parking", montant_reel="8", pour=["Bob", "Chloé", "Paul"])
+    E = {x["libelle"]: x["id"] for x in ops.trip(tid)["depenses"]}
+    r = c.post(f"/v/{tid}/groupes", data={"name": "Minibus", "old_name": "Minibus",
+                                         "members": [P["Bob"], P["Chloé"], P["Gisèle"]]}, follow_redirects=True)
+    assert (P["Gisèle"], E["Parking"]) in proposal(r)
+    assert "contient aussi Paul" in clean(re.sub(r"<[^>]+>", " ", r.text))
+
+
+def test_custom_shares_are_flagged_until_reviewed(env):
+    """Parts personnalisées : signalées « à vérifier » (base), en rouge dans Dépenses, bandeau sur les pages du voyage,
+    alerte du tableau de bord ; « C'est bon » ou un nouvel enregistrement de la dépense les retire. Jamais ajoutées
+    d'office, même par un envoi trafiqué."""
+    app, ops, tid, c, P, E = _gisele_env(env)
+    g = P["Gisèle"]
+    c.post(f"/v/{tid}/groupes", data={"name": "Minibus", "old_name": "Minibus", "members": [P["Bob"], P["Chloé"], g]})
+    lst = c.get(f"/v/{tid}/depenses").text
+    assert re.search(r'<tr id="e%d" class="[^"]*to-check' % E["Pique-nique"], lst)
+    t = clean(re.sub(r"<[^>]+>", " ", lst))
+    assert "2 dépenses à vérifier" in t and "À vérifier : Gisèle a rejoint « groupe Minibus »" in t
+    assert "2 dépenses à vérifier" in clean(re.sub(r"<[^>]+>", " ", c.get(f"/v/{tid}").text))
+    assert any("à vérifier" in a["text"] for a in _alerts(app, tid))
+    # un envoi trafiqué ne l'ajoute pas aux parts personnalisées
+    c.post(f"/v/{tid}/rejoindre", data={"next": f"/v/{tid}/participants", "add": [f"{g}.{E['Pique-nique']}"]})
+    assert "Gisèle" not in shares(app, tid)["Pique-nique"]
+    # « C'est bon »
+    r = c.post(f"/v/{tid}/depenses/{E['Pique-nique']}/verifiee", follow_redirects=True)
+    assert "« Pique-nique » vérifiée" in clean(r.text)
+    assert "1 dépense à vérifier" in clean(re.sub(r"<[^>]+>", " ", c.get(f"/v/{tid}/depenses").text))   # le resto
+    # de nouveau signalée (Gisèle sort puis revient), puis la dépense est revue (enregistrée) : retirée aussi
+    c.post(f"/v/{tid}/groupes", data={"name": "Minibus", "old_name": "Minibus", "members": [P["Bob"], P["Chloé"]]})
+    c.post(f"/v/{tid}/groupes", data={"name": "Minibus", "old_name": "Minibus", "members": [P["Bob"], P["Chloé"], g]})
+    assert "2 dépenses à vérifier" in clean(re.sub(r"<[^>]+>", " ", c.get(f"/v/{tid}/depenses").text))
+    with app.state.db.Session() as s_:
+        assert len(s_.get(M.Expense, E["Pique-nique"]).checks) == 1
+    # « Modifier » : on ajoute Gisèle à la main (une part) et on enregistre
+    c.post(f"/v/{tid}/depenses/{E['Pique-nique']}", data={
+        "label": "Pique-nique", "actual": "40", f"inc_{P['Bob']}": "1", f"w_{P['Bob']}": "2",
+        f"inc_{P['Chloé']}": "1", f"w_{P['Chloé']}": "1", f"inc_{g}": "1", f"w_{g}": "1"})
+    with app.state.db.Session() as s_:
+        assert s_.get(M.Expense, E["Pique-nique"]).checks == []
+    assert "Gisèle" in shares(app, tid)["Pique-nique"]
+    assert "1 dépense à vérifier" in clean(re.sub(r"<[^>]+>", " ", c.get(f"/v/{tid}/depenses").text))   # le resto
+
+
+def test_ai_adds_only_whole_group_expenses_and_flags_the_rest(env):
+    """L'IA (API) : ajoutée d'office seulement aux dépenses partagées exactement entre des groupes entiers ; les
+    parts personnalisées sont signalées « à vérifier » ; « contient aussi » : rien d'office."""
+    app, ops, tid, c, P, E = env
+    ops.add_participants(tid, ["Julie"])                  # plongeuse par défaut
+    sh = shares(app, tid)
+    assert "Julie" in sh["Gîte"] and "Julie" in sh["Bateau"] and "Julie" not in sh["Resto"]
+    with app.state.db.Session() as s_:
+        resto = s_.get(M.Expense, E["Resto"])
+        assert [c_.reason for c_ in resto.checks] in (["Plongeurs"], ["tout le monde"])
+
+
+def _alerts(app, tid):
+    with app.state.db.Session() as s_:
+        t = s_.get(M.Trip, tid)
+        return S.alerts(t, S.compute_trip(t))

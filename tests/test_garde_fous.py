@@ -189,7 +189,7 @@ def test_old_change_elsewhere_is_said_once_per_computer(tmp_path):
     d = D.Database(f)
     os.environ["TRIPCOMPTA_ORDINATEUR"] = "PC-Anne"
     d.mark_writer()
-    now = dt.datetime.now() + dt.timedelta(days=1, hours=2)
+    now = dt.datetime.now() + dt.timedelta(days=1, minutes=1)              # « hier », quelle que soit l heure
     n = writer_notice(d, me="PC-Bob", now=now)
     assert n.startswith("Dernière modification de tes voyages : sur « PC-Anne », hier à ")
     assert writer_notice(d, me="PC-Bob", now=now) is None             # déjà dit : pas à chaque lancement

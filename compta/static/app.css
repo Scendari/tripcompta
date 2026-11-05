@@ -878,6 +878,7 @@ label.check { display: inline-flex; align-items: center; gap: .4rem; font-weight
 .folder-line a:hover { color: var(--teal-strong); text-decoration: underline; }
 .folder-banner { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; padding: .6rem 1.2rem; font-size: .9rem; }
 .folder-banner > span { flex: 1 1 280px; }
+.folder-banner.danger { background: var(--err-bg); color: var(--text); border-bottom: 1px solid var(--border); }
 .folder-banner.warn { background: var(--amber-bg); color: var(--text); border-bottom: 1px solid var(--border); }
 .data-where { font-size: 1.05rem; margin: .3rem 0 .1rem; }
 .data-state { margin: .3rem 0 .4rem; }
@@ -1229,3 +1230,18 @@ form.card.setting { cursor: default; }
 .join-person .check-col { columns: 1; display: grid; gap: .45rem; }
 .join-item { display: flex; gap: .55rem; align-items: baseline; }
 .join-form > .row { margin-top: .9rem; }
+
+/* dépenses « à vérifier » (parts personnalisées, quelqu'un a rejoint un groupe allumé) */
+tr.to-check > td { background: var(--err-bg); border-top: 2px solid var(--coral); border-bottom: 2px solid var(--coral); }
+tr.to-check > td:first-child { border-left: 2px solid var(--coral); }
+tr.to-check > td:last-child { border-right: 2px solid var(--coral); }
+.check-note { margin-top: .35rem; font-size: .85rem; color: var(--text); }
+.check-actions { display: inline-flex; gap: .35rem; margin-left: .3rem; vertical-align: middle; }
+.join-warn { margin: 0 0 1rem; padding: .7rem .9rem; border: 2px solid var(--coral); border-radius: 10px;
+             background: var(--err-bg); }
+.join-all { display: inline-flex; align-items: center; gap: .45rem; margin: 0 0 .6rem; cursor: pointer; }
+.join-others { display: block; color: var(--amber); }
+.join-checks { margin-top: .7rem; padding: .55rem .7rem; border: 2px solid var(--coral); border-radius: 8px;
+               background: var(--err-bg); }
+.to-check-item { display: flex; gap: .5rem; align-items: baseline; font-size: .9rem; font-weight: 500; }
+.to-check-item + .to-check-item { margin-top: .3rem; }

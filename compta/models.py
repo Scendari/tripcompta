@@ -138,6 +138,7 @@ class Expense(Base):
     payer: Mapped[Optional[Participant]] = relationship(foreign_keys=[payer_id])
     refund_to: Mapped[Optional[Participant]] = relationship(foreign_keys=[refund_to_id])
     shares: Mapped[list["ExpenseShare"]] = relationship(cascade="all, delete-orphan")
+    checks: Mapped[list["ExpenseCheck"]] = relationship(cascade="all, delete-orphan")   # « à vérifier »
     payments: Mapped[list["ExpensePayment"]] = relationship(cascade="all, delete-orphan",
                                                             order_by="ExpensePayment.id")
     receipt_links: Mapped[list["ReceiptLink"]] = relationship(cascade="all, delete-orphan",
@@ -276,6 +277,18 @@ class Movement(Base):
 
     trip: Mapped[Trip] = relationship(back_populates="movements")
     participant: Mapped[Participant] = relationship()
+
+
+class ExpenseCheck(Base):
+    """Dépense « à vérifier » : quelqu'un a rejoint un groupe (étiquette, famille) allumé dans cette dépense, mais
+    ses parts sont personnalisées (parts inégales ou montant fixé) : impossible de l'y ajouter tout seul. L'alerte
+    disparaît quand la dépense est enregistrée de nouveau, ou avec « C'est bon »."""
+    __tablename__ = "expense_checks"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    expense_id: Mapped[int] = mapped_column(ForeignKey("expenses.id"))
+    participant_id: Mapped[int] = mapped_column(Integer)          # pas de clé : la personne peut être retirée
+    reason: Mapped[str] = mapped_column(String(200), default="")  # « groupe covoit »
+    created: Mapped[dt.datetime] = mapped_column(DateTime, default=now)
 
 
 class Receipt(Base):
