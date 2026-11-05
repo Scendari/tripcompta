@@ -15,26 +15,21 @@
     Trip Compta
   </a>
   <span class="spacer"></span>
-  {% if cloud and (not cloud.local or cloud.protected) %}
-  {# où sont les voyages, en discret (le détail au survol) #}
-  {% set where = ('💻 Rangé sur ' if cloud.local else '☁️ Rangé dans ') ~ cloud.service
-       ~ (' · protégé par mot de passe' if cloud.protected else '')
-       ~ ((' · enregistré le ' if '/' in cloud.saved else ' · enregistré à ') ~ cloud.saved if cloud.saved and not cloud.locked else '') %}
-  <a class="cloud-chip" href="/reglages/donnees" title="{{ where }}" aria-label="{{ where }}">
-    {% if cloud.local %}<span aria-hidden="true">💻</span>{% else %}<svg class="ico-cloud" viewBox="0 0 24 24" width="1.15em" height="1.15em" aria-hidden="true"><path d="M7 18h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.6 9.2 4.5 4.5 0 0 0 7 18z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg>{% endif %}<span class="lbl">{% if cloud.saved and not cloud.locked %}{{ cloud.saved }}{% else %}{{ cloud.service }}{% endif %}</span></a>
+  {% if dossier and dossier.saved and not dossier.locked %}
+  {# enregistrement automatique : l'heure du dernier (le détail au survol) #}
+  {% set when = ('le ' if '/' in dossier.saved else 'à ') ~ dossier.saved %}
+  <a class="save-chip" href="/reglages/donnees" title="Enregistré automatiquement {{ when }}" aria-label="Enregistré automatiquement {{ when }}">
+    <svg viewBox="0 0 24 24" width="1.05em" height="1.05em" aria-hidden="true"><path d="M5 4h11l3 3v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4z M8 4v5h7V4 M8 20v-6h8v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span class="lbl">{{ dossier.saved }}</span></a>
   {% endif %}
-  {% if cloud and cloud.inbox %}{% set n = cloud.inbox %}{% set txt = '📥 ' ~ n ~ ' justificatif' ~ ('s' if n > 1 else '') ~ ' à trier' %}
-  {% if trip %}<a class="cloud-chip inbox" href="/v/{{ trip.id }}/justificatifs#a-trier" title="Déposés depuis le téléphone : à ranger dans les dépenses">{{ txt }}</a>
-  {% else %}<span class="cloud-chip inbox" title="Ouvre un voyage, puis 📎 Justificatifs, pour les ranger">{{ txt }}</span>{% endif %}{% endif %}
-  {% if cloud and cloud.protected and not cloud.locked %}<form method="post" action="/verrouiller" class="inline"><button class="iconbtn" title="Verrouiller : le mot de passe sera redemandé">🔒 Verrouiller</button></form>{% endif %}
+  {% if dossier and dossier.protected and not dossier.locked %}<form method="post" action="/verrouiller" class="inline"><button class="iconbtn" title="Verrouiller : le mot de passe sera redemandé">🔒 Verrouiller</button></form>{% endif %}
   <a class="iconbtn settings-btn{{ ' on' if request.url.path.startswith('/reglages') or request.url.path.startswith('/protection') }}" href="/reglages" title="Réglages : où sont tes voyages, mot de passe, mises à jour" aria-label="Réglages">⚙️<span class="lbl"> Réglages</span></a>
   <button class="iconbtn" data-theme-toggle title="Thème clair / sombre">◐</button>
   <form method="post" action="/quitter" class="inline quit" data-confirm="Arrêter Trip Compta ? Tes données sont enregistrées : tu pourras relancer l'application plus tard.">
     <button class="iconbtn quit-btn" title="Arrêter l'application">{{ POWER }} Arrêter</button>
   </form>
 </header>
-{% if cloud and cloud.conflicts %}
-<div class="cloud-banner warn" role="status"><span>⚠️ {{ 'Une autre version' if cloud.conflicts == 1 else cloud.conflicts ~ ' autres versions' }} de tes voyages {{ 'est apparue' if cloud.conflicts == 1 else 'sont apparues' }} dans le dossier (Trip Compta ouvert sur deux ordinateurs en même temps ?). Rien n'est perdu.</span>
+{% if dossier and dossier.conflicts %}
+<div class="folder-banner warn" role="status"><span>⚠️ {{ 'Une autre version' if dossier.conflicts == 1 else dossier.conflicts ~ ' autres versions' }} de tes voyages {{ 'est apparue' if dossier.conflicts == 1 else 'sont apparues' }} dans le dossier (Trip Compta ouvert sur deux ordinateurs en même temps ?). Rien n'est perdu.</span>
   <a class="btn small" href="/reglages/donnees#conflits">Voir</a></div>
 {% endif %}
 {% if window_blocked == "dotnet" %}

@@ -98,7 +98,7 @@ def no_clear_text(folder: Path) -> list:
     """Fichiers du dossier qui contiennent quelque chose de lisible (hors verrou, LISEZMOI, clé, à trier)."""
     bad = []
     for f in folder.rglob("*"):
-        if not f.is_file() or f.name in (K.README, K.KEY_FILE) or C.INBOX in f.parts:
+        if not f.is_file() or f.name in (K.README, K.KEY_FILE):
             continue
         data = f.read_bytes()
         hits = [s_ for s_ in SECRETS if s_ in data]
@@ -146,7 +146,7 @@ def test_round_trip_activate_unlock_remove(env):
     tmp, folder = env
     tid, files, key = protect(env)
     # le dossier : seulement des fichiers chiffrés
-    names = {p.name for p in folder.iterdir()} - {C.INBOX}
+    names = {p.name for p in folder.iterdir()}
     assert names == {K.KEY_FILE, K.DB_FILE, K.README, C.RECEIPTS}      # plus d'historique ni de sauvegardes ici
     assert all(p.name.endswith(K.SUFFIX) for p in (folder / C.RECEIPTS).iterdir())
     assert len(list((folder / C.RECEIPTS).iterdir())) == 2
@@ -166,7 +166,7 @@ def test_round_trip_activate_unlock_remove(env):
     assert "Voyages déverrouillés" in r.text and not app.state.coffre.locked
     assert amounts(app, tid) == EXPECTED
     assert receipts_bytes(app, tid) == files                     # octet pour octet
-    assert "🔒 Verrouiller" in cl.get("/").text and "protégé par mot de passe" in cl.get("/").text
+    assert "🔒 Verrouiller" in cl.get("/").text and "Enregistré automatiquement" in cl.get("/").text
     # une saisie : publiée chiffrée
     cl.post("/voyages", data={"name": "Voyage secret"})
     assert no_clear_text(folder) == [] and b"Voyage secret" not in (folder / K.DB_FILE).read_bytes()
@@ -418,15 +418,6 @@ def test_two_computers_on_a_protected_folder(tmp_path, monkeypatch, keyring_mem)
     assert b.state.coffre.conflicts() == []
     assert no_clear_text(shared) == []
 
-    # justificatifs à trier : chiffrés au rangement, original supprimé
-    from PIL import Image
-    n_before = len(list((shared / C.RECEIPTS).glob(f"*{K.SUFFIX}")))   # 2 + les 2 du voyage importé
-    assert n_before == 4
-    Image.new("RGB", (20, 20), (1, 2, 3)).save(shared / C.INBOX / "IMG_0001.jpg")
-    r = cb.post(f"/v/{tid}/justificatifs/a-trier", data={"nom": ["IMG_0001.jpg"]}, follow_redirects=True)
-    assert "ajouté" in r.text and not (shared / C.INBOX / "IMG_0001.jpg").exists()
-    assert not (shared / C.INBOX / C.INBOX_DONE).exists()
-    assert len(list((shared / C.RECEIPTS).glob(f"*{K.SUFFIX}"))) == n_before + 1 and no_clear_text(shared) == []
     stop(a)
     stop(b)
 
@@ -573,7 +564,7 @@ def test_no_clear_copy_elsewhere_while_protected(env):
     cl = TestClient(app)
     cl.post("/deverrouiller", data={"mot_de_passe": PASSWORD})
     page = cl.get("/reglages/donnees").text.replace("&#39;", "'")
-    assert "Sur <b>cet ordinateur</b>" in page and "protégés par un mot de passe" in page
+    assert "Tes voyages sont rangés dans" in page and "protégés par un mot de passe" in page
     assert 'value="ranger"' not in page and "Ranger mes voyages sur cet ordinateur" not in page
     other = tmp / "Dropbox" / "TripCompta"
     other.parent.mkdir()

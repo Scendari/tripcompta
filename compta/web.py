@@ -371,10 +371,6 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
                 vault_box.publish()
         else:
             db = Database(folder, app_version=upd.version)
-            try:                                 # photos de tickets déposées depuis un téléphone (avec l'app du cloud)
-                (folder / C.INBOX).mkdir(exist_ok=True)
-            except OSError:
-                pass
     except NewerDatabaseError as err:
         return newer_data_app(err, upd)
     except (DataUnavailableError, DamagedDatabaseError) as err:
@@ -528,7 +524,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         ctx.setdefault("caisse_title", _capfirst(ctx["asso_name"]) if ctx["asso_name"].startswith("la caisse")
                        else Markup("Caisse de ") + ctx["asso_name"])
         ctx["request"] = request
-        ctx.setdefault("cloud", folder_status())
+        ctx.setdefault("dossier", folder_status())
         if vault_box is not None and vault_box.notice and not ctx.get("msg"):
             ctx["msg"], vault_box.notice = vault_box.notice, None
         ctx.setdefault("app_version", upd.label)
@@ -543,10 +539,9 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         return templates.TemplateResponse(request, name, ctx)
 
     def folder_status() -> dict:
-        """Où sont les voyages, pour l'en-tête des pages : service de cloud (ou cet ordinateur), protégés,
-        dernier enregistrement, copies en conflit et justificatifs à trier. « stat » ne télécharge rien."""
+        """Pour l'en-tête des pages : heure du dernier enregistrement (automatique), protégé / verrouillé, copies en
+        conflit laissées à côté de la base. « stat » ne télécharge rien d'un fichier resté dans un cloud."""
         F = db.home
-        svc = C.service_name(F)
         try:
             main = vault_box.shared_db if vault_box is not None else db.path
             on_disk = main.stat().st_mtime if main.exists() else None
@@ -554,12 +549,9 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             on_disk = None
         published = vault_box.published_at if vault_box is not None else None
         saved = max([x for x in (published, on_disk) if x] or [0]) or None
-        local = not PATHS.looks_synced(F) and svc is None
-        return dict(service=svc or ("cet ordinateur" if local else "le dossier synchronisé"), folder=str(F),
-                    local=local, protected=vault_box is not None,
+        return dict(folder=str(F), protected=vault_box is not None,
                     locked=vault_box is not None and vault_box.locked, saved=_hm(saved),
-                    conflicts=len(C.conflicts(F, vault_box is not None, readable=lambda p: True)),
-                    inbox=len(C.inbox(F)))
+                    conflicts=len(C.conflicts(F, vault_box is not None, readable=lambda p: True)))
 
     def back(url: str, msg: str | None = None, redo: str | None = None):
         if msg:
@@ -829,17 +821,9 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     def _data_page(request, **ctx):
         cur = db.home
         default_dir = PATHS.documents_dir() / PATHS.FOLDER
-        clouds = C.cloud_roots()
-        for c_ in clouds:
-            try:
-                c_["current"] = Path(c_["target"]).resolve() == cur.resolve()
-            except OSError:
-                c_["current"] = False
         w = db.last_writer() if vault_box is None or not vault_box.locked else None
         return render(request, "data_dir.html", data_dir=cur, source=data_source,
-                      local_has_data=(default_dir / C.DB).exists(),
-                      local_current=source_is_default(),
-                      default_dir=default_dir, clouds=clouds,
+                      local_current=source_is_default(), default_dir=default_dir,
                       conflicts=(vault_box.conflicts() if vault_box is not None else C.conflicts(cur)),
                       writer=dict(ordinateur=w["ordinateur"], quand=human_when(w["quand"])) if w else None,
                       protected=vault_box is not None,
@@ -869,7 +853,11 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         except OSError:
             pass
         out["existe"] = p.is_dir()
-        out["ok"] = p.is_dir() or p.parent.is_dir()
+        try:                                             # le dossier par défaut est créé au besoin (Documents compris)
+            default = p.resolve() == (PATHS.documents_dir() / PATHS.FOLDER).resolve()
+        except OSError:
+            default = False
+        out["ok"] = p.is_dir() or p.parent.is_dir() or default
         if not p.is_dir():
             return out
         if K.is_protected(p):
@@ -964,45 +952,17 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
 
     @app.post("/reglages/donnees", response_class=HTMLResponse)
     async def data_dir_change(request: Request):
+        """Changer de dossier : un seul chemin. Le dossier contient déjà des voyages → on les ouvre (jamais de copie
+        par-dessus) ; sinon → on y copie les voyages actuels (vérifiés), l'ancien dossier n'est pas touché."""
         f = await request.form()
-        action = f.get("action") or "ranger"
-        if f.get("dossier") == "__local__":     # l'option « 💻 Sur cet ordinateur » de la liste
-            action = "local"
         if data_source in ("lancement", "env"):
             return _data_page(request, error="Le dossier est imposé au lancement de l'application : il ne se change "
                                               "pas ici.")
-        if vault_box is not None and action in ("local", "defaut", "ranger"):
+        if vault_box is not None:
             return _data_page(request, error="Tes voyages sont protégés par un mot de passe : pour les ranger "
                                               "ailleurs, retire d'abord la protection (plus bas), change de dossier, "
                                               "puis protège-les de nouveau. Sinon, une copie lisible serait créée.")
-        if action in ("local", "defaut"):        # retour au dossier sur cet ordinateur (Documents/TripCompta)
-            target = PATHS.documents_dir() / PATHS.FOLDER
-            try:
-                same = target.resolve() == db.home.resolve()
-            except OSError:
-                same = False
-            if f.get("mode") == "utiliser":   # reprendre les voyages déjà rangés sur cet ordinateur
-                if not (target / C.DB).exists():
-                    return _data_page(request, error=f"Il n'y a pas encore de voyages Trip Compta dans « {target} ». "
-                                                      "Choisis « Copier mes voyages dans ce dossier ».", mode="utiliser")
-                PATHS.write_config(data_dir=None)
-                return _restart_page(request, f"Trip Compta va utiliser les voyages rangés sur cet ordinateur, dans "
-                                              f"« {target} ».")
-            if not same:
-                try:
-                    if (target / C.DB).exists():  # ce qui y était (l'ancien dossier) est gardé dans ses sauvegardes
-                        (target / "sauvegardes").mkdir(parents=True, exist_ok=True)
-                        C.sqlite_copy(target / C.DB, target / "sauvegardes" /
-                                      f"avant-retour-{dt.datetime.now():%Y-%m-%d-%Hh%M%S}.db")
-                    _copy_voyages(target, target / "justificatifs", target / "brouillons_ia")
-                except (OSError, Exception) as e:
-                    return _data_page(request, error=f"Impossible de copier les voyages vers « {target} » : {e}")
-            PATHS.write_config(data_dir=None)
-            return _restart_page(request, f"Tes voyages sont de nouveau rangés sur cet ordinateur, dans « {target} »."
-                                 + (f" Le dossier « {db.home} » n'a pas été touché." if not same else ""))
         raw = (f.get("dossier") or "").strip().strip('"').strip("'")
-        if raw == "__autre__":
-            raw = (f.get("autre") or "").strip().strip('"').strip("'")
         if not raw:
             return _data_page(request, error="Choisis un dossier.", value=raw)
         target = Path(raw).expanduser()
@@ -1015,30 +975,26 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             same = False
         if same:
             return _data_page(request, error="Tes voyages sont déjà rangés dans ce dossier.", value=raw)
-        if not target.parent.is_dir() and not target.is_dir():
+        try:
+            default = target.resolve() == (PATHS.documents_dir() / PATHS.FOLDER).resolve()
+        except OSError:
+            default = False
+        if not default and not target.parent.is_dir() and not target.is_dir():
             return _data_page(request, error=f"Le dossier « {target.parent} » est introuvable.", value=raw)
+        conf = None if default else str(target)       # le dossier par défaut : rien à retenir
         has_data = (target / C.DB).exists() or (target / f".{C.DB}.icloud").exists() or K.is_protected(target)
-        if f.get("mode") == "utiliser":
-            if not has_data:
-                return _data_page(request, error="Il n'y a pas encore de voyages Trip Compta dans ce dossier (fichier "
-                                                  "« compta.db » introuvable). Choisis « Copier mes voyages dans ce dossier ».",
-                                  value=raw, mode="utiliser")
-            PATHS.write_config(data_dir=str(target))
-            return _restart_page(request, f"Trip Compta va utiliser les voyages rangés dans « {target} ».")
-        if has_data:
-            return _data_page(request, error="Ce dossier contient déjà des voyages Trip Compta (sans doute rangés "
-                                              "depuis un autre ordinateur). Choisis « Ouvrir les voyages de ce "
-                                              "dossier », ou un autre dossier.", value=raw)
+        if has_data:                                   # des voyages y sont déjà : on les ouvre, rien n'est copié
+            PATHS.write_config(data_dir=conf)
+            return _restart_page(request, f"Trip Compta va ouvrir les voyages rangés dans « {target} ». Ceux de "
+                                          f"« {db.home} » restent où ils sont.")
         try:
             _copy_voyages(target, target / C.RECEIPTS, target / "brouillons_ia")
-            (target / C.INBOX).mkdir(exist_ok=True)
         except (OSError, Exception) as e:
             return _data_page(request, error=f"Impossible de copier les voyages vers ce dossier : {e}", value=raw)
-        PATHS.write_config(data_dir=str(target))
-        svc = C.service_name(target)
-        return _restart_page(request, f"Tes voyages ont été copiés dans « {target} »"
-                             + (f" ({svc})" if svc else "") + f". L'ancien dossier « {db.home} » n'a pas été "
-                             f"touché : tu pourras le supprimer quand tu auras vérifié que tout est là.")
+        PATHS.write_config(data_dir=conf)
+        return _restart_page(request, f"Tes voyages ont été copiés dans « {target} ». L'ancien dossier "
+                                      f"« {db.home} » n'a pas été touché : tu pourras le supprimer quand tu auras "
+                                      f"vérifié que tout est là.")
 
     # ------------------------------------------------------------------ protection par un mot de passe
     app.state.pending_protection = None      # en cours d'activation (en mémoire seulement, jamais sur le disque)
@@ -1165,9 +1121,9 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         app.state.pending_protection = None
         if pend["remember"]:
             K.remember(vault)
-        return _restart_page(request, "Tes voyages sont maintenant protégés par ton mot de passe. Pense à vider la "
-                                      "corbeille et les anciennes versions de ton cloud (par exemple Google Drive les "
-                                      "garde 30 jours) : elles contiennent encore les fichiers d'avant, lisibles.")
+        return _restart_page(request, "Tes voyages sont maintenant protégés par ton mot de passe. Si ce dossier est "
+                                      "sauvegardé ou synchronisé ailleurs, ses anciennes copies sont encore lisibles : "
+                                      "pense à les supprimer (corbeille, anciennes versions).")
 
     def _activate(password: str, recovery: str):
         """Chiffre la base et les justificatifs dans le dossier, vérifie TOUT, puis écrit cle.tripcompta (c'est le
@@ -1248,8 +1204,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
                                     error=f"Le nouveau mot de passe doit faire au moins {K.MIN_PASSWORD} caractères, "
                                           "et les deux saisies doivent être identiques.")
         K.change_password(_folder(), vault_box.vault, new)
-        return back("/reglages/protection", "Mot de passe changé (sur tous tes ordinateurs, dès que ton cloud aura "
-                                          "recopié le dossier)")
+        return back("/reglages/protection", "Mot de passe changé")
 
     @app.post("/protection/secours", response_class=HTMLResponse)
     async def protect_new_recovery(request: Request):
@@ -2986,83 +2941,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     def receipts(tid: int, request: Request, s: Session = Depends(get_s)):
         t = trip_or_404(s, tid)
         missing = [e for e in t.expenses if e.actual is not None and not e.receipt_links]
-        return render(request, "receipts.html", trip=t, missing=missing, inbox=C.inbox(db.home),
-                      inbox_folder=str(db.home / C.INBOX))
-
-    # « Justificatifs à trier » : photos ou PDF déposés dans le dossier des voyages depuis un téléphone
-    def _inbox_path(name: str) -> Path:
-        p_ = C.inbox_file(db.home, name)
-        if p_ is None:
-            raise HTTPException(404, "Fichier introuvable")
-        return p_
-
-    @app.get("/a-trier/fichier")
-    def inbox_file(nom: str):
-        p_ = _inbox_path(nom)
-        return FileResponse(p_, media_type=mimetypes.guess_type(p_.name)[0] or None,
-                            headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(p_.name)}"})
-
-    @app.get("/a-trier/vignette")
-    def inbox_thumb(nom: str):
-        import hashlib
-        p_ = _inbox_path(nom)
-        st_ = p_.stat()
-        key = hashlib.sha1(f"{p_.name}|{st_.st_size}|{st_.st_mtime_ns}".encode()).hexdigest()[:16]
-        cache = db.thumbs_dir / f"a-trier-{key}.jpg"
-        if not cache.exists():
-            try:
-                data = _thumbnail(p_.read_bytes(), p_.suffix.lower() == ".pdf")
-                cache.parent.mkdir(exist_ok=True)
-                _write_atomic(cache, data)       # deux demandes simultanées : jamais une vignette à moitié écrite
-            except Exception:
-                return Response(TRANSPARENT_PNG, media_type="image/png", headers={"Cache-Control": "no-store"})
-        return FileResponse(cache, media_type="image/jpeg")
-
-    @app.post("/v/{tid}/justificatifs/a-trier")
-    async def inbox_attach(tid: int, request: Request, s: Session = Depends(get_s)):
-        """Ajoute au voyage les fichiers cochés de « Justificatifs à trier » (et les lie aux dépenses cochées) ;
-        les originaux sont rangés dans « Justificatifs à trier/Rangés » (jamais effacés)."""
-        import shutil
-        t = trip_or_404(s, tid)
-        f = await request.form()
-        names_ = [n for n in f.getlist("nom") if n]
-        if not names_:
-            return back(f"/v/{tid}/justificatifs#a-trier", "Coche au moins un fichier")
-        files = [_inbox_path(n) for n in names_]
-        db.snapshot(f"ajout de {len(files)} justificatif(s) à trier")
-        link_to = {int(x) for x in f.getlist("expenses")}
-        done = db.home / C.INBOX / C.INBOX_DONE
-        if vault_box is None:
-            done.mkdir(exist_ok=True)
-        added = []
-        for src in files:
-            ext = src.suffix.lower()[:10]
-            stored = f"{t.id}_{uuid.uuid4().hex}{ext}"
-            shutil.copyfile(src, db.receipts_dir / stored)
-            number = max([r.number for r in t.receipts] or [0]) + 1
-            ctype = mimetypes.guess_type(src.name)[0] or ("image/heic" if ext in (".heic", ".heif") else "")
-            rec = M.Receipt(trip_id=t.id, number=number, original_name=src.name, stored_name=stored, content_type=ctype)
-            t.receipts.append(rec)
-            s.flush()
-            for eid in link_to:
-                s.add(M.ReceiptLink(receipt_id=rec.id, expense_id=eid))
-            added.append(rec)
-        s.commit()
-        for src in files:                        # après l'enregistrement : rangés, pas effacés
-            if vault_box is not None:            # dossier protégé : l'original en clair ne doit pas rester
-                src.unlink(missing_ok=True)
-                continue
-            dst = done / src.name
-            n_ = 2
-            while dst.exists():
-                dst = done / f"{src.stem} ({n_}){src.suffix}"
-                n_ += 1
-            try:
-                os.replace(src, dst)
-            except OSError:
-                pass
-        codes = ", ".join(r.code for r in added)
-        return back(f"/v/{tid}/justificatifs", f"{len(added)} justificatif(s) ajouté(s) : {codes}")
+        return render(request, "receipts.html", trip=t, missing=missing)
 
     @app.post("/v/{tid}/justificatifs")
     async def receipts_upload(tid: int, request: Request, s: Session = Depends(get_s)):

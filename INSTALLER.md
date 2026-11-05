@@ -92,9 +92,9 @@ retrouver sur un autre ordinateur, sans aucun serveur (rien n'est envoyé ailleu
 1. Vérifie que l'application de ton cloud est installée sur l'ordinateur (le dossier Dropbox, Google Drive,
    OneDrive ou iCloud Drive apparaît dans le Finder ou l'Explorateur).
 2. Dans Trip Compta : **⚙️ Réglages → Où sont mes voyages**.
-3. Dans **Changer de dossier**, choisis ton service dans la liste (ou « Autre dossier… » puis **Parcourir…**), garde
-   **Copier mes voyages dans ce dossier**, puis clique sur le bouton du même nom. Tout est copié et vérifié ; Trip Compta
-   redémarre tout seul.
+3. Dans **Changer de dossier**, clique sur **Parcourir…** et choisis un dossier de ton cloud (par exemple un
+   nouveau dossier « TripCompta »), puis **Copier mes voyages dans ce dossier**. Tout est copié et vérifié ; Trip
+   Compta redémarre tout seul.
 
 **Sur les autres ordinateurs**
 
@@ -119,8 +119,6 @@ C'est possible, mais à tes risques :
 **Windows** : le dossier Documents est souvent dans OneDrive sans que tu le saches (Windows le fait tout seul).
 C'est sans risque tant que tu utilises Trip Compta sur un seul ordinateur.
 
-**Depuis ton téléphone** : dans l'app de ton cloud, dépose les photos de tickets dans le dossier
-**TripCompta / Justificatifs à trier**. Dans Trip Compta → 📎 Justificatifs, coche-les et choisis les dépenses.
 
 ---
 
@@ -148,8 +146,6 @@ indispensable.
 - « Se souvenir sur cet ordinateur » : plus besoin de taper le mot de passe sur cet ordinateur (il est rangé dans
   le trousseau du système). **🔒 Verrouiller**, en haut, le redemande.
 - Sur un 2e ordinateur, Trip Compta demande le même mot de passe.
-- Les photos déposées depuis le téléphone dans « Justificatifs à trier » arrivent en clair ; elles sont chiffrées
-  (et l'original supprimé) dès que tu les ranges dans un voyage.
 - Les PDF et mails que tu envoies restent lisibles : ils sont faits pour être lus.
 - Pour revenir en arrière : **Retirer la protection** (avec le mot de passe).
 

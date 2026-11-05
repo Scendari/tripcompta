@@ -17,7 +17,6 @@ from pathlib import Path
 
 APP_NAME = "Trip Compta"
 FOLDER = "TripCompta"
-CLOUD_HINTS = ("dropbox", "onedrive", "icloud", "mobile documents", "google drive", "googledrive", "pcloud", "box sync")
 
 
 def documents_dir() -> Path:
@@ -91,9 +90,3 @@ def default_data_dir() -> Path:
     if chosen:
         return chosen
     return documents_dir() / FOLDER
-
-
-def looks_synced(path: Path) -> bool:
-    """Dossier synchronisé dans le cloud ? (la base peut s'abîmer si deux ordinateurs l'ouvrent en même temps)"""
-    low = str(path).lower()
-    return any(h in low for h in CLOUD_HINTS)

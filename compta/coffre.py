@@ -25,8 +25,8 @@ import sqlite3
 import threading
 from pathlib import Path
 
-from .dossier import (DB, INBOX, RECEIPTS, _unlink, cloud_only, computer_name, file_hash, is_valid_db, replace,
-                      same_content, service_name, sqlite_copy)
+from .dossier import (DB, RECEIPTS, _unlink, cloud_only, computer_name, file_hash, is_valid_db, replace,
+                      same_content, sqlite_copy)
 from . import dossier as _D
 from .db import DataUnavailableError
 
@@ -88,10 +88,6 @@ class Coffre:
     @property
     def local_db(self) -> Path:
         return self.local / DB
-
-    @property
-    def service(self) -> str | None:
-        return service_name(self.shared)
 
     # ------------------------------------------------------------------ empreintes du dernier enregistrement
     def _state(self) -> dict:
@@ -337,7 +333,6 @@ class Coffre:
             raise DossierIndisponible(self.shared_db)
         self.local.mkdir(parents=True, exist_ok=True)
         (self.shared / RECEIPTS).mkdir(exist_ok=True)
-        (self.shared / INBOX).mkdir(exist_ok=True)
         data = crypto.read_key_file(self.shared) or {}
         v = crypto.recall(data.get("id", "")) if data.get("id") else None
         if v is not None and self._key_works(v):
@@ -441,6 +436,3 @@ class Coffre:
         self._stop.set()
         if self.vault is not None:
             self.lock()
-
-    def inbox(self) -> list[dict]:
-        return _D.inbox(self.shared)

@@ -74,11 +74,11 @@ ordinateur à la fois**.
 
 1. Installe l'application de ton cloud pour ordinateur (Dropbox, Google Drive pour ordinateur, OneDrive, iCloud,
    kDrive, Proton Drive…), s'il n'y est pas déjà.
-2. Dans Trip Compta : **⚙️ Réglages → Où sont mes voyages**. Les dossiers synchronisés trouvés sur
-   l'ordinateur sont proposés ; sinon « Autre dossier… » → **Parcourir…**.
-3. Sur le 1er ordinateur : **Copier mes voyages dans ce dossier** (tout est copié et vérifié, l'ancien dossier n'est pas
-   touché). Sur un autre, une fois la synchronisation faite : **Ouvrir les voyages de ce dossier** (Trip Compta
-   indique d'abord combien de voyages il y trouve).
+2. Dans Trip Compta : **⚙️ Réglages → Où sont mes voyages → Changer de dossier** : tape le chemin, ou
+   **Parcourir…**. Trip Compta regarde ce que contient le dossier :
+   - vide : **Copier mes voyages dans ce dossier** (tout est copié et vérifié, l'ancien dossier n'est pas touché) ;
+   - il contient déjà des voyages (par exemple rangés depuis un autre ordinateur) : **Ouvrir les voyages de ce
+     dossier** (jamais de copie par-dessus).
 
 - **Un seul ordinateur à la fois** : ferme Trip Compta avant de l'ouvrir ailleurs, et attends que ton cloud ait fini
   de synchroniser. Ouvert sur deux ordinateurs en même temps, les saisies de l'un peuvent effacer celles de l'autre.
@@ -93,8 +93,6 @@ ordinateur à la fois**.
 - **Fichier pas encore téléchargé, disque débranché** : Trip Compta le dit, sans rien toucher, avec **Réessayer**.
   **Base abîmée** : il reprend tout seul la dernière copie intacte (historique « Défaire » ou sauvegarde du jour) et
   garde le fichier abîmé à côté.
-- **Depuis un téléphone** : avec l'app de ton cloud, dépose les photos de tickets dans `Justificatifs à trier` ;
-  dans 📎 Justificatifs, coche-les et rattache-les aux dépenses (ils sont ensuite rangés dans `Rangés/`).
 - **Windows** : le dossier Documents est souvent dans OneDrive sans qu'on le sache (Trip Compta le suit) : sans
   risque avec un seul ordinateur.
 - **Revenir sur cet ordinateur** : même page ; les voyages sont recopiés dans `Documents/TripCompta`.
@@ -106,8 +104,8 @@ clé des voyages enfermée par le mot de passe et par une clé de secours, via s
 clé de secours, personne ne peut les lire, même le service de cloud. Utile si le dossier est partagé, si
 l'ordinateur est partagé (club), ou pour les données personnelles des adhérents.
 
-- Dans le dossier : `voyages.chiffre`, `justificatifs/*.chiffre`, `cle.tripcompta`, `LISEZMOI.txt`
-  (`Justificatifs à trier` reste en clair). Sur l'ordinateur, une copie de travail n'est en clair que pendant que
+- Dans le dossier : `voyages.chiffre`, `justificatifs/*.chiffre`, `cle.tripcompta`, `LISEZMOI.txt`.
+  Sur l'ordinateur, une copie de travail n'est en clair que pendant que
   l'app est déverrouillée ; à l'arrêt (ou au démarrage suivant après un plantage) elle est effacée, et l'historique,
   les sauvegardes et les brouillons IA sont chiffrés.
 - Après chaque modification, la base est rechiffrée dans le dossier. Si un autre ordinateur l'a modifiée entre-temps,
