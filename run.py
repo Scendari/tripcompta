@@ -220,13 +220,13 @@ def main():
                 open_running(url, window)
             return
 
-    import uvicorn
-    from compta.web import create_app
+    holder = {}                                # l'app, une fois créée (restart en a besoin)
 
     def restart():
         """Relance le même programme, à la MÊME adresse (sans rouvrir d'onglet : la page ouverte se recharge seule)."""
         os.environ["TRIPCOMPTA_RESTARTED"] = "1"
-        port_now = getattr(app.state, "port", None) or a.port
+        app = holder.get("app")
+        port_now = (getattr(app.state, "port", None) if app is not None else None) or a.port
         os.environ["TRIPCOMPTA_PORT_WAIT"] = str(port_now)
         args, skip = [], False
         for x in sys.argv[1:]:
@@ -248,12 +248,6 @@ def main():
             os._exit(0)
         os.execv(sys.executable, cmd)
 
-    app = create_app(a.data_dir, restart=restart)
-    if a.demo and app.state.db is not None:
-        from compta.demo import seed_demo, seed_family_demo
-        seed_family_demo(app.state.db, replace=False)
-        seed_demo(app.state.db, replace=False)
-
     if os.environ.get("TRIPCOMPTA_PORT_WAIT") == str(a.port):     # relancé : attendre que l'ancien libère l'adresse
         os.environ.pop("TRIPCOMPTA_PORT_WAIT", None)
         for _ in range(60):
@@ -263,23 +257,41 @@ def main():
     port = free_port(a.port)
     if lock is not None:
         lock.publish(port)
-    app.state.port = port                    # pour relancer au même endroit après une mise à jour
-    app.state.argv = sys.argv[1:]
     url = f"http://127.0.0.1:{port}/"
-    print("=" * 60)
-    print(" Trip Compta")
-    print(f" Ouvre ton navigateur sur : {url}")
-    if app.state.db is not None:
-        print(f" Données : {app.state.db.dir}")
-    else:
-        print(" ⚠️  Ces données viennent d'une version plus récente : installe-la (voir le navigateur).")
-    print(" Pour arrêter : ferme cette fenêtre (ou Ctrl+C)")
-    print("=" * 60)
+
+    def prepare():
+        """Bibliothèques, base de données, application : l'essentiel du temps d'ouverture."""
+        from compta.web import create_app
+        app = create_app(a.data_dir, restart=restart)
+        holder["app"] = app
+        if a.demo and app.state.db is not None:
+            from compta.demo import seed_demo, seed_family_demo
+            seed_family_demo(app.state.db, replace=False)
+            seed_demo(app.state.db, replace=False)
+        app.state.port = port                # pour relancer au même endroit après une mise à jour
+        app.state.argv = sys.argv[1:]
+        print("=" * 60)
+        print(" Trip Compta")
+        print(f" Ouvre ton navigateur sur : {url}")
+        if app.state.db is not None:
+            print(f" Données : {app.state.db.dir}")
+        else:
+            print(" ⚠️  Ces données viennent d'une version plus récente : installe-la (voir le navigateur).")
+        print(" Pour arrêter : ferme cette fenêtre (ou Ctrl+C)")
+        print("=" * 60)
+        return app
+
+    if window and sys.platform == "win32":
+        # la fenêtre s'ouvre tout de suite sur « Chargement… », pendant que prepare() tourne à côté
+        fenetre.run_early(prepare, "127.0.0.1", port)
+        return
+    app = prepare()
     if window:
         fenetre.run(app, "127.0.0.1", port)
         return
     if not a.no_browser and not restarted:
         threading.Thread(target=lambda: (time.sleep(1.2), webbrowser.open(url)), daemon=True).start()
+    import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 
 
