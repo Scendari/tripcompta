@@ -2,49 +2,38 @@
 {% block page %}
 <div class="page-head"><div class="grow">
   <h1>Où sont mes voyages</h1>
-  <p class="muted">Sur cet ordinateur, ou dans un dossier synchronisé (Dropbox, Google Drive, OneDrive, iCloud Drive…) pour retrouver tes voyages sur tous tes ordinateurs.</p>
+  <p class="muted">Sur cet ordinateur, ou dans un dossier synchronisé (Dropbox, Google Drive, OneDrive, iCloud Drive…) pour les retrouver sur un autre ordinateur : un seul à la fois.</p>
 </div><a class="btn ghost small" href="/reglages">← Réglages</a></div>
 {% if error %}<div class="flash err" role="alert">{{ error }}</div>{% endif %}
 
 <div class="card data-card">
   <span class="label-like">Tes voyages sont rangés</span>
-  {% if shared %}
   <p class="data-where">{% if cloud.local %}💻 Sur <b>cet ordinateur</b>{% else %}☁️ Dans <b>{{ cloud.service }}</b>{% endif %}{% if protected %} · 🔒 protégés par un mot de passe{% endif %}</p>
   <p class="data-path">{{ data_dir }}</p>
-  <p class="small muted data-state">
-    {% if cloud.problem %}⚠️ {{ cloud.problem }}
-    {% elif cloud.readonly %}🔒 Lecture seule : ouverts sur « {{ cloud.owner or 'un autre ordinateur' }} »{% if cloud.since %} depuis {{ cloud.since }}{% endif %}.
-    {% elif cloud.saved %}✓ Enregistré dans le dossier {{ 'le' if '/' in cloud.saved else 'à' }} {{ cloud.saved }}.
-    {% else %}✓ Prêt.{% endif %}</p>
-  <p class="hint">Sur cet ordinateur restent seulement l'historique « Défaire / Rétablir », les sauvegardes automatiques et les brouillons de la page IA.</p>
-  {% else %}
-  <p class="data-where">💻 Sur cet ordinateur</p>
-  <p class="data-path">{{ data_dir }}</p>
-  <p class="small muted" style="margin:.2rem 0 .7rem">
+  <p class="small muted data-state" style="margin:.2rem 0 .7rem">
     {% if source == 'defaut' %}C'est le dossier par défaut (dans tes Documents).
     {% elif source == 'choisi' %}C'est le dossier que tu as choisi.
-    {% else %}Ce dossier est imposé au lancement de l'application.{% endif %}</p>
-  {% if synced and source == 'choisi' %}<div class="warn-box small">⚠️ Ce dossier semble synchronisé dans le cloud, mais il n'est pas protégé : si Trip Compta est ouvert sur deux ordinateurs en même temps, des saisies peuvent se perdre.
-    <form method="post" action="/reglages/donnees" class="inline"><button class="btn small" name="action" value="proteger">Protéger ce dossier</button></form></div>
-  {% elif synced %}<p class="warn-box small">⚠️ Ce dossier semble synchronisé dans le cloud (iCloud, OneDrive…). N'ouvre pas Trip Compta sur deux ordinateurs en même temps ; pour le faire sans risque, choisis ce dossier ci-dessous.</p>{% endif %}
-  {% endif %}
+    {% else %}Ce dossier est imposé au lancement de l'application.{% endif %}
+    {% if cloud.saved %}Enregistré {{ 'le' if '/' in cloud.saved else 'à' }} {{ cloud.saved }}.{% endif %}
+    {% if writer %}<span class="d-block">Dernière modification sur « {{ writer.ordinateur }} », {{ writer.quand }}.</span>{% endif %}</p>
+  {% if not cloud.local %}<p class="warn-box small">⚠️ Ce dossier est synchronisé{% if cloud.service != 'le dossier synchronisé' %} par {{ cloud.service }}{% endif %} : <b>un seul ordinateur à la fois</b>. Ferme Trip Compta avant de l'ouvrir sur un autre ordinateur, et laisse {{ 'ton cloud' if cloud.service == 'le dossier synchronisé' else cloud.service }} finir de synchroniser.</p>{% endif %}
   <form method="post" action="/reglages/ouvrir-dossier" class="inline"><button class="btn small ghost">📂 Ouvrir le dossier</button></form>
 </div>
 
 {% if conflicts %}
 <div class="card data-card" id="conflits">
-  <h3 style="margin-top:0">⚠️ Plusieurs versions de tes voyages</h3>
-  <p class="hint">{{ cloud.service }} a gardé {{ 'ces versions' if conflicts|length > 1 else 'cette version' }} à côté de la version actuelle (deux ordinateurs ont enregistré en même temps). Rien n'est perdu. Garde celle qui contient tes dernières saisies ; l'autre est rangée dans le dossier « Anciennes versions », jamais effacée.</p>
+  <h3 style="margin-top:0">⚠️ Une autre version de tes voyages</h3>
+  <p class="hint">{{ 'Ton cloud' if cloud.local or cloud.service == 'le dossier synchronisé' else cloud.service }} a gardé {{ 'ces versions' if conflicts|length > 1 else 'cette version' }} à côté de la tienne : Trip Compta a sans doute été ouvert sur deux ordinateurs en même temps. Trip Compta ne mélange pas deux versions, et n'efface rien.</p>
+  <p class="hint">Pour récupérer des saisies de l'autre version : <b>exporte-la</b> (fichier .zip), puis dans <b>Mes voyages › Importer un voyage</b>, choisis ce fichier : ses voyages s'ajoutent à côté des tiens, rien n'est écrasé. Recopie ce qui manque, puis supprime le voyage importé. Ensuite, range l'autre version.</p>
   <ul class="conflict-list">
   {% for c in conflicts %}
-    <li><div class="grow"><b>{{ c.name }}</b><span class="muted small d-block">enregistrée le {{ c.date.strftime('%d/%m/%Y à %H h %M') }}{% if not c.valid %} · ⚠️ abîmée, inutilisable{% endif %}</span></div>
-      {% if c.valid %}<form method="post" action="/reglages/conflit" class="inline" data-confirm="Utiliser cette version pour tes voyages ? La version actuelle sera rangée dans « Anciennes versions » (et « Défaire » reviendra en arrière)."><input type="hidden" name="nom" value="{{ c.name }}"><button class="btn small" name="choix" value="utiliser">Utiliser cette version</button></form>{% endif %}
-      <form method="post" action="/reglages/conflit" class="inline"><input type="hidden" name="nom" value="{{ c.name }}"><button class="btn small ghost" name="choix" value="ranger">Garder la version actuelle</button></form></li>
+    <li><div class="grow"><b>{{ c.name }}</b><span class="muted small d-block">enregistrée le {{ c.date.strftime('%d/%m/%Y à %H h %M') }}{% if not c.valid %} · ⚠️ abîmée, illisible{% endif %}</span></div>
+      {% if c.valid %}<a class="btn small" href="/reglages/conflit/export?nom={{ c.name|urlencode }}" download>Exporter cette version (.zip)</a>{% endif %}
+      <form method="post" action="/reglages/conflit" class="inline" data-confirm="Ranger cette version dans le dossier « Anciennes versions » ? Elle n'est pas effacée."><input type="hidden" name="nom" value="{{ c.name }}"><button class="btn small ghost" name="choix" value="ranger">La ranger</button></form></li>
   {% endfor %}
   </ul>
 </div>
 {% endif %}
-
 
 {% if source in ('defaut', 'choisi') %}
 {% if protected %}
@@ -85,23 +74,21 @@
 </form>
 {% endif %}
 
+{% endif %}
+
 <div class="card data-card">
-  <h3 style="margin-top:0">Avec plusieurs ordinateurs</h3>
+  <h3 style="margin-top:0">Mettre Trip Compta dans Google Drive, Dropbox, OneDrive ou iCloud</h3>
   <ul class="help-steps">
-    <li><span class="help-ico" aria-hidden="true">🔒</span><div><b>Un seul ordinateur à la fois</b>
-      <p>Sur les autres, les voyages s'ouvrent en lecture seule, avec le nom de l'ordinateur qui a la main. Ils se mettent à jour quand tu reviens sur l'app.</p></div></li>
-    <li><span class="help-ico" aria-hidden="true">{{ POWER }}</span><div><b>Quand tu as fini</b>
-      <p>Ferme simplement la fenêtre de Trip Compta : il enregistre, rend la main, et l'autre ordinateur la reprend tout seul. (Dans un navigateur : ferme l'onglet, Trip Compta rend la main au bout de 2 minutes.) En le rouvrant, tu reprends la main si elle est libre.</p></div></li>
-    <li><span class="help-ico" aria-hidden="true">✋</span><div><b>Prendre la main</b>
-      <p>Ordinateur resté allumé, planté, ou tu es pressé ? Clique sur « Prendre la main » dans le bandeau « Lecture seule ». Préviens d'abord la personne si elle est en train de saisir.</p></div></li>
+    <li><span class="help-ico" aria-hidden="true">💻</span><div><b>Un seul ordinateur à la fois</b>
+      <p>C'est possible, à tes risques : Trip Compta enregistre directement dans le dossier, et ton cloud le recopie sur tes autres ordinateurs. Ferme Trip Compta avant de l'ouvrir ailleurs, et attends que ton cloud ait fini de synchroniser. Ouvert sur deux ordinateurs en même temps, les saisies de l'un peuvent effacer celles de l'autre.</p></div></li>
+    <li><span class="help-ico" aria-hidden="true">🔔</span><div><b>Trip Compta te prévient</b>
+      <p>À l'ouverture, il te dit si tes voyages viennent d'être modifiés sur un autre ordinateur. Si ton cloud garde deux versions, elles s'affichent ici : exporte l'autre pour en récupérer les saisies.</p></div></li>
     <li><span class="help-ico" aria-hidden="true">📱</span><div><b>Depuis ton téléphone</b>
       <p>Avec l'app de ton cloud, dépose les photos de tickets dans le dossier « Justificatifs à trier », puis rattache-les aux dépenses dans 📎 Justificatifs.</p></div></li>
-    <li><span class="help-ico" aria-hidden="true">☁️</span><div><b>Fichier retiré par le cloud</b>
-      <p>Disque plein… ? Trip Compta te le dit et passe en lecture seule : rends le dossier TripCompta de nouveau disponible sur l'ordinateur.</p></div></li>
+    <li><span class="help-ico" aria-hidden="true">🪟</span><div><b>Sur Windows, le dossier Documents est souvent dans OneDrive</b>
+      <p>Windows le fait souvent tout seul. C'est sans risque tant que tu utilises Trip Compta sur un seul ordinateur.</p></div></li>
   </ul>
 </div>
-
-{% endif %}
 <script>
 (function () {
   var form = document.querySelector('[data-data-choice]'); if (!form) return;

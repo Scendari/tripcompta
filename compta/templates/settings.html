@@ -11,13 +11,10 @@
     <span class="setting-body">
       <b>Où sont mes voyages</b>
       <span class="setting-state">
-        {% if cloud %}{% if cloud.local %}Sur cet ordinateur{% else %}Dans {{ cloud.service }}{% endif %}
-          {% if cloud.problem %} · <span class="warn-text">⚠️ dossier indisponible</span>
-          {% elif cloud.readonly %} · lecture seule (ouverts sur « {{ cloud.owner }} »)
-          {% elif cloud.saved %} · enregistré {{ 'le' if '/' in cloud.saved else 'à' }} {{ cloud.saved }}{% endif %}
-        {% else %}Sur cet ordinateur · pas synchronisé{% endif %}
+        {% if cloud.local %}Sur cet ordinateur{% else %}Dans {{ cloud.service }}{% endif %}
+          {% if cloud.saved %} · enregistré {{ 'le' if '/' in cloud.saved else 'à' }} {{ cloud.saved }}{% endif %}
       </span>
-      <span class="setting-hint">Les ranger dans Google Drive, Dropbox, OneDrive, iCloud Drive… pour les retrouver sur tous tes ordinateurs.</span>
+      <span class="setting-hint">Les ranger ailleurs, par exemple dans Google Drive, Dropbox, OneDrive ou iCloud Drive (un seul ordinateur à la fois).</span>
     </span>
     <span class="setting-go">{{ 'Changer' if source in ('defaut', 'choisi') else 'Voir' }} ›</span>
   </a>

@@ -74,21 +74,30 @@ LOCKED = "Trip Compta est verrouillé (voyages protégés par un mot de passe) :
          "mot de passe, puis réessaie."
 
 
-def build_server(data_dir: Optional[str] = None, home: Optional[str] = None):
-    """home : dossier synchronisé (voir cloud.py) quand data_dir est la copie de travail de cet ordinateur."""
+def build_server(data_dir: Optional[str] = None):
+    """data_dir : le dossier des voyages ; voyages protégés par un mot de passe : la copie de travail de cet
+    ordinateur (donnée par la page IA de l'application), jamais le dossier chiffré lui-même."""
     from pathlib import Path as _P
+    from . import crypto
+    from .paths import default_data_dir
     flag = _P(data_dir) / "VERROUILLE" if data_dir else None
-    if flag is not None and flag.exists():       # rien n'est créé : la base est chiffrée tant que c'est verrouillé
-        mcp = _Server(name="tripcompta", instructions=LOCKED)
+    blocked = None
+    if crypto.is_protected(_P(data_dir) if data_dir else default_data_dir()):
+        blocked = ("Les voyages sont protégés par un mot de passe : copie la configuration donnée par la page IA de "
+                   "Trip Compta (elle pointe vers les voyages déverrouillés de cet ordinateur).")
+    elif flag is not None and flag.exists():     # rien n'est créé : la base est chiffrée tant que c'est verrouillé
+        blocked = LOCKED
+    if blocked:
+        mcp = _Server(name="tripcompta", instructions=blocked)
 
         @mcp.tool()
         def etat() -> dict:
             """État de Trip Compta."""
-            return {"erreur": LOCKED}
+            return {"erreur": blocked}
         return mcp
     global _LOCK_FLAG
     _LOCK_FLAG = flag
-    db = Database(data_dir, home=home)
+    db = Database(data_dir)
     ops = Ops(db)
     mcp = _Server(name="tripcompta", instructions=INSTRUCTIONS)
 
@@ -264,9 +273,8 @@ def build_server(data_dir: Optional[str] = None, home: Optional[str] = None):
 def main():
     ap = argparse.ArgumentParser(description="Serveur MCP de Trip Compta (stdio)")
     ap.add_argument("--data-dir", default=os.environ.get("TRIPCOMPTA_DATA_DIR"))
-    ap.add_argument("--home", help="Dossier synchronisé (justificatifs), si --data-dir est la copie de travail")
     a = ap.parse_args()
-    build_server(a.data_dir, a.home).run("stdio")
+    build_server(a.data_dir).run("stdio")
 
 
 if __name__ == "__main__":

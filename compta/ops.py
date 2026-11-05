@@ -810,9 +810,6 @@ class Ops:
         if (d / "VERROUILLE").exists() or (d.name == ".verrouille" and (d.parent / "VERROUILLE").exists()):
             raise OpsError("Trip Compta est verrouillé (voyages protégés par un mot de passe) : ouvre l'application "
                            "et saisis le mot de passe, puis réessaie.")
-        if not simulation and (self.db.dir / "LECTURE-SEULE").exists():   # voir cloud.py
-            raise OpsError("Les voyages sont ouverts en lecture seule sur cet ordinateur (ils sont ouverts sur un "
-                           "autre ordinateur, ou le dossier synchronisé est indisponible) : rien n'a été modifié.")
         s = self.db.Session()
         snapped = False
         try:
