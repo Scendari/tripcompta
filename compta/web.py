@@ -513,7 +513,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             now = db.undo_token()
             before, started = snap_before.get() or (None, "")
             # « Défaire » seulement si CETTE requête a modifié les données (sauvegarde d'annulation créée pendant
-            # elle). Déverrouiller, verrouiller, mot de passe, « Prendre la main », changer de dossier… ne font
+            # elle). Déverrouiller, verrouiller, mot de passe, changer de dossier… ne font
             # qu'ouvrir d'autres données : la dernière action change, mais il n'y a rien à défaire.
             if now and now != before and now >= started:
                 url += "&d=" + quote(now)
@@ -2928,7 +2928,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         return render(request, "receipts.html", trip=t, missing=missing, inbox=C.inbox(db.home),
                       inbox_folder=str(db.home / C.INBOX))
 
-    # « Justificatifs à trier » : photos ou PDF déposés dans le dossier synchronisé depuis un téléphone
+    # « Justificatifs à trier » : photos ou PDF déposés dans le dossier des voyages depuis un téléphone
     def _inbox_path(name: str) -> Path:
         p_ = C.inbox_file(db.home, name)
         if p_ is None:

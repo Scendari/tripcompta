@@ -657,3 +657,25 @@ def test_no_undo_button_after_unlocking(env):
                                                  "confirmation": "un autre mot de passe"}, follow_redirects=False)
     assert "msg=" in r.headers["location"] and "&d=" not in r.headers["location"]
     stop(app)
+
+
+def test_working_copy_without_history_never_overwrites(env, keyring_mem):
+    """Copie de travail restée sur l'ordinateur sans empreinte du dossier (état perdu, ancienne version de Trip
+    Compta) : la version du dossier est reprise ; rien n'est enregistré par-dessus."""
+    tmp, folder = env
+    tid, files, key = protect(env, remember=True)
+    app = create_app()
+    box = app.state.coffre
+    TestClient(app).post("/voyages", data={"name": "Enregistré"})
+    good = (folder / K.DB_FILE).read_bytes()
+    app.state.db.engine.dispose()                                # plantage, puis état perdu
+    (box.local / CF.STATE).unlink()
+    Ops(app.state.db).create_trip("Copie d'origine inconnue")
+    app.state.db.engine.dispose()
+    app = create_app()
+    with app.state.db.Session() as s_:
+        assert "Copie d'origine inconnue" not in [t.name for t in s_.query(M.Trip).all()]
+    assert len(app.state.coffre.conflicts()) == 1                # gardée à côté, exportable
+    assert K.Vault.decrypt(app.state.coffre.vault, good, "base") == \
+        K.Vault.decrypt(app.state.coffre.vault, (folder / K.DB_FILE).read_bytes(), "base")
+    stop(app)

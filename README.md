@@ -66,36 +66,37 @@ Une base créée avec une version plus ancienne est mise à niveau toute seule �
 
 **Sauvegarder = copier ce dossier** (clé USB, Dropbox, iCloud…).
 
-### Retrouver ses voyages sur plusieurs ordinateurs (Dropbox, Google Drive, OneDrive, iCloud…)
+### Mettre ses voyages dans Google Drive, Dropbox, OneDrive ou iCloud (à tes risques)
 
-Aucun serveur : Trip Compta range ses voyages dans un **dossier synchronisé** de ton choix, et c'est le logiciel de
-ton cloud qui les recopie sur tes autres ordinateurs (Mac, Windows, Linux).
+Aucun serveur et aucune synchronisation propre à Trip Compta : il lit et écrit **directement** son dossier. Ce dossier
+peut être dans ton cloud, qui le recopie sur tes autres ordinateurs : c'est possible, **à tes risques, un seul
+ordinateur à la fois**.
 
 1. Installe l'application de ton cloud pour ordinateur (Dropbox, Google Drive pour ordinateur, OneDrive, iCloud,
    kDrive, Proton Drive…), s'il n'y est pas déjà.
 2. Dans Trip Compta : **⚙️ Réglages → Où sont mes voyages**. Les dossiers synchronisés trouvés sur
    l'ordinateur sont proposés ; sinon « Autre dossier… » → **Parcourir…**.
 3. Sur le 1er ordinateur : **Copier mes voyages dans ce dossier** (tout est copié et vérifié, l'ancien dossier n'est pas
-   touché). Sur les suivants, une fois la synchronisation faite : **Ouvrir les voyages de ce dossier** (Trip Compta
+   touché). Sur un autre, une fois la synchronisation faite : **Ouvrir les voyages de ce dossier** (Trip Compta
    indique d'abord combien de voyages il y trouve).
 
-Dans le dossier synchronisé : `compta.db` (la version enregistrée), `justificatifs/`, `Justificatifs à trier/` et
-`tripcompta-verrou.json`. Sur chaque ordinateur restent l'historique Défaire/Rétablir, les sauvegardes du jour et
-les brouillons IA. L'app travaille sur une copie et, après chaque modification, enregistre une version complète
-**d'un seul coup** (jamais de fichier à moitié écrit).
-
-- **Un seul ordinateur à la fois** peut modifier : les autres ouvrent les voyages en **lecture seule** (« ouverts
-  sur « PC du club » depuis 14 h 02 ») et se mettent à jour quand on revient sur l'app. Fermer la fenêtre suffit (l'app fabriquée s'ouvre dans sa
-  propre fenêtre ; dans un navigateur : sans onglet ouvert depuis 2 minutes, l'app rend la main) (« ⏻ Arrêter » aussi) ; sinon, **Prendre la main** à tout moment (l'autre passe en lecture seule dès que le cloud lui apporte le
-  verrou ; une saisie faite là-bas entre-temps donne une copie en conflit à trancher, rien n'est perdu). Sur un
-  même ordinateur, une seule Trip Compta à la fois : relancer l'icône montre celle qui est ouverte.
-- **Fichier retiré de l'ordinateur par le cloud** (disque plein, « Libérer de l'espace »…) : Trip Compta le signale
-  et passe en lecture seule, sans lire le fichier (ce qui forcerait un téléchargement) ; « Toujours garder sur cet
-  appareil » / « Rendre disponible hors connexion » sur le dossier, puis relancer.
+- **Un seul ordinateur à la fois** : ferme Trip Compta avant de l'ouvrir ailleurs, et attends que ton cloud ait fini
+  de synchroniser. Ouvert sur deux ordinateurs en même temps, les saisies de l'un peuvent effacer celles de l'autre.
+  Sur un même ordinateur, une seule Trip Compta à la fois : relancer l'icône montre celle qui est ouverte.
+- **Trip Compta te prévient** : le nom du dernier ordinateur qui a modifié les voyages est enregistré dans la base ;
+  à l'ouverture, « Tes voyages ont été modifiés il y a 3 min sur « PC du club » » (s'il y a moins d'une heure) ou
+  simplement « Dernière modification : sur « PC du club », hier à 18 h 30 ».
 - **Copies en conflit** (« compta (conflicted copy…).db », « compta (copie en conflit…).db », « compta-PC.db »…) :
-  Trip Compta les signale ; tu choisis laquelle garder, l'autre est rangée dans « Anciennes versions ».
+  Trip Compta les signale. Pas de fusion ni de remplacement : **Exporter cette version (.zip)**, puis **Mes voyages
+  › Importer un voyage** l'ajoute à côté des tiens (rien n'est écrasé) pour en recopier les saisies ; ensuite
+  **La ranger** (dossier « Anciennes versions », jamais effacée).
+- **Fichier pas encore téléchargé, disque débranché** : Trip Compta le dit, sans rien toucher, avec **Réessayer**.
+  **Base abîmée** : il reprend tout seul la dernière copie intacte (historique « Défaire » ou sauvegarde du jour) et
+  garde le fichier abîmé à côté.
 - **Depuis un téléphone** : avec l'app de ton cloud, dépose les photos de tickets dans `Justificatifs à trier` ;
   dans 📎 Justificatifs, coche-les et rattache-les aux dépenses (ils sont ensuite rangés dans `Rangés/`).
+- **Windows** : le dossier Documents est souvent dans OneDrive sans qu'on le sache (Trip Compta le suit) : sans
+  risque avec un seul ordinateur.
 - **Revenir sur cet ordinateur** : même page ; les voyages sont recopiés dans `Documents/TripCompta`.
 
 ### Protéger ses voyages par un mot de passe (facultatif)
@@ -105,10 +106,13 @@ clé des voyages enfermée par le mot de passe et par une clé de secours, via s
 clé de secours, personne ne peut les lire, même le service de cloud. Utile si le dossier est partagé, si
 l'ordinateur est partagé (club), ou pour les données personnelles des adhérents.
 
-- Dans le dossier : `voyages.chiffre`, `justificatifs/*.chiffre`, `cle.tripcompta`, `LISEZMOI.txt` (le verrou et
-  `Justificatifs à trier` restent en clair). Sur l'ordinateur, la copie de travail n'est en clair que pendant que
+- Dans le dossier : `voyages.chiffre`, `justificatifs/*.chiffre`, `cle.tripcompta`, `LISEZMOI.txt`
+  (`Justificatifs à trier` reste en clair). Sur l'ordinateur, une copie de travail n'est en clair que pendant que
   l'app est déverrouillée ; à l'arrêt (ou au démarrage suivant après un plantage) elle est effacée, et l'historique,
   les sauvegardes et les brouillons IA sont chiffrés.
+- Après chaque modification, la base est rechiffrée dans le dossier. Si un autre ordinateur l'a modifiée entre-temps,
+  rien n'est écrasé : au déverrouillage, sa version est reprise ; une version de cet ordinateur pas encore
+  enregistrée est déposée à côté (« voyages (version de PC-Anne …).chiffre »), exportable comme une copie en conflit.
 - Au lancement : **🔒 Mot de passe de tes voyages** (ou rien, avec « Se souvenir sur cet ordinateur » : trousseau
   du système). Bouton **🔒 Verrouiller** en haut. **Mot de passe oublié ?** → la clé de secours, puis un nouveau.
 - **Mot de passe ET clé de secours perdus = voyages perdus pour toujours.** Personne ne peut les récupérer.

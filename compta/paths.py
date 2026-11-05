@@ -3,7 +3,7 @@
 Ordre de priorité :
   1. l'option `--data-dir` au lancement (développement, tests) ;
   2. la variable d'environnement TRIPCOMPTA_DATA_DIR ;
-  3. le dossier choisi dans l'application (« Où sont mes voyages », voir cloud.py), mémorisé dans un petit fichier de réglages
+  3. le dossier choisi dans l'application (« Où sont mes voyages »), mémorisé dans un petit fichier de réglages
      propre à l'ordinateur (il ne peut pas être rangé dans le dossier des données lui-même) ;
   4. par défaut : <Documents>/TripCompta, où <Documents> est le VRAI dossier Documents (sous Windows avec OneDrive,
      c'est souvent C:\\Users\\<nom>\\OneDrive\\Documents, et pas C:\\Users\\<nom>\\Documents).

@@ -84,10 +84,11 @@ mkdir -p ~/Applications && tar -xzf /tmp/TripCompta.tar.gz -C ~/Applications
 
 ---
 
-## Retrouver tes voyages sur plusieurs ordinateurs
+## Mettre tes voyages dans ton cloud (à tes risques)
 
-Tu peux ranger tes voyages dans **ton** Dropbox, Google Drive, OneDrive, iCloud Drive, kDrive ou Proton Drive :
-ils te suivent sur tous tes ordinateurs, sans aucun serveur (rien n'est envoyé ailleurs que chez ton service).
+Tu peux ranger tes voyages dans **ton** Dropbox, Google Drive, OneDrive, iCloud Drive, kDrive ou Proton Drive pour les
+retrouver sur un autre ordinateur, sans aucun serveur (rien n'est envoyé ailleurs que chez ton service).
+**Un seul ordinateur à la fois** (voir plus bas).
 
 **Sur le premier ordinateur**
 
@@ -104,26 +105,22 @@ ils te suivent sur tous tes ordinateurs, sans aucun serveur (rien n'est envoyé 
 2. **⚙️ Réglages → Où sont mes voyages** → **Changer de dossier** → choisis le même dossier : Trip Compta
    indique les voyages qu'il y trouve → **Ouvrir les voyages de ce dossier**.
 
-**Rien d'autre à régler** : Trip Compta travaille sur une copie posée sur ton ordinateur, et ton cloud envoie les
-changements. Seul cas à connaître : si ton cloud a retiré le fichier de l'ordinateur (disque presque plein, ou
-« Retirer le téléchargement » / « Libérer de l'espace » choisi par erreur), Trip Compta te le dit et passe en lecture
-seule. Il suffit alors de le rendre de nouveau disponible : clic droit sur le dossier TripCompta →
-« Toujours garder sur cet appareil » (iCloud, OneDrive) ou « Rendre disponible hors connexion » (Google Drive,
-Dropbox), puis relancer Trip Compta.
+**Un seul ordinateur à la fois** : Trip Compta enregistre directement dans le dossier, et ton cloud le recopie.
+C'est possible, mais à tes risques :
 
-**À deux ordinateurs**
+- **ferme Trip Compta** sur un ordinateur avant de l'ouvrir sur un autre, et attends que ton cloud ait fini de
+  synchroniser ; ouvert sur deux ordinateurs en même temps, les saisies de l'un peuvent effacer celles de l'autre ;
+- à l'ouverture, Trip Compta te dit si tes voyages viennent d'être modifiés sur un autre ordinateur ;
+- si ton cloud a gardé deux versions (« copie en conflit »), Trip Compta te le dit : **Exporter cette version
+  (.zip)**, puis **Mes voyages › Importer un voyage** pour en récupérer les saisies (rien n'est écrasé) ;
+- si ton cloud a retiré le fichier de l'ordinateur (disque presque plein, « Libérer de l'espace »…), Trip Compta te
+  le dit sans rien toucher : clic droit sur le dossier TripCompta → « Toujours garder sur cet appareil » (iCloud,
+  OneDrive) ou « Rendre disponible hors connexion » (Google Drive, Dropbox), puis **Réessayer** ;
+- sur un même ordinateur, Trip Compta ne s'ouvre qu'une fois : cliquer de nouveau sur l'icône montre celle qui est
+  déjà ouverte.
 
-- **Un seul à la fois** peut modifier les voyages. Sur l'autre, ils s'ouvrent en **lecture seule**, avec le nom de
-  l'ordinateur qui a la main, et se mettent à jour quand tu reviens sur l'app.
-- Quand tu as fini : **ferme simplement la fenêtre de Trip Compta**. Il enregistre, rend la main, et l'autre
-  ordinateur la reprend tout seul (dans un navigateur : ferme l'onglet, Trip Compta rend la main au bout de 2 minutes) (rien n'est perdu : tout est enregistré à chaque modification).
-- Ordinateur resté allumé, planté, ou pas le temps d'attendre : **Prendre la main** dans le bandeau « Lecture
-  seule ». L'autre passe en lecture seule (le temps que ton cloud le prévienne). Préviens d'abord la personne si
-  elle est en train de saisir : sinon tu devras choisir entre deux versions (rien n'est perdu).
-- Sur un même ordinateur, Trip Compta ne s'ouvre qu'une fois : cliquer de nouveau sur l'icône montre celle qui
-  est déjà ouverte.
-- Si ton cloud a gardé deux versions (« copie en conflit »), Trip Compta te le dit et te laisse choisir ; rien
-  n'est effacé.
+**Windows** : le dossier Documents est souvent dans OneDrive sans que tu le saches (Windows le fait tout seul).
+C'est sans risque tant que tu utilises Trip Compta sur un seul ordinateur.
 
 **Depuis ton téléphone** : dans l'app de ton cloud, dépose les photos de tickets dans le dossier
 **TripCompta / Justificatifs à trier**. Dans Trip Compta → 📎 Justificatifs, coche-les et choisis les dépenses.
