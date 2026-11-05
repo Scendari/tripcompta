@@ -32,18 +32,6 @@
 <div class="folder-banner warn" role="status"><span>⚠️ {{ 'Une autre version' if dossier.conflicts == 1 else dossier.conflicts ~ ' autres versions' }} de tes voyages {{ 'est apparue' if dossier.conflicts == 1 else 'sont apparues' }} dans le dossier (Trip Compta ouvert sur deux ordinateurs en même temps ?). Rien n'est perdu.</span>
   <a class="btn small" href="/reglages/donnees#conflits">Voir</a></div>
 {% endif %}
-{% if window_blocked == "dotnet" %}
-<div class="update-banner" role="status" id="fenetre-bloquee">
-  <span>🪟 <b>Trip Compta s'est ouvert sans sa fenêtre habituelle</b> (dans Edge ou ton navigateur) : Windows a refusé de
-  charger un de ses composants (.NET). Tout marche quand même ici. Pour retrouver la fenêtre : arrête Trip Compta et
-  réinstalle-le avec <b>TripCompta-windows-setup.exe</b>.</span>
-</div>
-{% elif window_blocked %}
-<div class="update-banner" role="status" id="fenetre-bloquee">
-  <span>🪟 <b>Trip Compta s'est ouvert sans sa fenêtre habituelle</b> (dans Edge ou ton navigateur) : elle ne peut pas s'ouvrir sur cet ordinateur
-  (composant Microsoft Edge WebView2 absent ?). Tout marche quand même ici.</span>
-</div>
-{% endif %}
 {% if update_banner %}
 <div class="update-banner" role="status">
   <span>🎁 <b>Trip Compta {{ update_banner.version }} est disponible.</b></span>

@@ -63,7 +63,10 @@ navigateur** l'affiche dans ton navigateur si tu préfères. Pour l'arrêter : f
    raccourci dans le menu Démarrer (et sur le Bureau si tu le coches).
 
 Trip Compta s'ouvre dans **sa propre fenêtre**. Pour l'arrêter, ferme simplement cette fenêtre : tout est enregistré.
-Il utilise WebView2, le moteur d'Edge, présent dans Windows 10 et 11 ; s'il manque, l'installeur l'ajoute.
+Il utilise WebView2, le moteur d'Edge, présent dans Windows 11 et la plupart des Windows 10 ; s'il manque,
+l'installeur l'ajoute (connexion Internet nécessaire), ou Trip Compta propose de le télécharger à son lancement.
+Sans Internet sur cet ordinateur : télécharge ailleurs le « programme d'installation autonome » (Evergreen Standalone
+Installer, x64) sur https://developer.microsoft.com/fr-fr/microsoft-edge/webview2/ et apporte-le sur une clé USB.
 Les mises à jour s'installent ensuite toutes seules, en un clic (**ℹ️ À propos**). Pour le désinstaller :
 **Paramètres → Applications installées → Trip Compta** ; tes voyages (dossier **Documents\TripCompta**) restent.
 
