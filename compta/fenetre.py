@@ -353,6 +353,20 @@ def _mac_shortcuts():
     AppHelper.callAfter(add)
 
 
+def _browser_instead(app, base: str, th: threading.Thread, why: str) -> None:
+    """La fenêtre ne peut pas s'ouvrir sur ce PC : Trip Compta marche quand même, dans le navigateur. Cause la plus
+    fréquente sous Windows : le zip téléchargé n'a pas été « débloqué » avant l'extraction, et .NET refuse alors de
+    charger Python.Runtime.dll ; la page d'accueil explique comment faire (app.state.fenetre_impossible)."""
+    import traceback
+    print(f"fenêtre impossible ({why}) : ouverture dans le navigateur", flush=True)
+    traceback.print_exc()
+    app.state.fenetre_impossible = why
+    app.state.fenetres = None
+    if not DISCRETE:
+        webbrowser.open(base)
+    th.join()                                  # « Arrêter » termine le processus
+
+
 def run(app, host: str, port: int, log_level: str = "warning", on_start=None) -> None:
     """Démarre le serveur puis la fenêtre ; rend la main quand la dernière fenêtre est fermée (après l'arrêt
     propre). Sur Mac, Cmd+Q passe par applicationWillTerminate (arrêt propre aussi)."""
@@ -375,12 +389,18 @@ def run(app, host: str, port: int, log_level: str = "warning", on_start=None) ->
             from webview.platforms import cocoa
             cocoa.BrowserView.app.setActivationPolicy_(2)     # « prohibited » : jamais au premier plan
     elif sys.platform == "win32":
-        _win_hooks(f)
+        try:
+            _win_hooks(f)                      # charge .NET (pythonnet) : peut échouer sur certains PC
+        except Exception:
+            return _browser_instead(app, base, th, "dotnet")
         if DISCRETE:
             _win_discreet()
     f.new()
 
+    started = []
+
     def after_start():
+        started.append(True)
         if sys.platform == "darwin":
             _mac_shortcuts()
         if on_start:                           # tests : piloter la vraie fenêtre
@@ -393,8 +413,13 @@ def run(app, host: str, port: int, log_level: str = "warning", on_start=None) ->
     if DISCRETE and sys.platform == "win32":
         import tempfile
         storage = tempfile.mkdtemp(prefix="tripcompta-webview2-")
-    webview.start(after_start, private_mode=False, storage_path=storage,
-                  menu=[] if sys.platform == "win32" else _menu(f))
+    try:
+        webview.start(after_start, private_mode=False, storage_path=storage,
+                      menu=[] if sys.platform == "win32" else _menu(f))
+    except Exception:
+        if started:
+            raise
+        return _browser_instead(app, base, th, "webview")
     arreter()                                  # dernière fenêtre fermée : enregistre et rend la main
     server.should_exit = True
     th.join(timeout=5)

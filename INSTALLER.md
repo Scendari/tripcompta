@@ -57,8 +57,9 @@ navigateur** l'affiche dans ton navigateur si tu préfères. Pour l'arrêter : f
 ## Windows
 
 1. Télécharge `TripCompta-windows.zip`.
-2. *(Facultatif, évite l'alerte de l'étape 4)* clic droit sur le fichier → **Propriétés** → coche **Débloquer**
-   en bas → **OK**.
+2. **Important :** clic droit sur le fichier → **Propriétés** → coche **Débloquer** en bas → **OK**. Sans ça,
+   Windows bloque la fenêtre de Trip Compta : elle s'ouvre alors dans le navigateur (tout marche, mais refais
+   cette étape puis l'extraction pour avoir la fenêtre).
 3. Clic droit → **Extraire tout…** et choisis un dossier **à toi**, par exemple ton dossier personnel
    (`C:\Users\<ton nom>`). Évite « Program Files » : l'application ne pourrait pas se mettre à jour toute seule.
 4. Dans le dossier **TripCompta**, double-clique sur **TripCompta.exe**. Si Windows affiche

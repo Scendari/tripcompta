@@ -49,6 +49,18 @@
   <a class="btn small" href="/reglages/donnees#conflits">Choisir</a></div>
 {% endif %}
 {% endif %}
+{% if window_blocked == "dotnet" %}
+<div class="update-banner" role="status" id="fenetre-bloquee">
+  <span>🪟 <b>Trip Compta s'est ouvert dans ton navigateur :</b> Windows a bloqué sa fenêtre, parce que le fichier
+  téléchargé n'a pas été « débloqué ». Tout marche quand même ici. Pour avoir la fenêtre : arrête Trip Compta, fais un
+  clic droit sur <b>TripCompta-windows.zip</b> → Propriétés → coche <b>Débloquer</b> → OK, puis extrais-le de nouveau.</span>
+</div>
+{% elif window_blocked %}
+<div class="update-banner" role="status" id="fenetre-bloquee">
+  <span>🪟 <b>Trip Compta s'est ouvert dans ton navigateur :</b> sa fenêtre ne peut pas s'ouvrir sur cet ordinateur
+  (composant Microsoft Edge WebView2 absent ?). Tout marche quand même ici.</span>
+</div>
+{% endif %}
 {% if update_banner %}
 <div class="update-banner" role="status">
   <span>🎁 <b>Trip Compta {{ update_banner.version }} est disponible.</b></span>
