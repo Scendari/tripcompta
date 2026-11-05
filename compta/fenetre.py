@@ -71,8 +71,11 @@ class Fenetres:
             # Windows : une fenêtre masquée ne dessine pas (WebView2 en pause) -> visible mais HORS de l'écran,
             # sans activation ni bouton dans la barre des tâches (voir _win_discreet)
             x, y, hidden = OFFSCREEN_X - 40 * n, 100, False
-        return webview.create_window(TITLE, url or self.base, width=1280, height=860, min_size=(820, 560),
-                                     x=x, y=y, text_select=True, zoomable=True, hidden=hidden, focus=not DISCRETE)
+        w = webview.create_window(TITLE, url or self.base, width=1280, height=860, min_size=(820, 560),
+                                  x=x, y=y, text_select=True, zoomable=True, hidden=hidden, focus=not DISCRETE)
+        if sys.platform == "win32" and not DISCRETE:
+            w.events.shown += lambda: _win_front()     # sinon elle s'ouvre souvent derrière l'Explorateur
+        return w
 
     def new_later(self, url: str | None = None):
         """Nouvelle fenêtre sans bloquer l'appelant (route du serveur, menu)."""
@@ -91,6 +94,8 @@ class Fenetres:
         w = webview.windows[-1]
         w.restore()
         w.show()
+        if sys.platform == "win32":
+            _win_front()
 
     def current(self):
         import webview
@@ -267,6 +272,50 @@ def _win_hooks(f: Fenetres):
 
     ec.EdgeChrome.on_download_starting = on_download_starting
     ec.EdgeChrome.on_new_window_request = on_new_window_request
+
+
+def _win_front() -> bool:
+    """Windows : mettre la fenêtre de Trip Compta au premier plan. Windows le refuse souvent à une application qui a
+    mis quelques secondes à démarrer (elle restait derrière l'Explorateur) ; on s'attache un instant à la file
+    d'entrée de la fenêtre active, ce qui l'autorise. Renvoie True si la fenêtre est bien devant."""
+    import ctypes
+    from ctypes import wintypes
+    u32 = ctypes.WinDLL("user32")             # instance à part : ses argtypes ne touchent pas ctypes.windll
+    u32.GetForegroundWindow.restype = wintypes.HWND
+    u32.GetWindowThreadProcessId.argtypes = (wintypes.HWND, ctypes.POINTER(wintypes.DWORD))
+    u32.GetWindowThreadProcessId.restype = wintypes.DWORD
+    for name in ("IsWindowVisible", "IsIconic", "GetWindowTextLengthW", "BringWindowToTop", "SetForegroundWindow"):
+        getattr(u32, name).argtypes = (wintypes.HWND,)
+    u32.GetWindow.argtypes = (wintypes.HWND, wintypes.UINT)
+    u32.GetWindow.restype = wintypes.HWND
+    u32.ShowWindow.argtypes = (wintypes.HWND, ctypes.c_int)
+    u32.AttachThreadInput.argtypes = (wintypes.DWORD, wintypes.DWORD, wintypes.BOOL)
+    pid, found = os.getpid(), []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def each(h, _):
+        p = wintypes.DWORD()
+        u32.GetWindowThreadProcessId(h, ctypes.byref(p))
+        if p.value == pid and u32.IsWindowVisible(h) and u32.GetWindowTextLengthW(h) and not u32.GetWindow(h, 4):
+            found.append(h)                    # fenêtre principale visible de CE processus (GW_OWNER = 4)
+        return True
+    u32.EnumWindows(each, 0)
+    if not found:
+        return False
+    h = found[0]                               # la plus haute des nôtres (EnumWindows suit l'ordre d'empilement)
+    if u32.IsIconic(h):
+        u32.ShowWindow(h, 9)                   # SW_RESTORE
+    fg = u32.GetForegroundWindow()
+    mine = u32.GetWindowThreadProcessId(h, None)
+    other = u32.GetWindowThreadProcessId(fg, None) if fg else 0
+    attached = bool(other and other != mine and u32.AttachThreadInput(other, mine, True))
+    try:
+        u32.BringWindowToTop(h)
+        u32.SetForegroundWindow(h)
+    finally:
+        if attached:
+            u32.AttachThreadInput(other, mine, False)
+    return u32.GetForegroundWindow() == h
 
 
 def _win_discreet():

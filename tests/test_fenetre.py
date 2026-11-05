@@ -298,3 +298,9 @@ def test_window_impossible_falls_back_to_browser(tmp_path, monkeypatch):
     app.state.fenetre_impossible = "dotnet"
     page = TestClient(app).get("/").text
     assert "Débloquer" in page and "TripCompta-windows.zip" in page
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows")
+def test_win_front_without_window_is_harmless():
+    """Mise au premier plan (Windows) : sans fenêtre à nous, elle ne fait rien et ne plante pas (appels user32)."""
+    assert fenetre._win_front() is False
