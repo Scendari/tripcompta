@@ -187,9 +187,9 @@ def _bare_app(updater) -> tuple[FastAPI, str]:
     @app.post("/fenetre/{action}")
     def window_action(action: str):
         f = getattr(app.state, "fenetres", None)
-        if f is None or action not in ("nouvelle", "montrer", "navigateur"):
+        if f is None or action not in ("nouvelle", "montrer"):
             return JSONResponse({"ok": False}, status_code=404)
-        getattr(f, {"nouvelle": "new_later", "montrer": "show", "navigateur": "open_in_browser"}[action])()
+        getattr(f, {"nouvelle": "new_later", "montrer": "show"}[action])()
         return {"ok": True}
 
     @app.get("/ping")
@@ -773,15 +773,6 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         if f is None:
             return JSONResponse({"ok": False}, status_code=404)
         f.new_later()
-        return {"ok": True}
-
-    @app.post("/fenetre/navigateur")
-    def window_to_browser():
-        """« Ouvrir dans le navigateur » (Réglages), quand Trip Compta tourne dans sa propre fenêtre."""
-        f = getattr(app.state, "fenetres", None)
-        if f is None:
-            return JSONResponse({"ok": False}, status_code=404)
-        f.open_in_browser()
         return {"ok": True}
 
     @app.post("/fenetre/montrer")

@@ -143,9 +143,9 @@ def test_real_window_discreet_windows(tmp_path):
             assert all((dl / n).stat().st_size > 1000 for n in names)
             assert not [w for pid in pids for w in _windows(pid) if w[0] not in {x[0] for x in wins}]  # aucun dialogue
 
-            # Réglages : la carte « Ouvrir dans le navigateur » n'apparaît que dans la fenêtre
+            # Réglages : plus de carte « Ouvrir dans le navigateur »
             page.goto(base + "reglages")
-            assert page.locator("[data-window-only]").is_visible()
+            assert "Ouvrir dans le navigateur" not in page.content()
             b.close()
 
         # jamais (durablement) au premier plan : au plus un passage de quelques ms pendant l'ouverture de chaque fenêtre
