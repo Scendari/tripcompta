@@ -114,6 +114,15 @@ def show_running_window(url: str) -> bool:
         return False
 
 
+def open_running(url: str, window: bool) -> None:
+    """Trip Compta tourne déjà, mais sans sa fenêtre (repli) : Windows → Edge en mode application, sinon le navigateur."""
+    if window:
+        from compta import fenetre
+        fenetre.open_app_window(url)
+    else:
+        webbrowser.open(url)
+
+
 def _quiet_streams():
     """Application sans console (Windows, fenêtre) : pas de sortie standard ; on écrit dans un journal à côté des
     réglages, sinon le serveur échouerait au premier message."""
@@ -186,7 +195,7 @@ def main():
         if url:
             print(f"Trip Compta est déjà ouvert : {url}")
             if not (window and show_running_window(url)) and not a.no_browser:
-                webbrowser.open(url)
+                open_running(url, window)
         else:
             print("Trip Compta est déjà en train de s'ouvrir sur ces voyages.")
         return
@@ -200,7 +209,7 @@ def main():
             if window and show_running_window(url):
                 return
             if not a.no_browser:
-                webbrowser.open(url)
+                open_running(url, window)
             return
 
     import uvicorn
