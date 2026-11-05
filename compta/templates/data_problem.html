@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Voyages {{ 'abîmés' if damaged else 'indisponibles' }} · Trip Compta{% endblock %}
+{% block page %}
+<div class="card" style="max-width:680px;margin:2rem auto">
+  {% if damaged %}
+  <h1 style="margin-top:0">⚠️ Le fichier de tes voyages est abîmé</h1>
+  <p>Trip Compta n'arrive pas à le lire, et n'a trouvé aucune sauvegarde intacte pour le remplacer.
+    <b>Rien n'a été effacé ni modifié.</b></p>
+  <p>Que faire :</p>
+  <ul>
+    <li>si ce dossier est sur Google Drive, Dropbox, OneDrive ou iCloud : attends que la synchronisation soit finie,
+      puis réessaie ; ces services gardent aussi les <b>anciennes versions</b> d'un fichier (clic droit sur
+      « compta.db ») ;</li>
+    <li>si tu as exporté tes voyages (fichiers .zip), tu pourras les réimporter dans un dossier neuf.</li>
+  </ul>
+  {% else %}
+  <h1 style="margin-top:0">⏳ Tes voyages ne sont pas disponibles pour l'instant</h1>
+  <p>Le fichier de tes voyages est là, mais cet ordinateur ne peut pas le lire en ce moment : il n'est peut-être
+    pas encore téléchargé (Google Drive, Dropbox, OneDrive, iCloud…), ou le disque qui le contient n'est pas
+    branché. <b>Rien n'a été modifié.</b></p>
+  <p>Que faire : ouvre le dossier ci-dessous, attends que le fichier « compta.db » soit téléchargé (ou branche le
+    disque), puis réessaie.</p>
+  {% endif %}
+  {% if retry %}<form method="post" action="/reessayer"><button class="btn">Réessayer</button></form>
+  {% else %}<p>Ensuite, ferme puis relance Trip Compta.</p>{% endif %}
+  <p class="small muted">Dossier des données : <span class="break">{{ folder }}</span></p>
+</div>
+{% endblock %}
