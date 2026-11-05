@@ -1245,3 +1245,5 @@ tr.to-check > td:last-child { border-right: 2px solid var(--coral); }
                background: var(--err-bg); }
 .to-check-item { display: flex; gap: .5rem; align-items: baseline; font-size: .9rem; font-weight: 500; }
 .to-check-item + .to-check-item { margin-top: .3rem; }
+.prorata { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; margin: .5rem 0; padding: .55rem .75rem;
+           border: 1px solid var(--amber); border-radius: 8px; background: var(--amber-bg); font-size: .9rem; }

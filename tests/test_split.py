@@ -83,17 +83,20 @@ def test_fixed_amounts_refused_with_clear_messages(trip):
     assert shares(ops, tid) == {"Anne": 400.0, "Bob": 400.0, "Chloé": 396.0, "Dan": 0.0}
 
 
-def test_unequal_parts_shown_as_computed_amounts(trip):
-    """Parts inégales (une IA : 6, 4, 3 parts sur 1 300 €) : montants calculés, non fixés, parts gardées."""
+def test_unequal_parts_become_fixed_amounts(trip):
+    """Parts inégales (une IA : 6, 4, 3 parts sur 1 300 €) : plus de parts. Chloé (3 parts, la plus petite) reste
+    libre, 300 € ; Anne et Bob sont fixés 🔒 à 600 et 400 €. Mêmes montants."""
     app, c, tid, P, ops = trip
     ops.add_expense(tid, "Plongées club", montant_reel="1300", parts={"Anne": 6, "Bob": 4, "Chloé": 3})
     eid = ops.trip(tid)["depenses"][0]["id"]
     edit = c.get(f"/v/{tid}/depenses/{eid}/modifier").text
     assert f'name="m_{P["Anne"]}" value="600"' in edit and f'name="m_{P["Chloé"]}" value="300"' in edit
-    assert f'name="w_{P["Anne"]}" value="6.0"' in edit and f'name="fx_{P["Anne"]}" value=""' in edit
-    # ré-enregistrer sans rien toucher garde les parts
+    assert f'name="w_{P["Anne"]}" value="1.0"' in edit and f'name="fx_{P["Anne"]}" value="1"' in edit
+    assert f'name="fx_{P["Chloé"]}" value=""' in edit and f'name="fx_{P["Bob"]}" value="1"' in edit
+    # ré-enregistrer sans rien toucher garde les montants
     data = base(P, label="Plongées club", actual="1300", **{f"inc_{P[n]}": "1" for n in ("Anne", "Bob", "Chloé")},
-                **{f"w_{P[n]}": w for n, w in (("Anne", "6.0"), ("Bob", "4.0"), ("Chloé", "3.0"))})
+                **{f"fx_{P[n]}": "1" for n in ("Anne", "Bob")},
+                **{f"m_{P[n]}": v for n, v in (("Anne", "600"), ("Bob", "400"))})
     c.post(f"/v/{tid}/depenses/{eid}", data=data)
     assert shares(ops, tid) == {"Anne": 600.0, "Bob": 400.0, "Chloé": 300.0, "Dan": 0.0}
 
@@ -160,12 +163,13 @@ def test_no_parts_wording_anywhere_amounts_in_euros(trip):
     ops.add_expense(tid, "Plongées", montant_reel="1196", parts={"Anne": 400, "Bob": 400, "Chloé": 396})
     ops.add_expense(tid, "Nuits", montant_reel="130", parts={"Anne": 6, "Bob": 4, "Chloé": 3})
     fiche = re.sub("[ \xa0]", " ", c.get(f"/v/{tid}/p/{P['Chloé']}").text)
-    assert "montant indiqué pour lui (396,00 € sur 1 196,00 €)" in fiche
-    assert "part inégale, 3 sur 13 (30,00 € sur 130,00 €)" in fiche
+    assert "montant fixé pour lui (396,00 € sur 1 196,00 €)" in fiche
+    fiche = re.sub("[ \xa0]", " ", c.get(f"/v/{tid}/p/{P['Anne']}").text)   # Nuits : 3 parts = la part libre
+    assert "Nuits : montant fixé pour lui (60,00 € sur 130,00 €)" in fiche
     doc = pdfium.PdfDocument(c.get(f"/v/{tid}/export.pdf").content)
     text = re.sub(r"\s+", " ", "\n".join(doc[i].get_textpage().get_text_range() for i in range(len(doc))))
     assert "part(s)" not in text and "parts au total" not in text
-    assert "montant indiqué pour lui (396,00" in re.sub("[ \xa0]", " ", text)
+    assert "montant fixé pour lui (396,00" in re.sub("[ \xa0]", " ", text)
 
 
 def test_fixed_names_in_explanation(trip):
@@ -178,3 +182,52 @@ def test_fixed_names_in_explanation(trip):
     assert "500,00 € − 60,00 € fixés (Anne) = 440,00 € ÷ 4 personnes" in txt({1: 6000})
     assert "− 110,00 € fixés (Anne 60,00 €, Bob 50,00 €) = 390,00 € ÷ 3 personnes" in txt({1: 6000, 2: 5000})
     assert "fixés (4 personnes) = 300,00 € pour lui seul" in txt({1: 5000, 2: 5000, 3: 5000, 4: 5000})
+
+
+def test_browser_prorata_and_typed_equal_amount(trip):
+    """Montants fixés sur le prévu : quand le réel est tapé, « Recalculer en proportion » (11 € → 13,33 €) ; et un
+    montant tapé égal à la part de la répartition n'est pas fixé."""
+    import threading
+    import time
+    import uvicorn
+    from playwright.sync_api import sync_playwright
+    from tests.conftest import _free_port
+    app, c, tid, P, ops = trip
+    eid = ops.add_expense(tid, "Pique-nique", montant_prevu="66", parts={"Anne": 2, "Bob": 1, "Chloé": 1, "Dan": 2})["depense_id"]
+    port = _free_port()
+    srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
+    th = threading.Thread(target=srv.run, daemon=True)
+    th.start()
+    while not srv.started:
+        time.sleep(0.05)
+    try:
+        with sync_playwright() as p:
+            b = p.chromium.launch()
+            pg = b.new_page(viewport={"width": 1280, "height": 900})
+            errors = []
+            pg.on("pageerror", lambda e: errors.append(str(e)))
+            pg.goto(f"http://127.0.0.1:{port}/v/{tid}/depenses/{eid}/modifier")
+            m = lambda n: float(pg.input_value(f"input[name=m_{P[n]}]").replace(",", ".") or 0)
+            assert m("Anne") == 22 and m("Bob") == 11                          # 2 parts = 22 € 🔒 ; Bob libre
+            assert pg.input_value(f"input[name=fx_{P['Anne']}]") == "1" and pg.input_value(f"input[name=fx_{P['Bob']}]") == ""
+            assert pg.locator("[data-prorata]").is_hidden()
+            pg.fill("#actual", "80")
+            pg.wait_for_selector("[data-prorata]:not([hidden])")
+            assert "fixés pour le prévu (66,00" in pg.inner_text("[data-prorata]")
+            assert "22,00 € → 26,67 €" in pg.inner_text("[data-prorata-go]").replace(" ", " ").replace("\xa0", " ")
+            pg.click("[data-prorata-go]")
+            assert m("Anne") == 26.67 and m("Dan") == 26.67 and m("Bob") == 13.33
+            assert pg.locator("[data-prorata]").is_hidden()
+            # Chloé : on tape exactement ce qu'elle paie déjà (13,33) : pas de cadenas
+            pg.fill(f"input[name=m_{P['Chloé']}]", "13,33")
+            pg.press(f"input[name=m_{P['Chloé']}]", "Tab")
+            assert pg.input_value(f"input[name=fx_{P['Chloé']}]") == ""
+            # Bob : un autre montant : cadenas
+            pg.fill(f"input[name=m_{P['Bob']}]", "10")
+            pg.press(f"input[name=m_{P['Bob']}]", "Tab")
+            assert pg.input_value(f"input[name=fx_{P['Bob']}]") == "1"
+            assert errors == []
+            b.close()
+    finally:
+        srv.should_exit = True
+        th.join(5)

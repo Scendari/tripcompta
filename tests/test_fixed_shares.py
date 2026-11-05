@@ -63,8 +63,9 @@ def test_old_data_converted_once_with_identical_shares(tmp_path):
     assert _shares(d, tid)[0] == shares
 
 
-def test_ia_parts_are_not_converted(tmp_path):
-    """Des parts (2, 1, 1) ne sont pas des centimes : elles restent des parts."""
+def test_ia_parts_become_fixed_amounts(tmp_path):
+    """Plus de « parts » : des parts (2, 1, 1) données par l'IA : A paie double, 60 € fixés 🔒 ; B et C (une part)
+    restent libres et se partagent le reste, 30 € chacun."""
     d = tmp_path / "d"
     ops, tid = _trip(d)
     e = ops.add_expense(tid, "Nuits", montant_reel="120", parts={"A": 2, "B": 1, "C": 1})["depense_id"]
@@ -75,8 +76,8 @@ def test_ia_parts_are_not_converted(tmp_path):
     shares, _ = _shares(d, tid)
     assert shares == {"A": 6000, "B": 3000, "C": 3000, "D": 0}
     con = sqlite3.connect(d / "compta.db")
-    assert con.execute("SELECT COUNT(*) FROM expense_shares WHERE expense_id=? AND fixed IS NOT NULL",
-                       (e,)).fetchone()[0] == 0
+    assert sorted(f or 0 for (f,) in con.execute("SELECT fixed FROM expense_shares WHERE expense_id=?", (e,))) == [0, 0, 6000]
+    assert {w for (w,) in con.execute("SELECT weight FROM expense_shares WHERE expense_id=?", (e,))} == {1.0}
 
 
 def test_old_adjust_page_redirects(tmp_path):
@@ -146,3 +147,48 @@ def test_remise_in_accounts_tab(tmp_path):
     # le bouton du « Détail des comptes » ouvre ce formulaire
     assert f'href="/v/{tid}/participants/remises?remise={P["A"]}">Remise ou supplément' in \
         c.get(f"/v/{tid}/participants/comptes").text
+
+
+def test_amount_equal_to_the_equal_share_has_no_lock(tmp_path):
+    """Des montants donnés par l'IA égaux à la part égale (30, 30, 30 sur 90 €) : pas de cadenas ; 400, 400, 396 :
+    400 (le plus courant) est la part normale, 396 est fixé 🔒."""
+    d = tmp_path / "d"
+    ops, tid = _trip(d)
+    e = ops.add_expense(tid, "Repas", montant_reel="90", parts={"A": 30, "B": 30, "C": 30})["depense_id"]
+    e2 = ops.add_expense(tid, "Plongées", montant_reel="1196", parts={"A": 400, "B": 400, "C": 396})["depense_id"]
+    con = sqlite3.connect(d / "compta.db")
+    assert [f for (f,) in con.execute("SELECT fixed FROM expense_shares WHERE expense_id=?", (e,))] == [None] * 3
+    assert sorted(f or 0 for (f,) in con.execute("SELECT fixed FROM expense_shares WHERE expense_id=?", (e2,))) == \
+        [0, 0, 39600]
+    con.close()
+
+
+def test_old_parts_shown_as_fixed_and_converted_on_save(tmp_path):
+    """Une dépense d'avant avec des parts (Antoine compte double) : rien ne change tant qu'on n'y touche pas ; le
+    formulaire montre 11,00 € 🔒 ; l'enregistrer la convertit (mêmes montants)."""
+    from fastapi.testclient import TestClient
+    from compta.web import create_app
+    import re
+    d = tmp_path / "d"
+    app = create_app(d)
+    ops = Ops(app.state.db)
+    tid = ops.import_trip({"voyage": {"nom": "T"}, "participants": [f"P{i}" for i in range(11)]})["voyage_id"]
+    e = ops.add_expense(tid, "Pique-nique", montant_reel="66")["depense_id"]
+    con = sqlite3.connect(d / "compta.db")                        # « d'avant » : une double part en base
+    pid0 = con.execute("SELECT participant_id FROM expense_shares WHERE expense_id=? ORDER BY participant_id",
+                       (e,)).fetchone()[0]
+    con.execute("UPDATE expense_shares SET weight=2 WHERE expense_id=? AND participant_id=?", (e, pid0))
+    con.commit()
+    con.close()
+    c = TestClient(app)
+    form = c.get(f"/v/{tid}/depenses/{e}/modifier").text
+    assert f'name="fx_{pid0}" value="1"' in form and f'name="m_{pid0}" value="11"' in form
+    assert f'name="w_{pid0}" value="1.0"' in form
+    data = {"label": "Pique-nique", "actual": "66", f"fx_{pid0}": "1", f"m_{pid0}": "11"}
+    data.update({k: v for k, v in re.findall(r'name="(inc_\d+)" value="(1)" checked', form)})
+    c.post(f"/v/{tid}/depenses/{e}", data=data)
+    con = sqlite3.connect(d / "compta.db")
+    rows = dict(con.execute("SELECT participant_id, fixed FROM expense_shares WHERE expense_id=?", (e,)).fetchall())
+    assert rows[pid0] == 1100 and sum(1 for v in rows.values() if v is None) == 10
+    assert {w for (w,) in con.execute("SELECT weight FROM expense_shares WHERE expense_id=?", (e,))} == {1.0}
+    con.close()

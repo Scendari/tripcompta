@@ -31,7 +31,9 @@
 {% if checks and trip and not request.url.path.startswith('/v/' ~ trip.id ~ '/rejoindre') %}
 {% set one = checks.values()|list|first if checks|length == 1 else None %}
 <div class="folder-banner danger" role="alert"><span>⚠️ <b>{{ checks|length }} dépense{{ 's' if checks|length > 1 }} à vérifier</b> :
-  {%- if one and one|length == 1 %} {{ one[0][1] }} a rejoint « {{ one[0][0].reason }} » ; ajoute sa part à la main si cette dépense concerne {{ one[0][1] }}.
+  {%- if one and one|length == 1 and one[0][0].reason == 'désistement' %} désistement de {{ one[0][1] }} ; vérifie les montants fixés 🔒 de cette dépense.
+  {%- elif one and one|length == 1 %} {{ one[0][1] }} a rejoint « {{ one[0][0].reason }} » ; ajoute sa part à la main si cette dépense concerne {{ one[0][1] }}.
+  {%- elif checks.values()|sum(start=[])|selectattr('0.reason', 'equalto', 'désistement')|list %} des montants sont à revoir à la main (nouveaux membres de groupe ou désistement).
   {%- else %} de nouveaux membres de groupe y sont peut-être concernés ; ajoute leur part à la main.{% endif %}</span>
   {% if request.url.path != '/v/' ~ trip.id ~ '/depenses' %}<a class="btn small" href="/v/{{ trip.id }}/depenses">Voir</a>{% endif %}</div>
 {% endif %}

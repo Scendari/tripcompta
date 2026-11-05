@@ -30,7 +30,9 @@
       {% endif %}
       <tr id="e{{ e.id }}" class="{{ 'in-subcat' if grouped }}{{ ' to-check' if e.id in checks }}">
         <td><a href="/v/{{ trip.id }}/depenses/{{ e.id }}/modifier"><b>{{ e.label }}</b></a>{% if e.is_income %} <span class="pill ok">recette</span>{% endif %}{% if e.pending %} <span class="pill doit">montant à venir</span>{% endif %}{% if e.id in bad %} <span class="pill doit" title="La somme des parts ne fait pas le montant de la dépense : vérifie qui la paie et les ajustements">⚠ à vérifier</span>{% endif %}
-          {%- if e.id in checks %}<div class="check-note">⚠️ {% for c, name in checks[e.id] %}{{ name }} a rejoint « {{ c.reason }} »{{ ', ' if not loop.last }}{% endfor %} : ajoute {{ 'leur part' if checks[e.id]|length > 1 else 'sa part' }} à la main si cette dépense {{ 'les concerne' if checks[e.id]|length > 1 else 'concerne ' ~ checks[e.id][0][1] }}.
+          {%- if e.id in checks %}{% set joins = checks[e.id]|rejectattr('0.reason', 'equalto', 'désistement')|list %}{% set leaves = checks[e.id]|selectattr('0.reason', 'equalto', 'désistement')|list %}<div class="check-note">⚠️
+            {%- if joins %} {% for c, name, _ in joins %}{{ name }} a rejoint « {{ c.reason }} »{{ ', ' if not loop.last }}{% endfor %} : ajoute {{ 'leur part' if joins|length > 1 else 'sa part' }} à la main si cette dépense {{ 'les concerne' if joins|length > 1 else 'concerne ' ~ joins[0][1] }}.{% endif %}
+            {%- for c, name, no_free in leaves %} Désistement de {{ name }} : sa part est répartie entre les montants non fixés ; vérifie les montants fixés 🔒.{% if no_free %} Tous les montants sont fixés : personne ne reprend sa part.{% endif %}{% endfor %}
             <span class="check-actions"><a class="btn small" href="/v/{{ trip.id }}/depenses/{{ e.id }}/modifier">Modifier</a>
             <form method="post" action="/v/{{ trip.id }}/depenses/{{ e.id }}/verifiee" class="inline"><button class="btn small ghost">C'est bon</button></form></span></div>{% endif %}</td>
         <td class="date-col small">{{ e.date|date if e.date else '' }}</td>

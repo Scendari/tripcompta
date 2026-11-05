@@ -391,3 +391,26 @@ def test_check_texts_and_see_button(env):
     assert ">Voir</a>" not in lst                                           # déjà sur la page Dépenses
     assert ("Gisèle a rejoint « groupe Minibus » : ajoute sa part à la main si cette dépense concerne Gisèle."
             in clean(re.sub(r"<[^>]+>", " ", lst)))
+
+
+def test_withdrawal_in_expense_with_fixed_amounts_is_flagged(env):
+    """Désistement repris par le groupe : dans une dépense avec des montants fixés 🔒 (le resto : Anne 45 €), sa part
+    va aux montants non fixés, les montants fixés ne bougent pas : la dépense est « à vérifier ». Pas les dépenses à
+    parts égales (le gîte), ni celles qu'il garde, ni si l'asso reprend sa part."""
+    app, ops, tid, c, P, E = env
+    with app.state.db.Session() as s_:                       # le resto : Anne 45 € fixés 🔒, Bob et Chloé libres
+        e = s_.get(M.Expense, E["Resto"])
+        for x in e.shares:
+            x.weight = 1.0
+            x.fixed = 4500 if x.participant_id == P["Anne"] else None
+        s_.commit()
+    ops.withdraw(tid, "Bob", pris_en_charge_par="groupe")
+    page = clean(re.sub(r"<[^>]+>", " ", c.get(f"/v/{tid}/depenses").text))
+    assert "1 dépense à vérifier : désistement de Bob ; vérifie les montants fixés 🔒 de cette dépense." in page
+    assert "Désistement de Bob : sa part est répartie entre les montants non fixés" in page
+    assert "Tous les montants sont fixés" not in page
+    # Chloé aussi, mais l'asso reprend sa part : rien de plus à vérifier
+    ops.withdraw(tid, "Chloé", pris_en_charge_par="asso")
+    assert "1 dépense à vérifier" in clean(re.sub(r"<[^>]+>", " ", c.get(f"/v/{tid}/depenses").text))
+    r = c.post(f"/v/{tid}/depenses/{E['Resto']}/verifiee", follow_redirects=True)
+    assert "dépense à vérifier" not in clean(re.sub(r"<[^>]+>", " ", c.get(f"/v/{tid}/depenses").text))

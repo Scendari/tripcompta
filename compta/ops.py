@@ -469,6 +469,8 @@ def do_add_expense(s, t, libelle, categorie=None, montant_prevu=None, montant_re
     s.flush()
     for pid, wv in w.items():
         e.shares.append(M.ExpenseShare(participant_id=pid, weight=wv))
+    s.flush()
+    S.normalize_shares(e)                        # pas de « parts » : montants fixés 🔒 (voir services)
     _set_payments(e, payments)
     _check_payments(e)
     s.flush()
@@ -548,6 +550,9 @@ def do_update_expense(s, t, depense, libelle=None, categorie=None, montant_prevu
         raise OpsError(f"Le remboursement ({E.fmt(e.refund)}) dépasse le montant de « {e.label} ».")
     _check_payments(e)
     s.flush()
+    s.refresh(e)
+    if S.normalize_shares(e):                    # des parts (IA) : montants fixés 🔒, une fois le montant connu
+        s.flush()
     return e, changes
 
 
@@ -749,6 +754,7 @@ def do_withdraw(s, t, participant, pris_en_charge_par="groupe", parts_conservees
         raise OpsError("Le remboursement doit être positif.")
     w = M.Withdrawal(participant_id=p.id, date=d, absorber=absorber, kept=",".join(map(str, kept)))
     t.withdrawals.append(w)
+    S.flag_withdrawal(t, p.id, kept, absorber)   # montants fixés 🔒 dans ses dépenses : « à vérifier »
     if refund:
         t.movements.append(M.Movement(participant_id=p.id, kind="remboursement", amount=refund,
                                       date=date_of(date_remboursement) or d, note="Remboursement désistement"))

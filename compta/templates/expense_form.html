@@ -158,6 +158,13 @@
       {% endfor %}
     </div>
     <div id="split-status" class="split-status" aria-live="polite"></div>
+    {% if e and e.actual is none and e.planned and fixed %}
+    {# montants fixés sur le prévu : quand le réel arrive, proposer de les recalculer en proportion (un clic) #}
+    <div class="prorata" data-prorata data-planned="{{ e.planned }}" hidden>
+      <span data-prorata-text></span>
+      <button type="button" class="btn small" data-prorata-go>Recalculer en proportion</button>
+    </div>
+    {% endif %}
     <div class="cents-line" hidden>
       <p class="small" style="margin:.35rem 0 0"><span data-cents-text></span> · <button type="button" class="btn link small" data-cents-toggle aria-expanded="false">Changer</button></p>
       <div class="cents-choices" hidden>
@@ -401,6 +408,44 @@ document.getElementById('add-payer').addEventListener('click', function () {
     refresh();
   });
   list.addEventListener('change', function (ev) { if (ev.target.matches('input[data-who]')) refresh(); });
+  // en quittant un montant tapé : égal à ce que la répartition lui donne de toute façon → pas de cadenas
+  list.addEventListener('focusout', function (ev) {
+    var inp = ev.target.closest('.who-amount'); if (!inp) return;
+    var r = inp.closest('.who'); if (!isFixed(r) || inp.value.trim() === '') return;
+    // ce qu'il paierait sans cadenas (sans toucher aux autres champs : on est peut-être déjà dans l'un d'eux)
+    var act = rows().filter(on), others = act.filter(function (x) { return x !== r && isFixed(x); });
+    var free = act.filter(function (x) { return x === r || !isFixed(x); });
+    var rest = total() - others.reduce(function (s, x) { return s + euros(x.querySelector('.who-amount').value); }, 0);
+    var tw = free.reduce(function (s, x) { return s + weight(x); }, 0);
+    var would = tw ? rest * weight(r) / tw : 0;
+    if (Math.abs(euros(inp.value) - would) <= 1) { setFixed(r, false); refresh(); }
+  });
+  // montants fixés pour le prévu, réel tapé : les revoir, ou les recalculer en proportion (11,00 € → 13,33 €)
+  var pro = form.querySelector('[data-prorata]');
+  function prorata() {
+    if (!pro || pro.dataset.done) return;
+    var planned = +pro.dataset.planned, a = 0;
+    String(form.querySelector('#actual').value || '').split('+').forEach(function (x) { a += euros(x); });
+    var fx = rows().filter(function (r) { return on(r) && isFixed(r); });
+    pro.hidden = !(a && a !== planned && fx.length);
+    if (pro.hidden) return;
+    var first = fx[0].querySelector('.who-amount'), v = euros(first.value);
+    pro.querySelector('[data-prorata-text]').textContent = '⚠️ Ces montants 🔒 ont été fixés pour le prévu (' + fmt(planned)
+      + '). Vérifie-les pour le réel (' + fmt(a) + ').';
+    pro.querySelector('[data-prorata-go]').textContent = 'Recalculer en proportion (' + fmt(v) + ' → ' + fmt(Math.round(v * a / planned)) + ')';
+  }
+  if (pro) {
+    pro.querySelector('[data-prorata-go]').addEventListener('click', function () {
+      var planned = +pro.dataset.planned, a = 0;
+      String(form.querySelector('#actual').value || '').split('+').forEach(function (x) { a += euros(x); });
+      rows().filter(function (r) { return on(r) && isFixed(r); }).forEach(function (r) {
+        var inp = r.querySelector('.who-amount'); inp.value = input(Math.round(euros(inp.value) * a / planned));
+      });
+      pro.dataset.done = '1'; pro.hidden = true; refresh();
+    });
+    form.querySelector('#actual').addEventListener('input', prorata);
+    form.addEventListener('ticketsChanged', prorata);
+  }
   list.addEventListener('click', function (ev) {
     var b = ev.target.closest('[data-unfix]'); if (!b) return;
     setFixed(b.closest('.who'), false); refresh();

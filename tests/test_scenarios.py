@@ -352,6 +352,6 @@ def test_unequal_shares_nights_and_half_share(app):
                                      f"inc_{o.P['Bob']}": "1", f"w_{o.P['Bob']}": "2",
                                      f"inc_{o.P['Léo']}": "1", f"w_{o.P['Léo']}": "1,5"}).text
     assert "300,00" in pv and "150,00" in pv
-    # l'explication du calcul est donnée sur la fiche
-    page = o.get(f"/p/{o.P['Léo']}")
-    assert "part inégale, 1,5 sur 6,5" in page and "part(s)" not in page
+    # plus de « parts » : chacun son montant, fixé 🔒, expliqué sur la fiche
+    page = o.get(f"/p/{o.P['Anne']}")
+    assert "montant fixé pour lui (300,00" in page and "part inégale" not in page and "part(s)" not in page
