@@ -19,7 +19,6 @@ def test_priorities(tmp_path, monkeypatch):
     assert P.default_data_dir() == tmp_path / "Ailleurs"                          # choisi dans l'appli
     monkeypatch.setenv("TRIPCOMPTA_DATA_DIR", str(tmp_path / "Env"))              # variable d'environnement : prioritaire
     assert P.default_data_dir() == tmp_path / "Env"
-    assert P.looks_synced(tmp_path / "Dropbox" / "x") and not P.looks_synced(tmp_path / "Docs")
 
 
 @pytest.fixture
@@ -41,8 +40,9 @@ def chosen(tmp_path, monkeypatch):
 def test_move_data_to_another_folder(chosen):
     app, c, tmp, calls = chosen
     page = c.get("/reglages/donnees").text
-    assert str(tmp / "a") in page and "que tu as choisi" in page and 'value="__local__"' in page
-    r = c.post("/reglages/donnees", data={"dossier": str(tmp / "b"), "mode": "deplacer"})
+    assert str(tmp / "a") in page and "que tu as choisi" in page and "Revenir au dossier par défaut" in page
+    assert "Google Drive" not in page.split("Mettre Trip Compta dans")[0]    # plus de dossiers repérés
+    r = c.post("/reglages/donnees", data={"dossier": str(tmp / "b")})      # vide : on y copie
     import html
     assert "Redémarrage" in r.text and "n'a pas été touché" in html.unescape(r.text)
     import time; time.sleep(0.8)
@@ -59,20 +59,23 @@ def test_change_errors(chosen):
     app, c, tmp, calls = chosen
     def post(**d):
         return c.post("/reglages/donnees", data=d).text.replace("&#39;", "'").replace("&quot;", '"')
-    assert "chemin complet" in post(dossier="relatif/dossier", mode="deplacer")
-    assert "déjà rangés dans ce dossier" in post(dossier=str(tmp / "a"), mode="deplacer")
-    assert "pas encore de voyages Trip Compta" in post(dossier=str(tmp / "vide"), mode="utiliser")
-    assert "est introuvable" in post(dossier=str(tmp / "nulle part" / "x"), mode="deplacer")   # faute de frappe
-    (tmp / "plein").mkdir()
-    (tmp / "plein" / "compta.db").write_bytes(b"")
-    assert "contient déjà des voyages" in post(dossier=str(tmp / "plein"), mode="deplacer")
+    assert "chemin complet" in post(dossier="relatif/dossier")
+    assert "déjà rangés dans ce dossier" in post(dossier=str(tmp / "a"))
+    assert "est introuvable" in post(dossier=str(tmp / "nulle part" / "x"))   # faute de frappe
+    assert "Choisis un dossier" in post(dossier="")
     assert calls == []
-    # utiliser un dossier qui a déjà des données ; puis revenir sur cet ordinateur (Documents/TripCompta)
-    assert "va utiliser les voyages" in post(dossier=str(tmp / "plein"), mode="utiliser")
-    assert "de nouveau rangés sur cet ordinateur" in post(action="defaut")
+    # un dossier qui contient déjà des voyages : ouverts, jamais de copie par-dessus
+    (tmp / "plein").mkdir()
+    (tmp / "plein" / "compta.db").write_bytes(b"x")
+    before = (tmp / "plein" / "compta.db").read_bytes()
+    assert "va ouvrir les voyages rangés dans" in post(dossier=str(tmp / "plein"), mode="copier")
+    assert (tmp / "plein" / "compta.db").read_bytes() == before
+    assert json.loads((tmp / "reglages.json").read_text())["data_dir"] == str(tmp / "plein")
+    # revenir au dossier par défaut (Documents/TripCompta, vide) : les voyages y sont copiés, rien à retenir
+    assert "ont été copiés dans" in post(dossier=str(tmp / "Docs" / "TripCompta"))
     conf = json.loads((tmp / "reglages.json").read_text())
     assert conf["data_dir"] is None and "partage" not in conf
-    con = sqlite3.connect(tmp / "Docs" / "TripCompta" / "compta.db")      # les voyages y ont été copiés
+    con = sqlite3.connect(tmp / "Docs" / "TripCompta" / "compta.db")
     assert con.execute("SELECT name FROM trips").fetchall() == [("Sortie",)]
 
 
@@ -134,8 +137,8 @@ def test_folder_info_says_what_is_inside(tmp_path, monkeypatch):
 
 
 def test_folder_choice_explains_and_guards_in_browser(tmp_path, monkeypatch):
-    """Dans un vrai navigateur : le dossier choisi est inspecté, le bon choix présélectionné, la phrase dit ce qui va
-    se passer (et ce qui ne se passe pas), le bouton suit le choix ; copier par-dessus des voyages est impossible."""
+    """Dans un vrai navigateur : le dossier tapé est inspecté ; s'il contient des voyages, alerte et « Ouvrir les
+    voyages de ce dossier » ; vide, « Copier mes voyages dans ce dossier » ; copier par-dessus est impossible."""
     pw = pytest.importorskip("playwright.sync_api")
     import socket
     import threading
@@ -155,24 +158,31 @@ def test_folder_choice_explains_and_guards_in_browser(tmp_path, monkeypatch):
             b = p.chromium.launch()
             pg = b.new_page()
             pg.goto(f"http://127.0.0.1:{port}/reglages/donnees")
-            pg.fill("input[name=autre]", str(full))
+            assert pg.inner_text("[data-go]") == "Continuer" and pg.is_disabled("[data-go]")
+            pg.fill("input[name=dossier]", str(full))
             pw.expect(pg.locator("[data-folder-status]")).to_contain_text("4 voyages")
-            assert pg.is_checked("input[name=mode][value=utiliser]")        # présélectionné
+            assert "contient déjà des voyages" in pg.inner_text("[data-folder-status]")
             pw.expect(pg.locator("[data-go]")).to_have_text("Ouvrir les voyages de ce dossier")
             what = pg.inner_text("[data-what-happens]")
-            assert "ouvrir les voyages de ce dossier" in what and "rien n'est effacé" in what
-            pg.check("input[name=mode][value=copier]")                       # copier par-dessus : refusé d'avance
-            assert "ne copie jamais par-dessus" in pg.inner_text("[data-what-happens]")
-            assert pg.is_disabled("[data-go]")
-            pg.fill("input[name=autre]", str(empty))
-            pw.expect(pg.locator("[data-folder-status]")).to_contain_text("vide")
-            assert pg.is_checked("input[name=mode][value=copier]")
+            assert "ne copie jamais par-dessus" in what and "ouvrir les voyages de ce dossier" in what
+            pg.fill("input[name=dossier]", str(empty))
+            pw.expect(pg.locator("[data-folder-status]")).to_contain_text("ne contient pas de voyages")
             pw.expect(pg.locator("[data-go]")).to_have_text("Copier mes voyages dans ce dossier")
             what = pg.inner_text("[data-what-happens]")
             assert "copier ton voyage" in what and "n'est pas touché" in what and pg.is_enabled("[data-go]")
-            pg.check("input[name=mode][value=utiliser]")                     # ouvrir un dossier vide : impossible
+            pg.fill("input[name=dossier]", str(empty.parent / "Nouveau"))
+            pw.expect(pg.locator("[data-folder-status]")).to_contain_text("sera créé")
+            pg.fill("input[name=dossier]", str(app.state.db.home))
+            pw.expect(pg.locator("[data-folder-status]")).to_contain_text("déjà les voyages ouverts")
             assert pg.is_disabled("[data-go]")
             b.close()
     finally:
         srv.should_exit = True
         th.join(5)
+
+
+def test_default_folder_is_ok_even_if_documents_is_missing(chosen):
+    """« Revenir au dossier par défaut » : Documents/TripCompta est créé au besoin (pas « introuvable »)."""
+    app, c, tmp, calls = chosen
+    j = c.get("/reglages/dossier-info", params={"chemin": str(tmp / "Docs" / "TripCompta")}).json()
+    assert j["ok"] and not j["existe"]

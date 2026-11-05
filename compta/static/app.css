@@ -871,14 +871,14 @@ label.check { display: inline-flex; align-items: center; gap: .4rem; font-weight
 .known-list .d-block { display: block; overflow-wrap: anywhere; }
 .known-actions { justify-content: flex-end; margin-top: .6rem; }
 
-/* où sont les voyages : puce de l'en-tête, bandeau « autre version » */
-.cloud-line { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .2rem .45rem; padding: .25rem 1.2rem;
+/* bandeau « autre version des voyages » */
+.folder-line { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .2rem .45rem; padding: .25rem 1.2rem;
   font-size: .78rem; color: var(--muted); border-bottom: 1px solid var(--border); background: var(--bg); }
-.cloud-line a { color: var(--muted); text-decoration: none; }
-.cloud-line a:hover { color: var(--teal-strong); text-decoration: underline; }
-.cloud-banner { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; padding: .6rem 1.2rem; font-size: .9rem; }
-.cloud-banner > span { flex: 1 1 280px; }
-.cloud-banner.warn { background: var(--amber-bg); color: var(--text); border-bottom: 1px solid var(--border); }
+.folder-line a { color: var(--muted); text-decoration: none; }
+.folder-line a:hover { color: var(--teal-strong); text-decoration: underline; }
+.folder-banner { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; padding: .6rem 1.2rem; font-size: .9rem; }
+.folder-banner > span { flex: 1 1 280px; }
+.folder-banner.warn { background: var(--amber-bg); color: var(--text); border-bottom: 1px solid var(--border); }
 .data-where { font-size: 1.05rem; margin: .3rem 0 .1rem; }
 .data-state { margin: .3rem 0 .4rem; }
 .data-options { display: flex; flex-direction: column; gap: .4rem; margin-top: .4rem; }
@@ -898,13 +898,6 @@ label.check { display: inline-flex; align-items: center; gap: .4rem; font-weight
 .conflict-list .grow { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
 .conflict-list .d-block { display: block; }
 .data-path { overflow-wrap: anywhere; }
-.inbox { margin: 1rem 0; }
-.inbox-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .4rem; }
-.inbox-item { display: flex; align-items: center; gap: .6rem; padding: .4rem .5rem; border: 1px solid var(--border);
-  border-radius: 10px; cursor: pointer; min-width: 0; }
-.inbox-item:has(input:checked) { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal) inset; }
-.inbox-item .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.inbox-item .d-block { display: block; }
 .data-card { overflow-wrap: anywhere; }
 
 /* protection par un mot de passe */
@@ -929,7 +922,7 @@ label.check { display: inline-flex; align-items: center; gap: .4rem; font-weight
 .prot-action summary { cursor: pointer; color: var(--teal-strong); }
 .prot-action form { display: flex; flex-direction: column; gap: .5rem; margin-top: .5rem; max-width: 360px; }
 .prot-action .btn { align-self: flex-start; }
-@media print { .topbar, .cloud-line, .cloud-banner, .page-head .btn, .no-print, .hint, .row .btn { display: none !important; } }
+@media print { .topbar, .folder-line, .folder-banner, .page-head .btn, .no-print, .hint, .row .btn { display: none !important; } }
 
 .help-steps { list-style: none; padding: 0; margin: .4rem 0 0; display: flex; flex-direction: column; gap: .2rem; }
 .help-steps li { display: flex; gap: .8rem; align-items: flex-start; padding: .55rem 0; border-top: 1px solid var(--border); }
@@ -1210,12 +1203,11 @@ button.card.setting { font: inherit; text-align: left; width: 100%; cursor: poin
 .fin { width: 26px; bottom: 30px; }
 
 /* où sont les voyages : petite étiquette discrète dans l'en-tête (au lieu d'une ligne entière) */
-.cloud-chip { display: inline-flex; align-items: center; gap: .3rem; color: var(--muted); font-size: .88rem; text-decoration: none;
+.save-chip { display: inline-flex; align-items: center; gap: .3rem; color: var(--muted); font-size: .88rem; text-decoration: none;
   padding: .3rem .55rem; border-radius: 999px; white-space: nowrap; }
-a.cloud-chip:hover { color: var(--teal-strong); background: var(--bg); text-decoration: none; }
-.cloud-chip.inbox { color: var(--amber); font-weight: 600; }
-@media (max-width: 760px) { .cloud-chip:not(.inbox) .lbl { display: none; } }
-@media print { .cloud-chip { display: none !important; } }
+a.save-chip:hover { color: var(--teal-strong); background: var(--bg); text-decoration: none; }
+@media (max-width: 760px) { .save-chip .lbl { display: none; } }
+@media print { .save-chip { display: none !important; } }
 
 /* « Changer de dossier » : ce que contient le dossier choisi, et ce qui va se passer */
 .folder-status { margin: .6rem 0 0; padding: .5rem .75rem; border-radius: 8px; background: var(--bg-2); font-size: .92rem; }

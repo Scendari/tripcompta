@@ -1,7 +1,7 @@
 """Le dossier des voyages : fichiers et outils sans état (pas de synchronisation : Trip Compta lit et écrit
-directement son dossier). Si ce dossier est dans Google Drive, Dropbox, OneDrive ou iCloud, c'est « à tes risques » :
-un seul ordinateur à la fois. Garde-fous : copies en conflit laissées par le service de cloud (détectées, exportables),
-fichier pas encore téléchargé (jamais pris pour une base abîmée), « Justificatifs à trier » déposés depuis un téléphone.
+directement son dossier). S'il est dans un dossier Cloud, c'est « à tes risques » : un seul ordinateur à la fois.
+Garde-fous : copies en conflit laissées par le service qui synchronise (détectées, exportables), fichier pas encore
+téléchargé (jamais pris pour une base abîmée).
 """
 from __future__ import annotations
 
@@ -20,34 +20,11 @@ from pathlib import Path
 
 DB = "compta.db"
 RECEIPTS = "justificatifs"
-INBOX = "Justificatifs à trier"
-INBOX_DONE = "Rangés"
-INBOX_TYPES = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".gif", ".pdf"}
 
 # copies en conflit créées par les services : « compta (conflicted copy 2026-…).db », « compta (copie en
 # conflit de …).db », « compta-PC-DE-PAUL.db » (OneDrive), « compta (1).db » (Google Drive), « compta 2.db » (iCloud)…
 CONFLICT_RE = re.compile(r"^compta(?!\.db$).*\.db$", re.I)
 CONFLICT_RE_PROTECTED = re.compile(r"^voyages(?!\.chiffre$).*\.chiffre$", re.I)   # dossier protégé (crypto.py)
-
-SERVICES = [   # (motif dans le chemin, nom affiché)
-    ("dropbox", "Dropbox"), ("googledrive", "Google Drive"), ("google drive", "Google Drive"),
-    ("mon drive", "Google Drive"), ("my drive", "Google Drive"), ("onedrive", "OneDrive"),
-    ("mobile documents", "iCloud Drive"), ("icloud", "iCloud Drive"), ("kdrive", "kDrive"),
-    ("proton", "Proton Drive"), ("pcloud", "pCloud"), ("nextcloud", "Nextcloud"), ("box", "Box"),
-    ("synology", "Synology Drive"), ("tresorit", "Tresorit"),
-]
-
-
-def service_name(path: Path | str) -> str | None:
-    low = str(path).lower().replace("\\", "/")
-    for key, name in SERVICES:
-        if key == "box":
-            if re.search(r"(^|/)box(/|$)", low):
-                return name
-        elif key in low:
-            return name
-    return None
-
 
 def computer_name() -> str:
     """Nom lisible de cet ordinateur (« MacBook Pro de Paul », « PC-BUREAU »). TRIPCOMPTA_ORDINATEUR : essais à deux
@@ -155,14 +132,6 @@ def cloud_only(path: Path) -> bool:
     return bool(attrs & (0x1000 | 0x400000 | 0x40000))   # OFFLINE | RECALL_ON_DATA_ACCESS | RECALL_ON_OPEN
 
 
-def inbox_file(shared: Path, name: str) -> Path | None:
-    """Un fichier de « Justificatifs à trier » (nom contrôlé : pas de sous-dossier ni de « .. »)."""
-    if not name or "/" in name or "\\" in name or name.startswith("."):
-        return None
-    p = Path(shared) / INBOX / name
-    return p if p.is_file() else None
-
-
 def _unlink(p: Path, tries: int = 8) -> None:
     """Supprime un fichier, en réessayant un peu si Windows le bloque un instant (antivirus, indexation…)."""
     for i in range(tries):
@@ -197,117 +166,3 @@ def conflicts(folder: Path, protected: bool = False, readable=None) -> list[dict
         out.append(dict(name=n, size=st.st_size, date=dt.datetime.fromtimestamp(st.st_mtime),
                         valid=(readable or is_valid_db)(p)))
     return out
-
-
-def inbox(folder: Path) -> list[dict]:
-    """Photos et PDF déposés dans « Justificatifs à trier » (depuis un téléphone, par exemple)."""
-    box = Path(folder) / INBOX
-    out = []
-    try:
-        entries = sorted(box.iterdir(), key=lambda p: p.name.lower())
-    except OSError:
-        return out
-    for p in entries:
-        if p.name.startswith(".") or not p.is_file() or p.suffix.lower() not in INBOX_TYPES:
-            continue
-        try:
-            st = p.stat()
-        except OSError:
-            continue
-        out.append(dict(name=p.name, size=st.st_size, date=dt.datetime.fromtimestamp(st.st_mtime),
-                        pdf=p.suffix.lower() == ".pdf", offline=cloud_only(p)))
-    return out
-
-
-# ---------------------------------------------------------------------- dossiers cloud de cet ordinateur
-def cloud_roots(home: Path | None = None, env: dict | None = None, platform: str | None = None) -> list[dict]:
-    """Dossiers synchronisés trouvés sur cet ordinateur : [{name, root}] (racine du service ; Trip Compta y
-    proposera un sous-dossier « TripCompta »). Paramètres : pour les tests."""
-    home = Path(home or Path.home())
-    env = os.environ if env is None else env
-    platform = platform or sys.platform
-    found: list[tuple[str, Path]] = []
-
-    def add(name, p):
-        p = Path(p)
-        if p.is_dir() and all(p != q for _, q in found):
-            found.append((name, p))
-
-    cs = home / "Library" / "CloudStorage"                      # Mac : services modernes (File Provider)
-    if platform == "darwin" and cs.is_dir():
-        for d in sorted(cs.iterdir(), key=lambda x: x.name.lower()):
-            low = d.name.lower()
-            if low.startswith("googledrive"):
-                for sub in ("Mon Drive", "My Drive"):
-                    if (d / sub).is_dir():
-                        add("Google Drive" + _account(d.name), d / sub)
-                        break
-            elif d.is_dir():
-                name = service_name(d.name) or d.name.split("-")[0]
-                add(name + _account(d.name), d)
-    if platform == "darwin":
-        add("iCloud Drive", home / "Library" / "Mobile Documents" / "com~apple~CloudDocs")
-    add("Dropbox", home / "Dropbox")
-    for k in ("OneDriveConsumer", "OneDriveCommercial", "OneDrive"):
-        if env.get(k):
-            add("OneDrive", env[k])
-    add("OneDrive", home / "OneDrive")
-    add("iCloud Drive", home / "iCloudDrive")                   # iCloud pour Windows
-    add("kDrive", home / "kDrive")
-    add("pCloud", home / "pCloud Drive")
-    add("pCloud", home / "pCloudDrive")
-    add("Nextcloud", home / "Nextcloud")
-    pd = home / "Proton Drive"
-    if pd.is_dir():
-        for acc in sorted(pd.iterdir()):
-            for sub in ("My files", "Mes fichiers"):
-                if (acc / sub).is_dir():
-                    add("Proton Drive", acc / sub)
-    if platform == "win32":                    # Google Drive pour ordinateur : lecteur G: par défaut, mais E:, F:… si pris
-        for letter in "DEFGHIJKLMNOPQRSTUVWXYZ":
-            for sub in ("Mon Drive", "My Drive"):
-                p = Path(f"{letter}:/") / sub
-                try:
-                    if p.is_dir():
-                        add("Google Drive", p)
-                except OSError:
-                    pass
-    out = []
-    for name, root in found:
-        target = root / "TripCompta"
-        out.append(dict(name=name, root=str(root), target=str(target), has_data=(target / DB).exists()
-                        or (target / f".{DB}.icloud").exists() or (target / "cle.tripcompta").exists()))
-    return out
-
-
-def _account(folder_name: str) -> str:
-    """« GoogleDrive-paul@exemple.fr » → « (paul@exemple.fr) » ; « Dropbox » → « »."""
-    _, _, acc = folder_name.partition("-")
-    return f" ({acc})" if acc else ""
-
-
-def pick_folder(prompt: str = "Choisis le dossier où ranger tes voyages") -> str | None:
-    """Fenêtre « choisir un dossier » du système (Mac, Windows, Linux). None si annulé ou impossible."""
-    try:
-        if sys.platform == "darwin":
-            r = subprocess.run(["osascript", "-e", f'POSIX path of (choose folder with prompt "{prompt}")'],
-                               capture_output=True, text=True, timeout=600)
-        elif sys.platform == "win32":
-            ps = ("Add-Type -AssemblyName System.Windows.Forms;"
-                  "$f=New-Object System.Windows.Forms.FolderBrowserDialog;"
-                  f"$f.Description='{prompt}';$f.ShowNewFolderButton=$true;"
-                  "[Console]::OutputEncoding=[Text.Encoding]::UTF8;"
-                  "if($f.ShowDialog() -eq 'OK'){$f.SelectedPath}")
-            r = subprocess.run(["powershell", "-NoProfile", "-STA", "-Command", ps], capture_output=True,
-                               text=True, encoding="utf-8", timeout=600,
-                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))   # pas de console bleue
-        else:
-            cmd = (["zenity", "--file-selection", "--directory", f"--title={prompt}"] if shutil.which("zenity")
-                   else ["kdialog", "--getexistingdirectory", str(Path.home())] if shutil.which("kdialog") else None)
-            if cmd is None:
-                return None
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    path = (r.stdout or "").strip()
-    return path.rstrip("/\\") or None if r.returncode == 0 and path else None

@@ -7,14 +7,13 @@
 
 <div class="settings">
   <a class="card setting" href="/reglages/donnees">
-    <span class="setting-ico" aria-hidden="true">{{ '☁️' if cloud and not cloud.local else '💻' }}</span>
+    <span class="setting-ico" aria-hidden="true">📁</span>
     <span class="setting-body">
       <b>Où sont mes voyages</b>
-      <span class="setting-state">
-        {% if cloud.local %}Sur cet ordinateur{% else %}Dans {{ cloud.service }}{% endif %}
-          {% if cloud.saved %} · enregistré {{ 'le' if '/' in cloud.saved else 'à' }} {{ cloud.saved }}{% endif %}
+      <span class="setting-state"><span class="break">{{ data_dir }}</span>
+          {% if dossier.saved %} · enregistré automatiquement {{ 'le' if '/' in dossier.saved else 'à' }} {{ dossier.saved }}{% endif %}
       </span>
-      <span class="setting-hint">Les ranger ailleurs, par exemple dans Google Drive, Dropbox, OneDrive ou iCloud Drive (un seul ordinateur à la fois).</span>
+      <span class="setting-hint">Les ranger dans un autre dossier, par exemple un dossier Cloud (un seul ordinateur à la fois).</span>
     </span>
     <span class="setting-go">{{ 'Changer' if source in ('defaut', 'choisi') else 'Voir' }} ›</span>
   </a>

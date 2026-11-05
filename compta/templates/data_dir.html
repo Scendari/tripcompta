@@ -6,23 +6,21 @@
 {% if error %}<div class="flash err" role="alert">{{ error }}</div>{% endif %}
 
 <div class="card data-card">
-  <span class="label-like">Tes voyages sont rangés</span>
-  <p class="data-where">{% if cloud.local %}💻 Sur <b>cet ordinateur</b>{% else %}☁️ Dans <b>{{ cloud.service }}</b>{% endif %}{% if protected %} · 🔒 protégés par un mot de passe{% endif %}</p>
-  <p class="data-path">{{ data_dir }}</p>
+  <span class="label-like">Tes voyages sont rangés dans</span>
+  <p class="data-path">{{ data_dir }}{% if protected %} · 🔒 protégés par un mot de passe{% endif %}</p>
   <p class="small muted data-state" style="margin:.2rem 0 .7rem">
     {% if source == 'defaut' %}C'est le dossier par défaut (dans tes Documents).
     {% elif source == 'choisi' %}C'est le dossier que tu as choisi.
     {% else %}Ce dossier est imposé au lancement de l'application.{% endif %}
-    {% if cloud.saved %}Enregistré {{ 'le' if '/' in cloud.saved else 'à' }} {{ cloud.saved }}.{% endif %}
+    {% if dossier.saved %}Enregistré automatiquement {{ 'le' if '/' in dossier.saved else 'à' }} {{ dossier.saved }}.{% endif %}
     {% if writer %}<span class="d-block">Dernière modification sur « {{ writer.ordinateur }} », {{ writer.quand }}.</span>{% endif %}</p>
-  {% if not cloud.local %}<p class="warn-box small">⚠️ Ce dossier est synchronisé{% if cloud.service != 'le dossier synchronisé' %} par {{ cloud.service }}{% endif %} : <b>un seul ordinateur à la fois</b>. Ferme Trip Compta avant de l'ouvrir sur un autre ordinateur, et laisse {{ 'ton cloud' if cloud.service == 'le dossier synchronisé' else cloud.service }} finir de synchroniser.</p>{% endif %}
   <form method="post" action="/reglages/ouvrir-dossier" class="inline"><button class="btn small ghost">📂 Ouvrir le dossier</button></form>
 </div>
 
 {% if conflicts %}
 <div class="card data-card" id="conflits">
   <h3 style="margin-top:0">⚠️ Une autre version de tes voyages</h3>
-  <p class="hint">{{ 'Ton cloud' if cloud.local or cloud.service == 'le dossier synchronisé' else cloud.service }} a gardé {{ 'ces versions' if conflicts|length > 1 else 'cette version' }} à côté de la tienne : Trip Compta a sans doute été ouvert sur deux ordinateurs en même temps. Trip Compta ne mélange pas deux versions, et n'efface rien.</p>
+  <p class="hint">{{ 'Ces versions sont apparues' if conflicts|length > 1 else 'Cette version est apparue' }} à côté de la tienne : Trip Compta a sans doute été ouvert sur deux ordinateurs en même temps, et le service qui synchronise le dossier a gardé les deux. Trip Compta ne mélange pas deux versions, et n'efface rien.</p>
   <p class="hint">Pour récupérer des saisies de l'autre version : <b>exporte-la</b> (fichier .zip), puis dans <b>Mes voyages › Importer un voyage</b>, choisis ce fichier : ses voyages s'ajoutent à côté des tiens, rien n'est écrasé. Recopie ce qui manque, puis supprime le voyage importé. Ensuite, range l'autre version.</p>
   <ul class="conflict-list">
   {% for c in conflicts %}
@@ -41,34 +39,18 @@
 {% else %}
 <form class="card data-card" method="post" action="/reglages/donnees" id="choisir" data-data-choice>
   <h3 style="margin-top:0">Changer de dossier</h3>
-  <p class="hint" style="margin-top:0">Pour ranger tes voyages ailleurs (par exemple dans ton cloud), ou pour retrouver ceux d'un autre ordinateur.</p>
-  <div class="data-options">
-    <label class="data-option{{ ' current' if local_current }}"><input type="radio" name="dossier" value="__local__" data-has="0" {{ 'disabled' if local_current }}>
-      <span><b>💻 Sur cet ordinateur</b>{% if local_current %} <span class="pill ok">actuel</span>{% elif local_has_data %} <span class="pill grey" title="Tes voyages tels qu'ils étaient avant d'être rangés ailleurs : « Y copier mes voyages » les remplace (ils sont gardés dans les sauvegardes)">contient une ancienne copie</span>{% endif %}
-        <span class="muted small d-block">{{ default_dir }} · pas synchronisé</span></span></label>
-    {% for c in clouds %}
-    <label class="data-option{{ ' current' if c.current }}"><input type="radio" name="dossier" value="{{ c.target }}" data-has="{{ 1 if c.has_data else 0 }}" {{ 'disabled' if c.current }}>
-      <span><b>{{ c.name }}</b>{% if c.current %} <span class="pill ok">actuel</span>{% elif c.has_data %} <span class="pill grey">contient déjà des voyages</span>{% endif %}
-        <span class="muted small d-block">{{ c.target }}</span></span></label>
-    {% endfor %}
-    <label class="data-option"><input type="radio" name="dossier" value="__autre__" {{ 'checked' if value or not clouds }}>
-      <span><b>Autre dossier…</b>
-        <span class="data-other"><input type="text" name="autre" value="{{ value or '' }}" placeholder="{{ default_dir.parent / 'Dropbox' / 'TripCompta' }}" autocomplete="off" spellcheck="false" aria-label="Chemin du dossier">
-        <button type="button" class="btn small ghost" data-browse>Parcourir…</button></span></span></label>
+  <div class="data-other">
+    <input type="text" name="dossier" value="{{ value or '' }}" placeholder="Chemin du dossier" autocomplete="off" spellcheck="false" aria-label="Chemin du dossier">
+    <button type="button" class="btn small ghost" data-browse>Parcourir…</button>
   </div>
+  {% if not local_current %}<p class="small" style="margin:.45rem 0 0"><a href="#" data-default="{{ default_dir }}">Revenir au dossier par défaut</a> <span class="muted">({{ default_dir }})</span></p>{% endif %}
   <p class="folder-status" data-folder-status aria-live="polite" hidden></p>
-  {% if not clouds %}<p class="hint">Aucun dossier synchronisé trouvé sur cet ordinateur. Installe l'application de ton service pour ordinateur (Dropbox, Google Drive pour ordinateur, OneDrive, iCloud…), puis reviens ici.</p>{% endif %}
-  <div class="choice" style="margin:.7rem 0 .4rem">
-    <label><input type="radio" name="mode" value="copier" {{ 'checked' if mode != 'utiliser' }}> Copier mes voyages dans ce dossier</label>
-    <label><input type="radio" name="mode" value="utiliser" {{ 'checked' if mode == 'utiliser' }}> Ouvrir les voyages déjà dans ce dossier <span class="hint">(ex. sur ton 2e ordinateur)</span></label>
-  </div>
-  {# ce qui va se passer, en clair, mis à jour selon le dossier et le choix (sans JavaScript : le texte général) #}
+  {# ce qui va se passer, en clair (sans JavaScript : le texte général, et Trip Compta décide selon le dossier) #}
   <p class="what-happens" data-what-happens data-cur="{{ data_dir }}" data-cur-trips="{{ cur_trips }}">
-    <b>Copier</b> : tes voyages sont copiés et vérifiés ; l'ancien dossier n'est pas touché. <b>Ouvrir</b> : Trip Compta
-    ouvre les voyages déjà rangés dans ce dossier ; tes voyages actuels restent où ils sont, rien n'est effacé.
-    Trip Compta redémarre ensuite.</p>
+    Si le dossier contient déjà des voyages Trip Compta, ils sont ouverts (rien n'est copié par-dessus). Sinon, tes
+    voyages y sont copiés et vérifiés. L'ancien dossier n'est jamais touché. Trip Compta redémarre ensuite.</p>
   <div class="row" style="gap:.5rem;justify-content:flex-end">
-    <button class="btn" name="action" value="ranger" data-go>{{ 'Ouvrir les voyages de ce dossier' if mode == 'utiliser' else 'Copier mes voyages dans ce dossier' }}</button>
+    <button class="btn" data-go>Continuer</button>
   </div>
 </form>
 {% endif %}
@@ -76,14 +58,12 @@
 {% endif %}
 
 <div class="card data-card">
-  <h3 style="margin-top:0">Mettre Trip Compta dans Google Drive, Dropbox, OneDrive ou iCloud</h3>
+  <h3 style="margin-top:0">Mettre Trip Compta dans un dossier Cloud (Google Drive, iCloud…)</h3>
   <ul class="help-steps">
     <li><span class="help-ico" aria-hidden="true">💻</span><div><b>Un seul ordinateur à la fois</b>
       <p>C'est possible, à tes risques : Trip Compta enregistre directement dans le dossier, et ton cloud le recopie sur tes autres ordinateurs. Ferme Trip Compta avant de l'ouvrir ailleurs, et attends que ton cloud ait fini de synchroniser. Ouvert sur deux ordinateurs en même temps, les saisies de l'un peuvent effacer celles de l'autre.</p></div></li>
     <li><span class="help-ico" aria-hidden="true">🔔</span><div><b>Trip Compta te prévient</b>
-      <p>À l'ouverture, il te dit si tes voyages viennent d'être modifiés sur un autre ordinateur. Si ton cloud garde deux versions, elles s'affichent ici : exporte l'autre pour en récupérer les saisies.</p></div></li>
-    <li><span class="help-ico" aria-hidden="true">📱</span><div><b>Depuis ton téléphone</b>
-      <p>Avec l'app de ton cloud, dépose les photos de tickets dans le dossier « Justificatifs à trier », puis rattache-les aux dépenses dans 📎 Justificatifs.</p></div></li>
+      <p>À l'ouverture, Trip Compta te dit si tes voyages viennent d'être modifiés sur un autre ordinateur (par exemple « il y a 3 min sur PC-de-Paul »). Si ton cloud a gardé deux versions du fichier, elles s'affichent sur cette page : tu peux exporter l'autre pour récupérer ses saisies.</p></div></li>
     <li><span class="help-ico" aria-hidden="true">🪟</span><div><b>Sur Windows, le dossier Documents est souvent dans OneDrive</b>
       <p>Windows le fait souvent tout seul. C'est sans risque tant que tu utilises Trip Compta sur un seul ordinateur.</p></div></li>
   </ul>
@@ -91,81 +71,54 @@
 <script>
 (function () {
   var form = document.querySelector('[data-data-choice]'); if (!form) return;
-  var other = form.querySelector('input[name=autre]');
-  var otherRadio = form.querySelector('input[value=__autre__]');
+  var input = form.querySelector('input[name=dossier]');
   var status = form.querySelector('[data-folder-status]'), what = form.querySelector('[data-what-happens]');
-  var go = form.querySelector('[data-go]');
-  var cur = what.dataset.cur, curTrips = +what.dataset.curTrips, info = null, seq = 0;
-  function esc(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+  var go = form.querySelector('[data-go]'), general = what.innerHTML;
+  var cur = what.dataset.cur, curTrips = +what.dataset.curTrips, seq = 0, t = null;
+  function esc(x) { var d = document.createElement('div'); d.textContent = x; return d.innerHTML; }
   function plural(n, w) { return n + ' ' + w + (n > 1 ? 's' : ''); }
-  function chosen() {
-    var r = form.querySelector('input[name=dossier]:checked'); if (!r) return '';
-    return r.value === '__autre__' ? other.value.trim() : r.value;
-  }
-  function mode() { var r = form.querySelector('input[name=mode]:checked'); return r ? r.value : 'copier'; }
-  function setMode(m) { var r = form.querySelector('input[name=mode][value=' + m + ']'); if (r) r.checked = true; }
   function names(i) { return i.noms.length ? ' (' + i.noms.map(esc).join(', ') + (i.voyages > i.noms.length ? '…' : '') + ')' : ''; }
-  function render() {
-    var m = mode(), i = info, local = (form.querySelector('input[name=dossier]:checked') || {}).value === '__local__';
-    go.textContent = m === 'utiliser' ? 'Ouvrir les voyages de ce dossier' : 'Copier mes voyages dans ce dossier';
-    go.disabled = false;
-    if (!i || !i.chemin) { status.hidden = true; return; }
-    var where = '« ' + esc(i.chemin) + ' »', has = i.voyages !== null || i.protege || i.cloud_seulement;
-    // ce que contient le dossier
+  function render(i) {
+    if (!i || !i.chemin) { status.hidden = true; what.innerHTML = general; go.textContent = 'Continuer'; go.disabled = !input.value.trim(); return; }
+    var has = i.voyages !== null || i.protege || i.cloud_seulement;
     status.hidden = false;
     status.className = 'folder-status ' + (has ? 'has' : 'is-empty');
-    if (i.actuel) status.innerHTML = '✅ Ce sont déjà les voyages ouverts en ce moment.';
-    else if (!i.ok) status.innerHTML = '⚠️ Dossier introuvable : vérifie le chemin.';
-    else if (i.protege) status.innerHTML = '📂 Ce dossier contient des voyages <b>protégés par un mot de passe</b>.';
-    else if (i.cloud_seulement) status.innerHTML = '📂 Ce dossier contient des voyages, pas encore téléchargés depuis le cloud.';
-    else if (i.voyages > 0) status.innerHTML = '📂 Ce dossier contient <b>' + plural(i.voyages, 'voyage') + '</b>' + names(i) + '.';
-    else if (i.voyages === -1) status.innerHTML = '📂 Ce dossier contient des voyages Trip Compta.';
-    else if (i.voyages === 0) status.innerHTML = '📂 Ce dossier contient des données Trip Compta, sans voyage.';
-    else status.innerHTML = i.existe ? '📁 Ce dossier est vide : prêt à recevoir tes voyages.' : '📁 Ce dossier sera créé.';
-    // ce qui va se passer
-    if (i.actuel || !i.ok) { what.innerHTML = ''; go.disabled = true; return; }
-    var mine = curTrips === 1 ? 'ton voyage' : curTrips ? 'tes ' + curTrips + ' voyages' : 'tes données';
-    var keep = 'Tes voyages actuels, dans « ' + esc(cur) + ' », <b>restent où ils sont : rien n\'est effacé</b>.';
-    if (m === 'utiliser') {
-      if (!has) { what.innerHTML = '⚠️ Il n\'y a pas de voyages à ouvrir ici : choisis plutôt « Copier mes voyages dans ce dossier ».'; go.disabled = true; return; }
-      what.innerHTML = 'Trip Compta va <b>ouvrir les voyages de ce dossier</b>' + (i.voyages > 0 ? ' (' + plural(i.voyages, 'voyage') + ')' : '') +
-        ', sans rien copier. ' + keep + ' Trip Compta redémarre ensuite.';
-    } else if (has && !local) {
-      what.innerHTML = '⚠️ Ce dossier contient déjà des voyages : <b>Trip Compta ne copie jamais par-dessus</b>. ' +
-        'Choisis « Ouvrir les voyages déjà dans ce dossier », ou un autre dossier.'; go.disabled = true;
-    } else if (has && local) {
-      what.innerHTML = 'Trip Compta va <b>copier ' + mine + '</b> dans ' + where + ' et vérifier la copie. ' +
-        'Les voyages qui s\'y trouvent (une ancienne copie) sont remplacés, mais <b>gardés dans les sauvegardes</b>. ' +
-        'Le dossier actuel n\'est pas touché. Trip Compta redémarre ensuite.';
+    go.disabled = false;
+    if (i.actuel) { status.innerHTML = '✅ Ce sont déjà les voyages ouverts en ce moment.'; what.innerHTML = ''; go.disabled = true; return; }
+    if (!i.ok) { status.innerHTML = '⚠️ Dossier introuvable : vérifie le chemin.'; what.innerHTML = ''; go.disabled = true; return; }
+    var keep = 'Tes voyages actuels, dans « ' + esc(cur) + ' », <b>restent où ils sont</b>.';
+    if (has) {
+      status.innerHTML = '⚠️ <b>Ce dossier contient déjà des voyages Trip Compta</b>' +
+        (i.protege ? ', protégés par un mot de passe' : i.cloud_seulement ? ', pas encore téléchargés sur cet ordinateur'
+         : i.voyages > 0 ? ' : ' + plural(i.voyages, 'voyage') + names(i) : '') + '.';
+      what.innerHTML = 'Trip Compta ne copie jamais par-dessus : il va <b>ouvrir les voyages de ce dossier</b>. ' + keep +
+        ' Trip Compta redémarre ensuite.';
+      go.textContent = 'Ouvrir les voyages de ce dossier';
     } else {
-      what.innerHTML = 'Trip Compta va <b>copier ' + mine + '</b> dans ' + where + ' et vérifier la copie. ' +
-        'Le dossier actuel, « ' + esc(cur) + ' », <b>n\'est pas touché</b>. Trip Compta redémarre ensuite.';
+      status.innerHTML = i.existe ? '📁 Ce dossier ne contient pas de voyages Trip Compta.' : '📁 Ce dossier sera créé.';
+      var mine = curTrips === 1 ? 'ton voyage' : curTrips ? 'tes ' + curTrips + ' voyages' : 'tes données';
+      what.innerHTML = 'Trip Compta va <b>copier ' + mine + '</b> dans « ' + esc(i.chemin) + ' » et vérifier la copie. ' +
+        'Le dossier actuel <b>n\'est pas touché</b>. Trip Compta redémarre ensuite.';
+      go.textContent = 'Copier mes voyages dans ce dossier';
     }
   }
-  function inspect(preselect) {
-    var c = chosen(), n = ++seq;
-    if (!c) { info = null; render(); return; }
+  function inspect() {
+    var c = input.value.trim(), n = ++seq;
+    if (!c) { render(null); return; }
     fetch('/reglages/dossier-info?chemin=' + encodeURIComponent(c)).then(function (r) { return r.json(); }).then(function (j) {
-      if (n !== seq) return;                       // une réponse plus ancienne : ignorée
-      info = j;
-      if (preselect) setMode(j.voyages !== null || j.protege || j.cloud_seulement ? 'utiliser' : 'copier');
-      render();
-    }).catch(function () { info = null; render(); });
+      if (n === seq) render(j);                    // une réponse plus ancienne : ignorée
+    }).catch(function () { render(null); });
   }
-  var t = null;
-  form.addEventListener('change', function (ev) {
-    if (ev.target.name === 'dossier') inspect(true);
-    else if (ev.target.name === 'mode') render();
-  });
-  other.addEventListener('focus', function () { if (!otherRadio.checked) { otherRadio.checked = true; inspect(true); } });
-  other.addEventListener('input', function () { clearTimeout(t); t = setTimeout(function () { inspect(true); }, 350); });
+  input.addEventListener('input', function () { clearTimeout(t); t = setTimeout(inspect, 350); });
   form.querySelector('[data-browse]').addEventListener('click', function () {
     var b = this; b.disabled = true; b.textContent = 'Choisis le dossier…';
     fetch('/reglages/parcourir', {method: 'POST'}).then(function (r) { return r.json(); }).then(function (j) {
-      if (j.path) { other.value = j.path; otherRadio.checked = true; inspect(true); }
+      if (j.path) { input.value = j.path; inspect(); }
     }).finally(function () { b.disabled = false; b.textContent = 'Parcourir…'; });
   });
-  if (chosen()) inspect(false); else render();
+  var back = form.querySelector('[data-default]');
+  if (back) back.addEventListener('click', function (ev) { ev.preventDefault(); input.value = back.dataset.default; inspect(); });
+  if (input.value.trim()) inspect(); else render(null);
 })();
 </script>
 {% endblock %}

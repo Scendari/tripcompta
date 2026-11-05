@@ -1,7 +1,7 @@
-"""Le dossier des voyages, sans synchronisation : Trip Compta lit et écrit directement son dossier (même dans
-Google Drive, Dropbox, OneDrive ou iCloud : à tes risques, un seul ordinateur à la fois). Garde-fous : nom du
-dernier ordinateur qui a modifié, copies en conflit (exportables, rangées, jamais fusionnées ni effacées),
-« Justificatifs à trier » toujours disponibles, l'IA (autre programme) et l'application voient les mêmes données.
+"""Le dossier des voyages, sans synchronisation : Trip Compta lit et écrit directement son dossier (même dans un
+dossier Cloud : à tes risques, un seul ordinateur à la fois). Garde-fous : nom du dernier ordinateur qui a modifié,
+copies en conflit (exportables, rangées, jamais fusionnées ni effacées), l'IA (autre programme) et l'application
+voient les mêmes données. « Changer de dossier » : un chemin ; des voyages dedans → ouverts, sinon → copiés.
 
 Voyage de test (montants vérifiés à la main) : Anne, Bruno, Chloé.
   Gîte 300 € payé par l'asso, pour tous            → 100 € chacun
@@ -85,11 +85,12 @@ def test_works_directly_in_the_chosen_folder(env):
     tid = seed(app)
     assert trip_names(shared / C.DB) == ["Sortie test"]                    # écrit dans le dossier, tout de suite
     assert amounts(app, tid) == EXPECTED
-    assert (shared / "sauvegardes").is_dir() and (shared / C.INBOX).is_dir()
+    assert (shared / "sauvegardes").is_dir() and not (shared / "Justificatifs à trier").exists()
     assert not (tmp / "reglages" / "copies").exists()                      # aucune copie de travail
     assert not list(shared.glob("tripcompta-verrou*"))                     # aucun verrou
     page = TestClient(app).get("/").text
-    assert "cloud-chip" in page and "Google Drive" in page                 # où sont les voyages, en discret
+    assert "save-chip" in page and "Enregistré automatiquement à" in page    # 💾 l'heure du dernier enregistrement
+    assert "cloud" not in page.lower() and "Google Drive" not in page
     stop(app)
     app = create_app()
     assert amounts(app, tid) == EXPECTED
@@ -119,7 +120,7 @@ def test_two_computers_in_turn(env, monkeypatch):
     assert amounts(b, tid) == EXPECTED
     TestClient(b).post("/voyages", data={"name": "Saisi sur le Mac"})
     data = clean(TestClient(b).get("/reglages/donnees").text)
-    assert "Dernière modification sur « MacBook de Bruno »" in data and "un seul ordinateur à la fois" in data
+    assert "Dernière modification sur « MacBook de Bruno »" in data and "Un seul ordinateur à la fois" in data
     stop(b)
     monkeypatch.setenv("TRIPCOMPTA_ORDINATEUR", "PC-Anne")
     a = create_app()
@@ -174,64 +175,15 @@ def test_conflicted_copies_exported_imported_and_put_away(env):
     stop(a)
 
 
-def test_service_names_and_cloud_roots(tmp_path):
-    assert C.service_name("/Users/x/Library/CloudStorage/Dropbox/TripCompta") == "Dropbox"
-    assert C.service_name("/Users/x/Library/CloudStorage/GoogleDrive-a@b.fr/Mon Drive/TripCompta") == "Google Drive"
-    assert C.service_name(r"C:\Users\x\OneDrive\Documents\TripCompta") == "OneDrive"
-    assert C.service_name("/Users/x/Library/Mobile Documents/com~apple~CloudDocs/TripCompta") == "iCloud Drive"
-    assert C.service_name("/home/x/kDrive/TripCompta") == "kDrive"
-    assert C.service_name("/home/x/Documents/boxes/TripCompta") is None
-    home = tmp_path / "maison"
-    (home / "Library/CloudStorage/GoogleDrive-paul@exemple.fr/Mon Drive").mkdir(parents=True)
-    (home / "Library/CloudStorage/Dropbox").mkdir(parents=True)
-    (home / "Library/Mobile Documents/com~apple~CloudDocs/TripCompta").mkdir(parents=True)
-    (home / "Library/Mobile Documents/com~apple~CloudDocs/TripCompta/compta.db").write_bytes(b"")
-    (home / "OneDrive - Asso").mkdir()
-    roots = C.cloud_roots(home=home, env={"OneDrive": str(home / "OneDrive - Asso")}, platform="darwin")
-    got = {r["name"]: (Path(r["target"]).relative_to(home).as_posix(), r["has_data"]) for r in roots}
-    assert got == {
-        "Dropbox": ("Library/CloudStorage/Dropbox/TripCompta", False),
-        "Google Drive (paul@exemple.fr)": ("Library/CloudStorage/GoogleDrive-paul@exemple.fr/Mon Drive/TripCompta", False),
-        "iCloud Drive": ("Library/Mobile Documents/com~apple~CloudDocs/TripCompta", True),
-        "OneDrive": ("OneDrive - Asso/TripCompta", False)}
-
-
-# ---------------------------------------------------------------- justificatifs à trier
-@pytest.mark.parametrize("where", ["choisi", "defaut"])
-def test_inbox_receipts(env, where):
-    """Toujours disponibles, que le dossier soit choisi (dans le cloud) ou le dossier par défaut (Documents)."""
+def test_no_inbox_folder_anymore(env):
+    """« Justificatifs à trier » (photos déposées depuis un téléphone) n'existe plus : ni dossier, ni pages."""
     tmp, shared = env
-    if where == "defaut":
-        from compta import paths as P
-        P.write_config(data_dir=None)
-        shared = tmp / "Mes Documents" / "TripCompta"
     a = create_app()
-    assert a.state.db.home == shared
     tid = seed(a)
-    inbox = shared / C.INBOX
-    assert inbox.is_dir()
-    from PIL import Image
-    Image.new("RGB", (40, 30), (200, 80, 40)).save(inbox / "ticket péage.jpg")
-    (inbox / "facture.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
-    (inbox / ".DS_Store").write_bytes(b"x")
-    (inbox / "notes.txt").write_text("pas un justificatif")
-    cl = TestClient(a)
-    assert "📥 2 justificatifs à trier" in cl.get(f"/v/{tid}").text
-    page = cl.get(f"/v/{tid}/justificatifs").text
-    assert "ticket péage.jpg" in page and "facture.pdf" in page and "notes.txt" not in page
-    assert cl.get("/a-trier/vignette", params={"nom": "ticket péage.jpg"}).headers["content-type"] == "image/jpeg"
-    assert cl.get("/a-trier/fichier", params={"nom": "../compta.db"}).status_code == 404
-    with a.state.db.Session() as s:
-        gite = next(e.id for e in s.get(M.Trip, tid).expenses if e.label == "Gîte")
-    r = cl.post(f"/v/{tid}/justificatifs/a-trier", data={"nom": ["ticket péage.jpg"], "expenses": [str(gite)]},
-                follow_redirects=True)
-    assert "1 justificatif(s) ajouté(s) : J01" in r.text
-    assert (inbox / C.INBOX_DONE / "ticket péage.jpg").exists() and not (inbox / "ticket péage.jpg").exists()
-    with a.state.db.Session() as s:
-        rec = s.get(M.Trip, tid).receipts[0]
-        assert rec.original_name == "ticket péage.jpg" and [l_.expense_id for l_ in rec.links] == [gite]
-        assert (shared / C.RECEIPTS / rec.stored_name).exists()
-    assert "📥 1 justificatif à trier" in cl.get(f"/v/{tid}").text
+    c = TestClient(a)
+    assert not (shared / "Justificatifs à trier").exists()
+    assert "à trier" not in clean(c.get(f"/v/{tid}/justificatifs").text)
+    assert c.get("/a-trier/fichier", params={"nom": "x.jpg"}).status_code == 404
     stop(a)
 
 
@@ -292,50 +244,39 @@ def test_launching_twice_shows_the_running_one(monkeypatch):
         th.join(5)
 
 
-def test_this_computer_is_an_option_of_the_list(tmp_path, monkeypatch):
-    """« 💻 Sur cet ordinateur » est une option de « Changer de dossier », avec les deux modes : y copier ses
-    voyages (l'ancien contenu est gardé dans les sauvegardes), ou reprendre ceux qui y sont déjà."""
+def test_change_folder_then_back_to_default(tmp_path, monkeypatch):
+    """« Changer de dossier » : un seul chemin (plus de dossiers Cloud repérés). Vide → les voyages y sont copiés ;
+    « Revenir au dossier par défaut » → Documents/TripCompta, qui contient déjà des voyages → ils sont ouverts."""
     monkeypatch.delenv("TRIPCOMPTA_DATA_DIR", raising=False)
     monkeypatch.setenv("TRIPCOMPTA_CONFIG", str(tmp_path / "conf" / "reglages.json"))
     docs = tmp_path / "Mes Documents"
     monkeypatch.setenv("TRIPCOMPTA_DOCUMENTS", str(docs))
-    app = create_app()                                           # sur cet ordinateur : option « actuel »
+    app = create_app()                                           # dossier par défaut
     tid = seed(app)
     page = TestClient(app).get("/reglages/donnees").text
-    assert "💻 Sur cet ordinateur" in page
-    assert re.search(r'value="__local__"[^>]*disabled', page)
+    assert "Revenir au dossier par défaut" not in page          # on y est déjà
+    assert "Google Drive (" not in page and "iCloud Drive" not in page and 'type="radio"' not in page
     cloud = tmp_path / "Dropbox" / "TripCompta"
     cloud.parent.mkdir()
-    r = TestClient(app).post("/reglages/donnees", data={"dossier": "__autre__", "autre": str(cloud), "mode": "copier"})
-    assert "ont été copiés" in clean(r.text) and "(Dropbox)" in r.text
+    r = TestClient(app).post("/reglages/donnees", data={"dossier": str(cloud)})
+    assert "ont été copiés" in clean(r.text)
     assert json.loads((tmp_path / "conf" / "reglages.json").read_text()) == {"data_dir": str(cloud)}
     stop(app)
-    app2 = create_app()                                          # dans le cloud : l'option redevient choisissable
+    app2 = create_app()
     assert app2.state.db.dir == cloud
     cl = TestClient(app2)
     page = cl.get("/reglages/donnees").text
-    assert not re.search(r'value="__local__"[^>]*disabled', page) and "contient une ancienne copie" in page
-    assert "un seul ordinateur à la fois" in clean(page)
+    assert "Revenir au dossier par défaut" in page and str(docs / "TripCompta") in page
     Ops(app2.state.db).create_trip("Saisi dans le cloud")
-    # reprendre les voyages déjà sur cet ordinateur : sans la saisie faite dans le cloud
-    r = cl.post("/reglages/donnees", data={"dossier": "__local__", "mode": "utiliser"})
-    assert "va utiliser les voyages rangés sur cet ordinateur" in r.text
+    r = cl.post("/reglages/donnees", data={"dossier": str(docs / "TripCompta")})   # contient l'ancienne copie
+    assert "va ouvrir les voyages rangés dans" in clean(r.text)
+    assert json.loads((tmp_path / "conf" / "reglages.json").read_text())["data_dir"] is None
     stop(app2)
     app3 = create_app()
     assert app3.state.db.dir == docs / "TripCompta" and amounts(app3, tid) == EXPECTED
-    assert "Saisi dans le cloud" not in TestClient(app3).get("/").text
+    assert "Saisi dans le cloud" not in TestClient(app3).get("/").text   # rien n'a été copié par-dessus
+    assert trip_names(cloud / C.DB) == ["Saisi dans le cloud", "Sortie test"]   # l'autre dossier est intact
     stop(app3)
-    # ou y copier ses voyages : la saisie revient, l'ancien contenu est gardé dans les sauvegardes
-    from compta import paths as P
-    P.write_config(data_dir=str(cloud))
-    app4 = create_app()
-    r = TestClient(app4).post("/reglages/donnees", data={"dossier": "__local__", "mode": "copier"})
-    assert "de nouveau rangés sur cet ordinateur" in r.text
-    assert list((docs / "TripCompta" / "sauvegardes").glob("avant-retour-*.db"))
-    stop(app4)
-    app5 = create_app()
-    assert "Saisi dans le cloud" in TestClient(app5).get("/").text
-    stop(app5)
 
 
 def test_settings_page(env):
@@ -345,14 +286,14 @@ def test_settings_page(env):
     cl = TestClient(a)
     assert 'href="/reglages"' in cl.get(f"/v/{tid}").text
     page = clean(cl.get("/reglages").text)
-    assert "Où sont mes voyages" in page and "Dans Google Drive" in page and "Non protégés" in page
-    assert "un seul ordinateur à la fois" in page and "lecture seule" not in page
+    assert "Où sont mes voyages" in page and str(shared) in page and "Non protégés" in page
+    assert "un seul ordinateur à la fois" in page and "enregistré automatiquement à" in page
     stop(a)
 
 
 def test_screens_light_dark_phone(env):
-    """Page du dossier (copie en conflit, aide), justificatifs à trier : clair, sombre, téléphone ; pas de
-    débordement ni d'erreur JavaScript."""
+    """Page du dossier (copie en conflit, aide), justificatifs : clair, sombre, téléphone ; pas de débordement ni
+    d'erreur JavaScript."""
     import uvicorn
     from playwright.sync_api import sync_playwright
     from tests.conftest import _free_port
@@ -360,8 +301,6 @@ def test_screens_light_dark_phone(env):
     a = create_app()
     tid = seed(a)
     shutil.copyfile(shared / C.DB, shared / "compta (conflicted copy 2026-11-03).db")
-    from PIL import Image
-    Image.new("RGB", (40, 30), (40, 120, 200)).save(shared / C.INBOX / "IMG_2041.jpg")
     port = _free_port()
     srv = uvicorn.Server(uvicorn.Config(a, host="127.0.0.1", port=port, log_level="error"))
     th = threading.Thread(target=srv.run, daemon=True)
@@ -380,7 +319,7 @@ def test_screens_light_dark_phone(env):
                     errs = []
                     pg.on("pageerror", lambda e: errs.append(str(e)))
                     for name, url in (("dossier", base + "/reglages/donnees"), ("voyage", base + f"/v/{tid}"),
-                                      ("a-trier", base + f"/v/{tid}/justificatifs")):
+                                      ("justificatifs", base + f"/v/{tid}/justificatifs")):
                         pg.goto(url)
                         wide = pg.evaluate(f"""() => [...document.querySelectorAll('body *')]
                             .filter(e => e.getBoundingClientRect().right > {w + 1})
@@ -393,8 +332,8 @@ def test_screens_light_dark_phone(env):
                     pg.close()
             pg = br.new_page()
             pg.goto(base + f"/v/{tid}")
-            assert "Une autre version de tes voyages" in pg.locator(".cloud-banner.warn").inner_text()
-            pg.locator(".cloud-banner.warn a").click()
+            assert "Une autre version de tes voyages" in pg.locator(".folder-banner.warn").inner_text()
+            pg.locator(".folder-banner.warn a").click()
             assert pg.url.endswith("/reglages/donnees#conflits")
             with pg.expect_download() as dl:
                 pg.get_by_role("link", name="Exporter cette version (.zip)").click()

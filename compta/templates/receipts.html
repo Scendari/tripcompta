@@ -21,31 +21,6 @@
 </div>
 </div>
 
-{% if inbox is not none %}
-<form class="card inbox" id="a-trier" method="post" action="/v/{{ trip.id }}/justificatifs/a-trier">
-  <h3 style="margin-top:0">📥 Justificatifs à trier{% if inbox %} <span class="pill grey">{{ inbox|length }}</span>{% endif %}</h3>
-  <p class="hint">Les photos ou PDF déposés depuis ton téléphone (avec l'app de ton cloud) dans le dossier <b>« Justificatifs à trier »</b>. Coche ceux de ce voyage, et les dépenses qu'ils justifient.</p>
-  {% if inbox %}
-  <div class="inbox-list">
-    {% for x in inbox %}
-    <label class="inbox-item"><input type="checkbox" name="nom" value="{{ x.name }}">
-      <span class="rthumb" data-kind="{{ 'PDF' if x.pdf else '' }}">{% if not x.offline %}<img src="/a-trier/vignette?nom={{ x.name|urlencode }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}</span>
-      <span class="grow"><a href="/a-trier/fichier?nom={{ x.name|urlencode }}" target="_blank">{{ x.name }}</a>
-        <span class="muted small d-block">déposé le {{ x.date.strftime('%d/%m à %H h %M') }}{% if x.offline %} · pas encore téléchargé{% endif %}</span></span></label>
-    {% endfor %}
-  </div>
-  {% if trip.expenses %}
-  <div class="field" style="margin-top:.7rem"><label>Pour quelle(s) dépense(s) ? <span class="hint">(facultatif)</span></label>
-    <div class="check-col">{% for e in trip.expenses %}<label><input type="checkbox" name="expenses" value="{{ e.id }}"> {{ e.label }}</label>{% endfor %}</div></div>
-  {% endif %}
-  <button class="btn">Ajouter à ce voyage</button>
-  <p class="hint" style="margin:.5rem 0 0">Les fichiers ajoutés sont rangés dans « Justificatifs à trier/Rangés » (jamais effacés).</p>
-  {% else %}
-  <p class="muted small" style="margin:0">Rien à trier pour l'instant. Dossier : <span class="data-path small">{{ inbox_folder }}</span></p>
-  {% endif %}
-</form>
-{% endif %}
-
 <h2>{{ trip.receipts|length }} justificatif{{ 's' if trip.receipts|length > 1 }}</h2>
 {% for rec in trip.receipts %}
 <div class="card" style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap">
