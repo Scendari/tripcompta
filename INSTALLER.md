@@ -13,7 +13,7 @@ tout en bas, dans « Assets ».
 |---|---|
 | Mac récent (puce Apple M1, M2, M3…) | `TripCompta-mac-arm64.zip` |
 | Mac plus ancien (processeur Intel) | `TripCompta-mac-intel.zip` |
-| Windows | `TripCompta-windows.zip` |
+| Windows | `TripCompta-windows-setup.exe` |
 | Linux | `TripCompta-linux.tar.gz` |
 
 > Mac : pour savoir quelle puce tu as, menu  → **À propos de ce Mac** : « Puce Apple M… » ou « Processeur Intel ».
@@ -56,19 +56,20 @@ navigateur** l'affiche dans ton navigateur si tu préfères. Pour l'arrêter : f
 
 ## Windows
 
-1. Télécharge `TripCompta-windows.zip`.
-2. **Important :** clic droit sur le fichier → **Propriétés** → coche **Débloquer** en bas → **OK**. Sans ça,
-   Windows bloque la fenêtre de Trip Compta : elle s'ouvre alors dans le navigateur (tout marche, mais refais
-   cette étape puis l'extraction pour avoir la fenêtre).
-3. Clic droit → **Extraire tout…** et choisis un dossier **à toi**, par exemple ton dossier personnel
-   (`C:\Users\<ton nom>`). Évite « Program Files » : l'application ne pourrait pas se mettre à jour toute seule.
-4. Dans le dossier **TripCompta**, double-clique sur **TripCompta.exe**. Si Windows affiche
-   *« Windows a protégé votre ordinateur »* : clique sur **Informations complémentaires**, puis
-   **Exécuter quand même**. (Une seule fois.)
-5. Pour la retrouver facilement : clic droit sur **TripCompta.exe** → **Envoyer vers** → **Bureau (créer un raccourci)**.
+1. Télécharge `TripCompta-windows-setup.exe` et double-clique dessus.
+2. Si Windows affiche *« Windows a protégé votre ordinateur »* : clique sur **Informations complémentaires**, puis
+   **Exécuter quand même**. (Une seule fois : l'installeur n'est pas encore signé.)
+3. Clique sur **Installer**. Pas besoin d'être administrateur : Trip Compta s'installe pour toi seul, avec un
+   raccourci dans le menu Démarrer (et sur le Bureau si tu le coches).
 
 Trip Compta s'ouvre dans **sa propre fenêtre**. Pour l'arrêter, ferme simplement cette fenêtre : tout est enregistré.
-(Il utilise WebView2, le moteur d'Edge, déjà présent dans Windows 10 et 11.)
+Il utilise WebView2, le moteur d'Edge, présent dans Windows 10 et 11 ; s'il manque, l'installeur l'ajoute.
+Les mises à jour s'installent ensuite toutes seules, en un clic (**ℹ️ À propos**). Pour le désinstaller :
+**Paramètres → Applications installées → Trip Compta** ; tes voyages (dossier **Documents\TripCompta**) restent.
+
+**Sans installation** (clé USB…) : `TripCompta-windows.zip`. Avant de l'extraire : clic droit sur le fichier →
+**Propriétés** → coche **Débloquer** → **OK** (sinon Windows bloque la fenêtre de Trip Compta, qui s'ouvre alors
+dans le navigateur). Extrais-le dans un dossier à toi, puis double-clique sur **TripCompta.exe**.
 
 ---
 

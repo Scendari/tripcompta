@@ -22,7 +22,7 @@ RELEASE = dict(tag_name="v1.1.0", body="- Nouveau : le mail au trésorier\n- Cor
                published_at="2026-11-02T10:00:00Z",
                assets=[{"name": n, "browser_download_url": f"https://exemple.invalid/{n}"} for n in
                        ("TripCompta-mac-arm64.zip", "TripCompta-mac-intel.zip", "TripCompta-windows.zip",
-                        "TripCompta-linux.tar.gz", "SHA256SUMS.txt")])
+                        "TripCompta-windows-setup.exe", "TripCompta-linux.tar.gz", "SHA256SUMS.txt")])
 
 
 @pytest.fixture(autouse=True)
@@ -83,7 +83,7 @@ def test_build_info_from_source_is_dev():
 def test_asset_for_each_computer():
     assert U.asset_name("darwin", "arm64") == "TripCompta-mac-arm64.zip"
     assert U.asset_name("darwin", "x86_64") == "TripCompta-mac-intel.zip"
-    assert U.asset_name("win32", "AMD64") == "TripCompta-windows.zip"
+    assert U.asset_name("win32", "AMD64") == "TripCompta-windows-setup.exe"      # l'installeur
     assert U.asset_name("linux", "x86_64") == "TripCompta-linux.tar.gz"
     assert U.asset_name("linux", "aarch64") is None            # pas fabriqué
     assert U.asset_name("win32", "ARM64") is None
@@ -93,7 +93,7 @@ def test_asset_for_each_computer():
 def test_release_info_and_sums():
     info = U.release_info(RELEASE)
     assert info["version"] == "1.1.0" and info["date"] == "2026-11-02" and "trésorier" in info["notes"]
-    assert info["assets"]["SHA256SUMS.txt"].endswith("SHA256SUMS.txt") and len(info["assets"]) == 5
+    assert info["assets"]["SHA256SUMS.txt"].endswith("SHA256SUMS.txt") and len(info["assets"]) == 6
     a, b = "a" * 64, "B" * 64
     sums = U.parse_sums(f"{a}  TripCompta-windows.zip\n{b} *TripCompta-mac-arm64.zip\n\nn'importe quoi\n")
     assert sums == {"TripCompta-windows.zip": a, "TripCompta-mac-arm64.zip": "b" * 64}
@@ -256,6 +256,8 @@ def archive_bytes(name: str, folder: str) -> bytes:
 @pytest.fixture
 def install_env(tmp_path, monkeypatch):
     name = U.asset_name() or "TripCompta-linux.tar.gz"
+    if name.endswith(".exe"):                                   # Windows : l'installeur, voir test_install_windows
+        name = "TripCompta-linux.tar.gz"
     monkeypatch.setattr(U, "asset_name", lambda *a, **k: name)
     folder = "TripCompta.app" if name.startswith("TripCompta-mac") else "TripCompta"
     content = archive_bytes(name if not name.startswith("TripCompta-mac") else "x.zip", folder)
@@ -532,3 +534,65 @@ def test_newer_database_page_not_installable(tmp_path, monkeypatch):
 
 def test_backup_skipped_without_database():
     assert U.backup_database(None, "1.2.0") is None
+
+
+# ---------------------------------------------------------------- Windows : l'installeur
+def test_install_windows_runs_the_installer(tmp_path, monkeypatch):
+    """Windows : l'installeur téléchargé et vérifié est lancé en silencieux (il attend la fermeture de Trip Compta,
+    installe et relance) ; rien n'est déplié ni remplacé par Trip Compta lui-même."""
+    name = "TripCompta-windows-setup.exe"
+    monkeypatch.setattr(U, "asset_name", lambda *a, **k: name)
+    content = b"MZ faux installeur"
+    target = tmp_path / "Programs" / "TripCompta"
+    target.mkdir(parents=True)
+    db = Database(tmp_path / "donnees", app_version="1.0.0")
+    u = make(download=fake_download(content))
+    u.check()
+    launched, quitted = [], []
+    u._read_text = lambda url: f"{hashlib.sha256(content).hexdigest()}  {name}\n"
+    u.run_install(db, port=8790, app_args=["--navigateur"], quit_app=lambda: quitted.append(1),
+                  location=(target, "TripCompta.exe"), launch=lambda **kw: launched.append(kw))
+    assert u.job["step"] == "redemarrage" and u.job["error"] is None, u.job
+    assert quitted == [1] and len(launched) == 1
+    kw = launched[0]
+    assert kw["installer"].read_bytes() == content and kw["current"] == target / "TripCompta.exe"
+    assert (kw["work"] / "en-cours.txt").read_text() == "1.1.0"
+    assert (db.backups_dir / "avant-maj-1.1.0.db").exists()
+    # relancé par l'installeur avec « --apres-maj » : mêmes options, même adresse, pas de nouvel onglet
+    assert U.relaunch_args(kw["work"]) == ["--navigateur", "--port", "8790", "--no-browser"]
+    assert U.relaunch_args(kw["work"]) == ["--no-browser"]                 # lu une seule fois
+    cmd = U.installer_command(kw["installer"], kw["work"], kw["current"], 4242)
+    assert cmd[0] == str(kw["installer"]) and "/VERYSILENT" in cmd and "/ATTENDRE=4242" in cmd
+    assert f"/ANCIEN={target / 'TripCompta.exe'}" in cmd and f"/ECHEC={kw['work'] / 'echec.txt'}" in cmd
+    assert f"/DIR={target}" in cmd                              # au même endroit (raccourcis d'un .zip gardés)
+
+
+def test_windows_install_needs_no_admin(monkeypatch, tmp_path):
+    monkeypatch.setattr(U.sys, "platform", "win32")
+    monkeypatch.setattr(U, "asset_name", lambda *a, **k: "TripCompta-windows-setup.exe")
+    monkeypatch.setattr(U, "install_location", lambda *a, **k: (tmp_path / "x", "TripCompta.exe"))
+    assert make().installable() == (True, "")
+
+
+def test_relaunched_after_update_reads_options(monkeypatch, tmp_path):
+    import importlib
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    run_mod = importlib.import_module("run")
+    U.work_dir().mkdir(parents=True, exist_ok=True)
+    U.write_relaunch(U.work_dir(), 8791, ["--navigateur"])
+    seen = {}
+
+    def fake_parse(self, *a, **k):
+        seen["argv"] = list(_sys.argv[1:])
+        raise SystemExit(0)
+    import argparse
+    monkeypatch.setattr(argparse.ArgumentParser, "parse_args", fake_parse)
+    monkeypatch.setattr(_sys, "argv", ["TripCompta.exe", "--apres-maj"])
+    monkeypatch.delenv("TRIPCOMPTA_RESTARTED", raising=False)
+    with pytest.raises(SystemExit):
+        run_mod.main()
+    assert seen["argv"] == ["--navigateur", "--port", "8791", "--no-browser"]
+    import os
+    assert os.environ.get("TRIPCOMPTA_RESTARTED") == "1"
+    monkeypatch.delenv("TRIPCOMPTA_RESTARTED", raising=False)

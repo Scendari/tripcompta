@@ -146,6 +146,11 @@ def free_port(preferred: int) -> int:
 
 
 def main():
+    if "--apres-maj" in sys.argv[1:]:
+        # relancé par l'installeur Windows après une mise à jour : les options d'avant, à la même adresse
+        from compta import updater as U
+        sys.argv = [sys.argv[0]] + [a for a in sys.argv[1:] if a != "--apres-maj"] + U.relaunch_args()
+        os.environ["TRIPCOMPTA_RESTARTED"] = "1"
     ap = argparse.ArgumentParser(description="Trip Compta")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-browser", action="store_true")
