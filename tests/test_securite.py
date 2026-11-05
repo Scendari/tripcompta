@@ -146,3 +146,41 @@ def test_window_and_browser_mode_really_work(tmp_path):
         evil.shutdown()
         srv.should_exit = True
         th.join(5)
+
+
+def test_no_get_route_changes_the_data(tmp_path):
+    """Le contrôle d'origine ne porte que sur POST/PUT/PATCH/DELETE : aucune page GET ne doit donc modifier les
+    voyages. On ouvre TOUTES les routes GET (exemple de démonstration) et on compare le contenu de la base."""
+    import re
+    import sqlite3
+    from compta.demo import seed_demo
+    app = create_app(tmp_path / "d")
+    tid = seed_demo(app.state.db, replace=True)
+    from compta import models as M
+    with app.state.db.Session() as s:
+        t = s.get(M.Trip, tid)
+        ids = {"tid": tid, "eid": t.expenses[0].id, "pid": t.participants[0].id,
+               "rid": t.receipts[0].id if t.receipts else 1, "cid": t.categories[0].id if t.categories else 1,
+               "fid": t.families[0].id if getattr(t, "families", None) else 1,
+               "sid": t.subaccounts[0].id if getattr(t, "subaccounts", None) else 1,
+               "mid": t.movements[0].id if getattr(t, "movements", None) else 1}
+
+    def dump():
+        con = sqlite3.connect(app.state.db.path)
+        try:
+            return [l_ for l_ in con.iterdump() if "'app_version'" not in l_]
+        finally:
+            con.close()
+    before = dump()
+    c = TestClient(app, base_url=f"http://{HOST}")
+    seen = []
+    for route in app.routes:
+        if "GET" not in (getattr(route, "methods", None) or set()) or route.path.startswith(("/static", "/api/docs")):
+            continue
+        url = route.path
+        for name in re.findall(r"{(\w+)(?::\w+)?}", url):
+            url = re.sub(r"{%s(?::\w+)?}" % name, str(ids.get(name, "x")), url)
+        c.get(url, follow_redirects=False)
+        seen.append(url)
+    assert len(seen) > 40
+    assert dump() == before, "une route GET a modifié la base"
