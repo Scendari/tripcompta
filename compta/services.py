@@ -431,31 +431,89 @@ def label_sets(trip: M.Trip) -> list:
     return out
 
 
+def flag_checks(trip: M.Trip, suggestions: list) -> int:
+    """Dépenses à parts personnalisées où quelqu'un vient d'entrer dans un ensemble allumé : marquées « à vérifier »
+    (une fois par dépense et par personne). Renvoie le nombre de marques ajoutées."""
+    exps = {e.id: e for e in trip.expenses}
+    n = 0
+    for x in suggestions:
+        e = exps.get(x["eid"])
+        if x["kind"] != "verifier" or e is None or any(c.participant_id == x["pid"] for c in e.checks):
+            continue
+        e.checks.append(M.ExpenseCheck(participant_id=x["pid"], reason=x["joined"]))
+        n += 1
+    return n
+
+
+def checks_of(trip: M.Trip) -> dict:
+    """{expense_id: [(check, nom)]} : dépenses « à vérifier » (personnes encore là, et pas encore dans la dépense)."""
+    names = {p.id: p.name for p in trip.participants}
+    out: dict = {}
+    for e in trip.expenses:
+        inside = {x.participant_id for x in e.shares}
+        for c in e.checks:
+            if c.participant_id in names and c.participant_id not in inside:
+                out.setdefault(e.id, []).append((c, names[c.participant_id]))
+    return out
+
+
 def label_members(trip: M.Trip) -> dict:
     """{clé: {ids}} : à garder AVANT un changement de personnes, d'étiquettes ou de groupes (join_suggestions)."""
     return {k: set(ids) for k, _, ids in label_sets(trip)}
 
 
 def join_suggestions(trip: M.Trip, before: dict) -> list:
-    """Quelqu'un vient d'entrer dans le voyage, une étiquette, un groupe ou une famille : les dépenses qui
-    concernaient exactement les membres de cet ensemble (parts égales, sans montant fixé) lui sont proposées.
-    Rien n'est ajouté ici : [{pid, eid, why}], pré-cochés sur la page de confirmation."""
+    """Quelqu'un vient d'entrer dans le voyage, une étiquette, un groupe ou une famille : chaque dépense où cet
+    ensemble est « allumé » (tous ses membres d'avant y sont, comme dans le formulaire de dépense) lui est proposée,
+    sauf s'il y est déjà. Rien n'est ajouté ici : [{pid, eid, why, joined, kind, others}] :
+    - why : l'origine de la dépense (« groupe covoit », « groupe covoit + Accompagnants ») ;
+    - joined : l'ensemble qu'il vient de rejoindre ;
+    - kind : « groupes » (partagée exactement entre des ensembles entiers), « autres » (l'ensemble et d'autres
+      personnes : others = leurs noms) ou « verifier » (parts inégales ou montant fixé : à faire à la main)."""
     after = {k: (lbl, ids) for k, lbl, ids in label_sets(trip)}
-    present = {p.id for p in trip.participants}
+    names = {p.id: p.name for p in trip.participants}
+    # organisateur, co-organisateur : des rôles d'équipe, pas des groupes de dépenses (sinon, nommer un
+    # co-organisateur proposerait toutes les dépenses de l'organisateur)
+    team = {f"role:{r}" for r in TEAM_ROLES}
+    old = {k: ids for k, ids in before.items() if ids and k in after and k not in team}
     out, seen = [], set()
     for e in sorted(trip.expenses, key=lambda x: (x.date or dt.date.min, x.id)):
         shares = list(e.shares)
-        if not shares or any(x.weight != 1 or x.fixed is not None for x in shares):
+        if not shares:
             continue
         ids = {x.participant_id for x in shares}
-        for k, old in before.items():
-            if not old or ids != old or k not in after:
-                continue
-            for pid in sorted(after[k][1] - old):
-                if pid in present and pid not in ids and (pid, e.id) not in seen:
-                    seen.add((pid, e.id))
-                    out.append(dict(pid=pid, eid=e.id, why=after[k][0]))
+        inside = {k: v for k, v in old.items() if v <= ids}          # ensembles allumés dans cette dépense
+        if not inside:
+            continue
+        covered = set().union(*inside.values())
+        custom = any(x.weight != 1 or x.fixed is not None for x in shares)
+        for k in inside:
+            for pid in sorted(after[k][1] - old[k]):
+                if pid not in names or pid in ids or (pid, e.id) in seen:
+                    continue
+                seen.add((pid, e.id))
+                kind = "verifier" if custom else "groupes" if covered == ids else "autres"
+                out.append(dict(pid=pid, eid=e.id, why=_origin(after, inside, covered, k), joined=after[k][0],
+                                kind=kind, others=sorted((names[i] for i in ids - covered if i in names),
+                                                         key=E.sort_key)))
     return out
+
+
+def _origin(after: dict, inside: dict, ids: set, first: str) -> str:
+    """D'où vient la dépense : l'ensemble allumé qui couvre exactement « ids », sinon la réunion d'ensembles entiers
+    qui le couvre, en commençant par celui que la personne vient de rejoindre (« groupe covoit + Accompagnants »)."""
+    exact = [k for k, v in inside.items() if v == ids]
+    if exact:
+        return after[first if first in exact else exact[0]][0]
+    chosen, covered = [first], set(inside[first])
+    rest = sorted((k for k in inside if k != first and k != "tous"), key=lambda k: -len(inside[k] - covered))
+    while covered != ids and rest:
+        k = max(rest, key=lambda k: len(inside[k] - covered))
+        rest.remove(k)
+        if inside[k] - covered:
+            chosen.append(k)
+            covered |= inside[k]
+    return " + ".join(after[k][0] for k in chosen)
 
 
 def who_label(trip: M.Trip, e: M.Expense) -> str:
@@ -590,6 +648,13 @@ def alerts(trip: M.Trip, result: E.Result) -> list[dict]:
     if trip.participants and not trip.expenses:
         out.append(dict(level="info", text="Aucune dépense saisie pour l'instant.",
                         link=f"/v/{tid}/depenses/nouvelle"))
+    checks = checks_of(trip)
+    if checks:
+        n = len(checks)
+        out.append(dict(level="error",
+                        text=f"{n} dépense{'s' if n > 1 else ''} à vérifier : quelqu'un a rejoint un groupe, mais les "
+                             f"parts sont personnalisées",
+                        link=f"/v/{tid}/depenses#a-verifier"))
     no_receipt = [e for e in trip.expenses if e.actual is not None and not e.receipt_links]
     if no_receipt:
         n = len(no_receipt)

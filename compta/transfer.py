@@ -309,7 +309,41 @@ def import_example(s, receipts_dir: Path) -> M.Trip:
     t = import_trip(s, v, z, receipts_dir)
     t.is_demo = True
     s.flush()
+    _temp_gisele(s, t)                           # TEMPORAIRE : à retirer (voir la fonction)
     return t
+
+
+def _temp_gisele(s, t: M.Trip) -> None:
+    """TEMPORAIRE (démo de « L'ajouter aussi à ces dépenses ? », à retirer ensuite) : Gisèle Martin rejoint le
+    groupe covoit ;
+    - cas normal : elle est ajoutée aux dépenses partagées exactement entre le covoit (péages, essence…) ;
+    - cas « à vérifier » : un pique-nique du covoit à parts inégales (Julien compte double), où elle n'a pas pu être
+      ajoutée toute seule : signalé en rouge dans les Dépenses, avec le bandeau en haut.
+    Pour revoir la page de proposition : retirer Gisèle du groupe covoit, puis l'y remettre."""
+    import json as _json
+    from . import services as S
+    g = M.Participant(name="Gisèle Martin", roles="plongeur")
+    t.participants.append(g)
+    s.flush()
+    groups = _json.loads(t.groups or "[]")
+    covoit = next(x for x in groups if x["name"] == "covoit")
+    old = set(covoit["members"])
+    covoit["members"] = covoit["members"] + [g.id]
+    t.groups = _json.dumps(groups, ensure_ascii=False)
+    for e in t.expenses:
+        if {x.participant_id for x in e.shares} == old and all(x.weight == 1 and x.fixed is None for x in e.shares):
+            e.shares.append(M.ExpenseShare(participant_id=g.id, weight=1.0))
+    cat = next((c for c in t.categories if "repas" in c.name.lower()), None)
+    first = sorted(old)[0]
+    picnic = M.Expense(trip_id=t.id, label="Pique-nique du covoit (démo « à vérifier »)", actual=6600,
+                       category_id=cat.id if cat else None, date=max((e.date for e in t.expenses if e.date), default=None))
+    s.add(picnic)
+    s.flush()
+    for pid in sorted(old):
+        picnic.shares.append(M.ExpenseShare(participant_id=pid, weight=2.0 if pid == first else 1.0))
+    picnic.checks.append(M.ExpenseCheck(participant_id=g.id, reason="groupe covoit"))
+    S.store_draws(t)
+    s.flush()
 
 
 def import_zip(s, content: bytes, receipts_dir: Path) -> tuple[list, list]:

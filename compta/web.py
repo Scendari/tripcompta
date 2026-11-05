@@ -514,6 +514,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             ctx.setdefault("roles", S.roles_map(ctx["trip"]))
             ctx.setdefault("estimated", [e for e in ctx["trip"].expenses if S.is_estimated(e)])
             ctx.setdefault("trip_roles", S.trip_roles(ctx["trip"]))
+            ctx.setdefault("checks", S.checks_of(ctx["trip"]))       # dépenses « à vérifier » (bandeau, liste)
         if "asso_name" not in ctx:
             if isinstance(ctx.get("trip"), M.Trip):
                 ctx["asso_name"] = S.caisse_label(ctx["trip"])
@@ -570,14 +571,21 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         return RedirectResponse(url, status_code=303)
 
     def _then_join(t: M.Trip, before: dict, url: str, msg: str):
-        """Après un ajout de personne, d'étiquette, de groupe ou de famille : s'il y a des dépenses qui concernaient
-        exactement cet ensemble, la page « L'ajouter aussi à ces dépenses ? » (tout pré-coché) ; sinon, retour."""
+        """Après un ajout de personne, d'étiquette, de groupe ou de famille : les dépenses où cet ensemble est allumé
+        sont proposées (rien de coché) ; celles à parts personnalisées sont marquées « à vérifier ». Sinon, retour."""
+        from sqlalchemy.orm import object_session
         sug = S.join_suggestions(t, before)
         if not sug:
             return back(url, msg)
-        whys = list(dict.fromkeys(x["why"] for x in sug))
-        q = "s=" + quote(",".join(f"{x['pid']}.{x['eid']}.{whys.index(x['why'])}" for x in sug)) \
-            + "&w=" + quote("|".join(w.replace("|", " ") for w in whys)) + "&next=" + quote(url)
+        if S.flag_checks(t, sug):
+            object_session(t).commit()
+        texts = list(dict.fromkeys([x["why"] for x in sug] + [x["joined"] for x in sug]
+                                   + [", ".join(x["others"]) for x in sug if x["others"]]))
+        kinds = {"groupes": "g", "autres": "a", "verifier": "v"}
+        q = "s=" + quote(",".join(
+            f"{x['pid']}.{x['eid']}.{texts.index(x['why'])}.{texts.index(x['joined'])}.{kinds[x['kind']]}."
+            f"{texts.index(', '.join(x['others'])) if x['others'] else -1}" for x in sug)) \
+            + "&w=" + quote("|".join(w.replace("|", " ") for w in texts)) + "&next=" + quote(url)
         return back(f"/v/{t.id}/rejoindre?{q}", msg)
 
     def trip_or_404(s: Session, tid: int) -> M.Trip:
@@ -1879,7 +1887,9 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
                 pairs = [(pid, e) for e in t.expenses if f.get(f"join_{e.id}") for pid in mine]
             else:
                 exps = {e.id: e for e in t.expenses}
-                pairs = [(x["pid"], exps[x["eid"]]) for x in S.join_suggestions(t, before) if x["pid"] in mine]
+                sug = S.join_suggestions(t, before)
+                S.flag_checks(t, sug)
+                pairs = [(x["pid"], exps[x["eid"]]) for x in sug if x["pid"] in mine and x["kind"] == "groupes"]
             for pid, e in pairs:
                 if pid not in {x.participant_id for x in e.shares}:
                     e.shares.append(M.ExpenseShare(participant_id=pid, weight=1.0))
@@ -1933,21 +1943,29 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         r = S.compute_trip(t)
         rows: dict = {}
         for item in (q.get("s") or "").split(","):
+            parts = item.split(".")
             try:
-                pid, eid, wi = (int(x) for x in item.split("."))
-            except ValueError:
+                pid, eid, wi = (int(x) for x in parts[:3])
+                ji = int(parts[3]) if len(parts) > 3 else wi
+                kind = {"g": "groupes", "a": "autres", "v": "verifier"}.get(parts[4] if len(parts) > 4 else "g")
+                oi = int(parts[5]) if len(parts) > 5 else -1
+            except (ValueError, IndexError):
                 continue
             p, e = people.get(pid), exps.get(eid)
-            if p is None or e is None or pid in {x.participant_id for x in e.shares}:
+            if p is None or e is None or kind is None or pid in {x.participant_id for x in e.shares}:
                 continue
-            rows.setdefault(pid, dict(p=p, whys=[], items=[]))
-            why = whys[wi] if 0 <= wi < len(whys) else ""
-            if why and why not in rows[pid]["whys"]:
-                rows[pid]["whys"].append(why)
-            rows[pid]["items"].append(dict(e=e, why=why, total=r.expense_totals.get(e.id, 0), n=len(e.shares)))
+            rows.setdefault(pid, dict(p=p, whys=[], items=[], checks=[]))
+            text = (lambda i: whys[i] if 0 <= i < len(whys) else "")
+            if text(ji) and text(ji) not in rows[pid]["whys"]:
+                rows[pid]["whys"].append(text(ji))
+            it = dict(e=e, why=text(wi), others=text(oi), kind=kind, total=r.expense_totals.get(e.id, 0),
+                      n=len(e.shares))
+            rows[pid]["checks" if kind == "verifier" else "items"].append(it)
         if not rows:
             return RedirectResponse(nxt, status_code=303)
-        return render(request, "join.html", trip=t, rows=list(rows.values()), next_url=nxt)
+        n_checks = sum(len(x["checks"]) for x in rows.values())
+        return render(request, "join.html", trip=t, rows=list(rows.values()), next_url=nxt, n_checks=n_checks,
+                      any_items=any(x["items"] for x in rows.values()))
 
     @app.post("/v/{tid}/rejoindre")
     async def join_save(tid: int, request: Request, s: Session = Depends(get_s)):
@@ -1963,7 +1981,8 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             except ValueError:
                 continue
             e = exps.get(eid)
-            if pid in people and e is not None and pid not in {x.participant_id for x in e.shares}:
+            if pid in people and e is not None and pid not in {x.participant_id for x in e.shares} \
+                    and not any(x.weight != 1 or x.fixed is not None for x in e.shares):   # parts personnalisées : non
                 wanted.append((pid, e))
         if not wanted:
             return back(nxt, "Aucune dépense changée")
@@ -2465,10 +2484,22 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             if getattr(up, "filename", None):
                 rec = await _store_receipt(s, t, up)
                 s.add(M.ReceiptLink(receipt_id=rec.id, expense_id=e.id))
+        e.checks.clear()                         # « à vérifier » : la dépense vient d'être revue
         s.commit()
         if f.get("again"):
             return back(f"/v/{tid}/depenses/nouvelle", f"« {label} » enregistrée. Dépense suivante :")
         return back(f"/v/{tid}/depenses#e{e.id}", f"« {label} » enregistrée")
+
+    @app.post("/v/{tid}/depenses/{eid}/verifiee")
+    async def expense_checked(tid: int, eid: int, s: Session = Depends(get_s)):
+        """« C'est bon » : la dépense à vérifier ne concerne pas la (les) personne(s) signalée(s)."""
+        trip_or_404(s, tid)
+        e = s.get(M.Expense, eid)
+        if not e or e.trip_id != tid:
+            raise HTTPException(404, "Dépense introuvable")
+        e.checks.clear()
+        s.commit()
+        return back(f"/v/{tid}/depenses#e{eid}", f"« {e.label} » vérifiée")
 
     @app.post("/v/{tid}/depenses/{eid}/supprimer")
     async def delete_expense(tid: int, eid: int, request: Request, s: Session = Depends(get_s)):

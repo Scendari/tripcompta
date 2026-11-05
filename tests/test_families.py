@@ -349,10 +349,16 @@ def test_browser_family_screens(fam_server):
         pg.check('#add-form input[name="r_accompagnant"]')
         pg.click("#add-form button:has-text('Ajouter')")
         assert "dans la famille Lebrun" in pg.locator(".flash").inner_text()
-        # proposition : les dépenses de tout le monde et celle des accompagnants (pas les plongées), pré-cochées
+        # proposition : les dépenses de tout le monde et celle des accompagnants (pas les plongées), rien de coché ;
+        # « Tout cocher » les coche toutes
         assert pg.locator("h1", has_text="L'ajouter aussi à ces dépenses ?").is_visible()
         items = pg.locator(".join-item input")
-        assert items.count() == 3 and all(items.nth(i).is_checked() for i in range(3))
+        assert items.count() == 3 and not any(items.nth(i).is_checked() for i in range(3))
+        assert pg.locator(".join-form button:has-text('Ajouter')").is_disabled()
+        pg.check("[data-all]")
+        assert all(items.nth(i).is_checked() for i in range(3))
+        assert pg.locator(".join-form button:has-text('Ajouter (3)')").is_enabled()
+        pg.uncheck("[data-all]")
         assert "Plongées" not in pg.locator(".join-form").inner_text()
         pg.click("text=Pas maintenant")
         assert pg.locator("tr.family-row", has_text="Famille Lebrun").count() == 1

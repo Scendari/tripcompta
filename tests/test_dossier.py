@@ -233,6 +233,8 @@ def test_launching_twice_shows_the_running_one(monkeypatch):
         opened, started = [], []
         monkeypatch.setattr(run, "running_instance", lambda *a: f"http://127.0.0.1:{port}/")
         monkeypatch.setattr(run.webbrowser, "open", opened.append)
+        from compta import fenetre
+        monkeypatch.setattr(fenetre, "DISCRETE", False)          # en essai discret, rien ne s'ouvrirait
         monkeypatch.setattr("compta.web.create_app", lambda *a, **k: started.append(1))
         monkeypatch.delenv("TRIPCOMPTA_DATA_DIR", raising=False)
         monkeypatch.delenv("TRIPCOMPTA_RESTARTED", raising=False)

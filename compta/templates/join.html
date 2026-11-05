@@ -1,24 +1,74 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="page-head"><div class="grow"><h1>L'ajouter aussi à ces dépenses ?</h1>
-<p class="muted">Ces dépenses concernaient exactement {{ 'ces personnes' if rows|length > 1 else 'ce groupe de personnes' }}. Décoche celles qui ne {{ 'les' if rows|length > 1 else 'le' }} concernent pas (par exemple une sortie qui a eu lieu avant son arrivée).</p></div></div>
-<form method="post" action="/v/{{ trip.id }}/rejoindre" class="join-form">
+<p class="muted">Ces dépenses concernent un groupe qu'{{ 'ils viennent' if rows|length > 1 else 'il ou elle vient' }} de rejoindre (indiqué sur chaque ligne). Coche celles qui {{ 'les' if rows|length > 1 else 'le' }} concernent : rien n'est ajouté sans ton accord.</p></div></div>
+{% if n_checks %}
+<div class="join-warn" role="alert">⚠️ <b>{{ n_checks }} dépense{{ 's' if n_checks > 1 }} à vérifier</b> : {{ 'leurs' if n_checks > 1 else 'ses' }} parts sont personnalisées (parts inégales ou montant fixé), Trip Compta ne peut pas ajouter quelqu'un tout seul. {{ 'Elles sont signalées' if n_checks > 1 else 'Elle est signalée' }} en rouge dans les Dépenses, jusqu'à ce que tu {{ 'les' if n_checks > 1 else 'la' }} revoies.</div>
+{% endif %}
+<form method="post" action="/v/{{ trip.id }}/rejoindre" class="join-form" data-join>
   <input type="hidden" name="next" value="{{ next_url }}">
+  {% if any_items %}
+  <label class="join-all"><input type="checkbox" data-all> <b>Tout cocher</b></label>
+  {% endif %}
   {% for row in rows %}
   <section class="card join-person">
     <h3 style="margin-top:0">{{ row.p.name }}{% if row.whys %} <span class="muted small" style="font-weight:normal">· maintenant dans {% for w in row.whys %}« {{ w }} »{{ ', ' if not loop.last }}{% endfor %}</span>{% endif %}</h3>
+    {% if row['items'] %}
+    {% if rows|length > 1 and row['items']|length > 1 %}<label class="join-all small"><input type="checkbox" data-all-of="{{ row.p.id }}"> Tout cocher pour {{ row.p.name }}</label>{% endif %}
     <div class="check-col">
       {% for it in row['items'] %}
-      <label class="join-item"><input type="checkbox" name="add" value="{{ row.p.id }}.{{ it.e.id }}" checked>
+      <label class="join-item"><input type="checkbox" name="add" value="{{ row.p.id }}.{{ it.e.id }}" data-of="{{ row.p.id }}">
         <span><b>{{ it.e.label }}</b>{% if it.e.date %} <span class="muted small">· {{ it.e.date|date }}</span>{% endif %}
-        <span class="muted small">· {{ it.total|money }} pour {{ it.n }} pers.{% if it.why %} ({{ it.why }}){% endif %}</span></span></label>
+        <span class="muted small">· {{ it.total|money }} · {{ it.n }} → {{ it.n + 1 }} personnes{% if it.why %} ({{ it.why }}){% endif %}</span>
+        {% if it.others %}<span class="small join-others">contient aussi {{ it.others }}</span>{% endif %}</span></label>
       {% endfor %}
     </div>
+    {% endif %}
+    {% if row.checks %}
+    <div class="join-checks">
+      <p class="small" style="margin:0 0 .3rem"><b>À vérifier plus tard</b> (parts personnalisées : à faire à la main dans la dépense)</p>
+      {% for it in row.checks %}
+      <div class="join-item to-check-item"><span aria-hidden="true">⚠️</span>
+        <span><b>{{ it.e.label }}</b>{% if it.e.date %} <span class="muted small">· {{ it.e.date|date }}</span>{% endif %}
+        <span class="muted small">· {{ it.total|money }} · {{ it.n }} personnes{% if it.why %} ({{ it.why }}){% endif %}</span></span></div>
+      {% endfor %}
+    </div>
+    {% endif %}
   </section>
   {% endfor %}
   <div class="row" style="gap:.5rem;justify-content:flex-end">
+    {% if any_items %}
     <a class="btn ghost" href="{{ next_url }}">Pas maintenant</a>
-    <button class="btn">Ajouter</button>
+    <button class="btn" data-go disabled>Ajouter</button>
+    {% else %}
+    <a class="btn" href="{{ next_url }}">Continuer</a>
+    {% endif %}
   </div>
 </form>
+<script>
+(function () {
+  var form = document.querySelector('[data-join]'); if (!form) return;
+  var boxes = function (sel) { return Array.prototype.slice.call(form.querySelectorAll(sel)); };
+  var go = form.querySelector('[data-go]'), all = form.querySelector('[data-all]');
+  function sync() {
+    var items = boxes('input[name=add]'), on = items.filter(function (b) { return b.checked; }).length;
+    if (go) { go.disabled = !on; go.textContent = on > 1 ? 'Ajouter (' + on + ')' : 'Ajouter'; }
+    if (all) {
+      all.checked = on === items.length && on > 0; all.indeterminate = on > 0 && on < items.length;
+      all.parentNode.querySelector('b').textContent = all.checked ? 'Tout décocher' : 'Tout cocher';
+    }
+    boxes('[data-all-of]').forEach(function (a) {
+      var mine = boxes('input[data-of="' + a.dataset.allOf + '"]'), n = mine.filter(function (b) { return b.checked; }).length;
+      a.checked = n === mine.length; a.indeterminate = n > 0 && n < mine.length;
+    });
+  }
+  form.addEventListener('change', function (ev) {
+    var t = ev.target;
+    if (t.matches('[data-all]')) boxes('input[name=add]').forEach(function (b) { b.checked = t.checked; });
+    else if (t.matches('[data-all-of]')) boxes('input[data-of="' + t.dataset.allOf + '"]').forEach(function (b) { b.checked = t.checked; });
+    sync();
+  });
+  sync();
+})();
+</script>
 {% endblock %}

@@ -396,9 +396,11 @@ def do_add_participants(s, t, noms, inclure_dans_depenses_communes=True, famille
     if inclure_dans_depenses_communes and added:
         mine = {p.id for p in added}
         exps = {e.id: e for e in t.expenses}
-        for sug in S.join_suggestions(t, before):
-            if sug["pid"] in mine:
-                exps[sug["eid"]].shares.append(M.ExpenseShare(participant_id=sug["pid"], weight=1.0))
+        sug = S.join_suggestions(t, before)
+        S.flag_checks(t, sug)                    # parts personnalisées : « à vérifier » dans l'application
+        for x in sug:                            # seulement les dépenses partagées exactement entre des groupes
+            if x["pid"] in mine and x["kind"] == "groupes":
+                exps[x["eid"]].shares.append(M.ExpenseShare(participant_id=x["pid"], weight=1.0))
         s.flush()
     return added, skipped
 

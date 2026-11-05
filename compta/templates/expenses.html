@@ -6,6 +6,7 @@
   <div class="row"><a class="btn ghost" href="/v/{{ trip.id }}/categories">🏷️ Gérer les catégories</a>
   <a class="btn" href="/v/{{ trip.id }}/depenses/nouvelle">+ Une dépense</a></div>
 </div>
+{% if checks %}<span id="a-verifier"></span>{% endif %}
 {% if not trip.expenses %}
 <div class="card empty"><p>Aucune dépense pour l'instant.</p><a class="btn" href="/v/{{ trip.id }}/depenses/nouvelle">Ajouter la première</a></div>
 {% endif %}
@@ -27,8 +28,11 @@
       <tr class="subcat-row"><td colspan="7"><span class="chev" aria-hidden="true">↳</span> {{ e.subcategory or "Autres (sans sous-catégorie)" }}</td>
         <td class="num"><b>{{ subtotals[(e.category_id, e.subcategory or '')]|money }}</b></td></tr>
       {% endif %}
-      <tr id="e{{ e.id }}" class="{{ 'in-subcat' if grouped }}">
-        <td><a href="/v/{{ trip.id }}/depenses/{{ e.id }}/modifier"><b>{{ e.label }}</b></a>{% if e.is_income %} <span class="pill ok">recette</span>{% endif %}{% if e.pending %} <span class="pill doit">montant à venir</span>{% endif %}{% if e.id in bad %} <span class="pill doit" title="La somme des parts ne fait pas le montant de la dépense : vérifie qui la paie et les ajustements">⚠ à vérifier</span>{% endif %}</td>
+      <tr id="e{{ e.id }}" class="{{ 'in-subcat' if grouped }}{{ ' to-check' if e.id in checks }}">
+        <td><a href="/v/{{ trip.id }}/depenses/{{ e.id }}/modifier"><b>{{ e.label }}</b></a>{% if e.is_income %} <span class="pill ok">recette</span>{% endif %}{% if e.pending %} <span class="pill doit">montant à venir</span>{% endif %}{% if e.id in bad %} <span class="pill doit" title="La somme des parts ne fait pas le montant de la dépense : vérifie qui la paie et les ajustements">⚠ à vérifier</span>{% endif %}
+          {%- if e.id in checks %}<div class="check-note">⚠️ À vérifier : {% for c, name in checks[e.id] %}{{ name }} a rejoint « {{ c.reason }} »{{ ', ' if not loop.last }}{% endfor %}. Les parts sont personnalisées : ajoute {{ 'les' if checks[e.id]|length > 1 else 'la personne' }} à la main si {{ 'elles sont concernées' if checks[e.id]|length > 1 else 'elle est concernée' }}.
+            <span class="check-actions"><a class="btn small" href="/v/{{ trip.id }}/depenses/{{ e.id }}/modifier">Modifier</a>
+            <form method="post" action="/v/{{ trip.id }}/depenses/{{ e.id }}/verifiee" class="inline"><button class="btn small ghost">C'est bon</button></form></span></div>{% endif %}</td>
         <td class="date-col small">{{ e.date|date if e.date else '' }}</td>
         <td class="num">{% if e.planned is not none %}{{ '− ' if e.is_income }}{{ e.planned|money }}{% else %}—{% endif %}</td>
         <td class="num">{% if e.actual is not none %}{% set tl = e.ticket_list %}{% if tl %}{% set lines = [] %}{% for tk in tl %}{% set _ = lines.append('Ticket ' ~ loop.index ~ ' : ' ~ tk.cents|money ~ ((' · ' ~ tk.date|date) if tk.date else '')) %}{% endfor %}<span class="ticket-count" title="{{ tl|length }} tickets">{{ tl|length }} tickets</span> {{ tip(('− ' if e.is_income else '') ~ e.actual|money, lines, tl|length ~ ' tickets') }}{% elif e.refund %}{{ '− ' if e.is_income }}{{ ((e.actual - e.refund) if e.actual > e.refund else 0)|money }}{% else %}{{ '− ' if e.is_income }}{{ e.actual|money }}{% endif %}{% if e.refund %}<div class="small muted" title="Seul ce qui reste après le remboursement est partagé">{% if tl %}− {{ e.refund|money }} remboursés = {{ ((e.actual - e.refund) if e.actual > e.refund else 0)|money }}{% else %}payé {{ e.actual|money }} − {{ e.refund|money }} remboursés{% endif %}{% if e.refund_to %} (à {{ e.refund_to.name }}){% endif %}</div>{% endif %}{% if e.planned is not none and e.actual != e.planned %}<div class="small {{ 'up' if e.actual > e.planned else 'down' }}">{{ (e.actual - e.planned)|money_sign }}</div>{% endif %}{% elif e.planned is not none %}<span class="est" title="Montant prévu : c'est lui qui est compté tant que le réel n'est pas saisi">≈ {{ '− ' if e.is_income }}{{ e.planned|money }}</span>{% else %}<span class="muted">à venir</span>{% endif %}</td>

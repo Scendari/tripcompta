@@ -199,7 +199,9 @@ def test_browser_roles_card(tmp_path):
                 edit = pg.locator("tr.edit-row:visible")
                 edit.locator(f"input[name={role}]").check()
                 edit.locator("button", has_text="Enregistrer").click()
-                assert "modifié" in pg.locator(".flash").inner_text()
+                assert "modifié" in pg.locator(".flash").first.inner_text()
+                if pg.locator("h1", has_text="L'ajouter aussi à ces dépenses ?").count():   # étiquette DP allumée
+                    pg.click(".join-form .row a.btn")                     # « Pas maintenant » ou « Continuer »
             row = pg.locator("tr", has=pg.locator(".name-btn b", has_text="Camille")).first
             assert row.locator(".role-organisateur").is_visible()
             assert pg.locator("tr", has=pg.locator(".name-btn b", has_text="Hugo")).first.locator(".role-perso", has_text="DP").is_visible()
