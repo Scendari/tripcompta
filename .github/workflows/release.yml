@@ -59,6 +59,13 @@ jobs:
     name: Fabriquer (${{ matrix.asset }})
     needs: tests
     runs-on: ${{ matrix.os }}
+    env:
+      # Mac : signature Developer ID et notarisation, seulement si les secrets existent (voir docs/SIGNATURE.md) ;
+      # sinon signature « ad hoc », comme avant
+      APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
     strategy:
       fail-fast: true
       matrix:
@@ -97,6 +104,22 @@ jobs:
           fi
       - name: Tester le script de mise à jour sur ce système
         run: python -m pytest -q tests/test_update_script.py
+      - name: Certificat Developer ID (Mac, si fourni)
+        if: runner.os == 'macOS' && env.APPLE_SIGN_IDENTITY != ''
+        env:
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        run: |
+          KC_PW="$(uuidgen)"
+          echo "$APPLE_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KC_PW" signature.keychain
+          security set-keychain-settings -lut 21600 signature.keychain
+          security unlock-keychain -p "$KC_PW" signature.keychain
+          security import "$RUNNER_TEMP/cert.p12" -k signature.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KC_PW" signature.keychain
+          security list-keychains -d user -s signature.keychain $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security find-identity -v -p codesigning signature.keychain
       - name: Fabriquer l'application
         env:
           TRIPCOMPTA_RELEASE: ${{ github.ref_name }}
@@ -106,6 +129,9 @@ jobs:
         run: |
           V="${GITHUB_REF_NAME#v}"
           python build_tools/smoke.py "${{ matrix.exe }}" "$V"
+      - name: Notariser (Mac, si fourni)
+        if: runner.os == 'macOS'
+        run: python build_tools/signer_mac.py notariser dist/TripCompta.app
       - name: Emballer (Mac)
         if: runner.os == 'macOS'
         run: ditto -c -k --sequesterRsrc --keepParent "dist/TripCompta.app" "${{ matrix.asset }}"

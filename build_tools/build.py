@@ -109,9 +109,11 @@ def main():
             data["CFBundleDisplayName"] = data["CFBundleName"] = "Trip Compta (dév)" if dev else "Trip Compta"
             with open(plist, "wb") as f:
                 plistlib.dump(data, f)
-            # Info.plist modifié : refaire la signature « ad hoc » (sinon macOS refuse d'ouvrir l'app)
-            subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(plist.parent.parent)],
-                           capture_output=True)
+            # Info.plist modifié : signer de nouveau (sinon macOS refuse d'ouvrir l'app) : Developer ID si
+            # APPLE_SIGN_IDENTITY est donné (voir docs/SIGNATURE.md), sinon « ad hoc »
+            sys.path.insert(0, str(ROOT / "build_tools"))
+            import signer_mac
+            print("Signature :", signer_mac.sign(plist.parent.parent))
     print(f"\nTerminé : Trip Compta {version}, voir le dossier {dist.name}/")
 
 
