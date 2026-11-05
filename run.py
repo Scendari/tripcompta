@@ -193,8 +193,8 @@ def main():
         url = lock.running_url()
         if url:
             print(f"Trip Compta est déjà ouvert : {url}")
-            if not (window and show_running_window(url)) and not a.no_browser:
-                webbrowser.open(url)
+            if not (window and show_running_window(url)) and not a.no_browser and not fenetre.DISCRETE:
+                webbrowser.open(url)           # (essais discrets : rien sur l'écran de l'utilisateur)
         else:
             print("Trip Compta est déjà en train de s'ouvrir sur ces voyages.")
         return
@@ -207,7 +207,7 @@ def main():
             print(f"Trip Compta est déjà ouvert : {url}")
             if window and show_running_window(url):
                 return
-            if not a.no_browser:
+            if not a.no_browser and not fenetre.DISCRETE:
                 webbrowser.open(url)
             return
 
