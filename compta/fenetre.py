@@ -56,8 +56,10 @@ def _ready(url: str, timeout: float = 30) -> bool:
 class Fenetres:
     """Les fenêtres ouvertes de Trip Compta (une ou plusieurs, comme des onglets)."""
 
-    def __init__(self, base: str):
+    def __init__(self, base: str, app=None):
         self.base = base                       # http://127.0.0.1:8765/
+        self.app = app
+        self._watched = False
 
     def is_ours(self, url: str) -> bool:
         return str(url).startswith(self.base)
@@ -75,7 +77,26 @@ class Fenetres:
                                   x=x, y=y, text_select=True, zoomable=True, hidden=hidden, focus=not DISCRETE)
         if sys.platform == "win32" and not DISCRETE:
             w.events.shown += lambda: _win_front()     # sinon elle s'ouvre souvent derrière l'Explorateur
+        if not self._watched:
+            self._watched = True
+            w.events.loaded += lambda: self._first_load(w)
         return w
+
+    def _first_load(self, w):
+        """La 1re page vraiment affichée par la fenêtre (titre, moteur), donnée par /ping : l'essai de l'application
+        fabriquée (build_tools/smoke.py --fenetre) vérifie ainsi la vraie fenêtre, WebView2 compris. Avec
+        TRIPCOMPTA_ESSAI_FENETRE (essais seulement) : la page crée aussi un voyage, comme un clic (contrôle d'origine)."""
+        try:
+            info = w.evaluate_js("document.title + '\\n' + navigator.userAgent") or ""
+            title, _, ua = str(info).partition("\n")
+            engine = "WebView2" if "Edg/" in ua else "WebKit" if "AppleWebKit" in ua else ua[:60]
+            if self.app is not None:
+                self.app.state.fenetre_vue = {"titre": title, "moteur": engine}
+            if os.environ.get("TRIPCOMPTA_ESSAI_FENETRE"):
+                w.evaluate_js("fetch('/api/voyages', {method: 'POST', headers: {'Content-Type': 'application/json'},"
+                              " body: JSON.stringify({nom: 'Essai de la fenêtre'})}); 1")
+        except Exception:
+            pass
 
     def new_later(self, url: str | None = None):
         """Nouvelle fenêtre sans bloquer l'appelant (route du serveur, menu)."""
@@ -429,7 +450,7 @@ def run(app, host: str, port: int, log_level: str = "warning", on_start=None) ->
     _ready(base)
     webview.settings["ALLOW_DOWNLOADS"] = True
     webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True
-    f = Fenetres(base)
+    f = Fenetres(base, app)
     app.state.fenetres = f
     arreter = getattr(app.state, "arreter", None) or (lambda: None)
     if sys.platform == "darwin":

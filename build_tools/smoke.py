@@ -1,6 +1,11 @@
 """Vérifie qu'une application fabriquée démarre et répond avec la bonne version (utilisé par GitHub Actions).
 
     python build_tools/smoke.py "dist/TripCompta.app/Contents/MacOS/TripCompta" 1.2.0
+    python build_tools/smoke.py "dist/TripCompta/TripCompta.exe" 1.2.0 --fenetre
+
+--fenetre (Mac, Windows) : ouvre la VRAIE fenêtre (pywebview : WebKit, ou WebView2 + .NET sous Windows), en mode
+discret (hors de l'écran, sans prendre la main) ; vérifie qu'elle affiche Trip Compta et qu'une action faite DANS la
+page passe le contrôle d'origine du serveur.
 """
 import json
 import os
@@ -107,5 +112,67 @@ def main(exe: str, expected: str) -> int:
         print(open(os.path.join(tmp, "sortie.log"), encoding="utf-8", errors="replace").read()[-3000:])
 
 
+def window(exe: str, expected: str) -> int:
+    tmp = tempfile.mkdtemp(prefix="tripcompta-fenetre-")
+    port = free_port()
+    env = dict(os.environ, TRIPCOMPTA_CONFIG=os.path.join(tmp, "reglages.json"), TRIPCOMPTA_NO_UPDATE_CHECK="1",
+               TRIPCOMPTA_DOCUMENTS=os.path.join(tmp, "Documents"), TRIPCOMPTA_FENETRE_DISCRETE="1",
+               TRIPCOMPTA_ESSAI_FENETRE="1")
+    env.pop("TRIPCOMPTA_DATA_DIR", None)
+    log = open(os.path.join(tmp, "sortie.log"), "w")
+    p = subprocess.Popen([os.path.abspath(exe), "--port", str(port)], env=env, stdout=log, stderr=subprocess.STDOUT)
+    base = f"http://127.0.0.1:{port}/"
+    ok = False
+    try:
+        info = {}
+        for _ in range(120):
+            if p.poll() is not None:
+                print("L'application s'est arrêtée.")
+                break
+            try:
+                with urllib.request.urlopen(base + "ping", timeout=2) as r:
+                    info = json.load(r)
+                if info.get("fenetre"):
+                    break
+            except OSError:
+                pass
+            time.sleep(1)
+        print(f"Réponse : {info}")
+        win = info.get("fenetre") or {}
+        engine = "WebView2" if sys.platform == "win32" else "WebKit"
+        ok = info.get("version") == expected and "Trip Compta" in (win.get("titre") or "") and win.get("moteur") == engine
+        print(f"Vraie fenêtre ({engine}) : {'affiche Trip Compta' if ok else 'ÉCHEC'}")
+        if ok:
+            ok = False
+            for _ in range(30):
+                with urllib.request.urlopen(base + "api/voyages", timeout=5) as r:
+                    if "Essai de la fenêtre" in r.read().decode("utf-8"):
+                        ok = True
+                        break
+                time.sleep(1)
+            print("Action dans la fenêtre (contrôle d'origine) :", "ok" if ok else "ÉCHEC")
+        try:
+            with urllib.request.urlopen(base, timeout=5) as r:
+                if 'id="fenetre-bloquee"' in r.read().decode("utf-8"):
+                    print("Repli dans le navigateur : la fenêtre n'a pas pu s'ouvrir")
+                    ok = False
+        except OSError:
+            pass
+        return 0 if ok else 1
+    finally:
+        try:
+            urllib.request.urlopen(urllib.request.Request(base + "quitter", method="POST"), timeout=3)
+        except OSError:
+            pass
+        try:
+            p.wait(15)
+        except subprocess.TimeoutExpired:
+            p.kill()
+        log.close()
+        print(open(os.path.join(tmp, "sortie.log"), encoding="utf-8", errors="replace").read()[-3000:])
+
+
 if __name__ == "__main__":
+    if "--fenetre" in sys.argv[3:]:
+        sys.exit(window(sys.argv[1], sys.argv[2]))
     sys.exit(main(sys.argv[1], sys.argv[2]))

@@ -9,4 +9,4 @@ mcp>=2.3
 pypdfium2>=4
 cryptography>=43
 keyring>=25
-pywebview>=6.2; sys_platform == "darwin" or sys_platform == "win32"   # sa propre fenêtre (Windows : pythonnet + WebView2)
+pywebview==6.2.1; sys_platform == "darwin" or sys_platform == "win32"  # épinglé : compta/fenetre.py touche ses rouages internes (essayer toute nouvelle version : smoke.py --fenetre)

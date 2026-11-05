@@ -129,6 +129,13 @@ jobs:
         run: |
           V="${GITHUB_REF_NAME#v}"
           python build_tools/smoke.py "${{ matrix.exe }}" "$V"
+      - name: "La vraie fenêtre (Mac : WebKit ; Windows : WebView2 + .NET), en mode discret"
+        if: runner.os != 'Linux'
+        shell: bash
+        run: |
+          V="$(python -c 'from compta import __version__; print(__version__)')-dev"
+          if [ -n "${TRIPCOMPTA_RELEASE:-}" ] || [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then V="${GITHUB_REF_NAME#v}"; fi
+          python build_tools/smoke.py "${{ matrix.exe }}" "$V" --fenetre
       - name: Notariser (Mac, si fourni)
         if: runner.os == 'macOS'
         run: python build_tools/signer_mac.py notariser dist/TripCompta.app

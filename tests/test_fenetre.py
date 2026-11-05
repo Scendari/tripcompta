@@ -305,3 +305,14 @@ def test_window_impossible_falls_back_to_browser(tmp_path, monkeypatch):
 def test_win_front_without_window_is_harmless():
     """Mise au premier plan (Windows) : sans fenêtre à nous, elle ne fait rien et ne plante pas (appels user32)."""
     assert fenetre._win_front() is False
+
+
+def test_ping_tells_what_the_real_window_shows(tmp_path):
+    """build_tools/smoke.py --fenetre lit dans /ping ce que la vraie fenêtre a affiché (titre, moteur)."""
+    from fastapi.testclient import TestClient
+    from compta.web import create_app
+    app = create_app(tmp_path / "d")
+    c = TestClient(app)
+    assert "fenetre" not in c.get("/ping").json()
+    app.state.fenetre_vue = {"titre": "Trip Compta", "moteur": "WebView2"}
+    assert c.get("/ping").json()["fenetre"] == {"titre": "Trip Compta", "moteur": "WebView2"}
