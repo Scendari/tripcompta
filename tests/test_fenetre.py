@@ -138,6 +138,7 @@ def test_real_window_discreet(tmp_path, end):
     assert r["cmd_n_menu"] == 2 and r["ctrl_n_page"] == 3 and r["une_fenetre_fermee_app_continue"]
     assert r["cmd_f_barre"] == "tc-find" and r["cmd_f_trouve"] == "Gîte" and r["cmd_f_introuvable"] is True
     assert r["retour"]
+    assert r["formulaire_fenetre"] is True                        # la fenêtre passe le contrôle d'origine
     assert r["lien_interne_nouvelle_fenetre"].endswith("/justificatifs")
     assert r["ouvert_dans_navigateur"][0] == "https://github.com/Scendari/tripcompta"
     assert r["ouvert_dans_navigateur"][1].startswith(f"http://127.0.0.1:{port}/")
