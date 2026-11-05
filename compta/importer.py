@@ -147,11 +147,12 @@ def _name(x) -> str:
 
 
 def apply_team(s, t: M.Trip, v: dict, errors: list):
-    """« voyage » : organisateur / co_organisateurs / dp, s'ils font partie des participants."""
+    """« voyage » : organisateur / co_organisateurs (et l'ancien « dp », devenu l'étiquette « DP »), s'ils font
+    partie des participants."""
     from . import services as S
     from .ops import person
     wanted = [(S.ORGANIZER, v.get("organisateur")), (S.CO_ORGANIZER, v.get("co_organisateurs")),
-              (S.DP, v.get("dp"))]
+              ("dp", v.get("dp"))]
     for role, refs in wanted:
         if not refs:
             continue
@@ -161,9 +162,9 @@ def apply_team(s, t: M.Trip, v: dict, errors: list):
             except OpsError as e:
                 if role == S.ORGANIZER and "ambigu" not in str(e):
                     continue      # organisateur qui ne participe pas : reste un simple nom pour le voyage
-                errors.append(f"Voyage, {S.ROLES[role].lower()} « {ref} » : {e}")
+                errors.append(f"Voyage, {S.ROLES[role].lower() if role in S.ROLES else 'DP'} « {ref} » : {e}")
                 continue
-            S.set_roles(t, p, p.role_list + [role])
+            S.set_roles(t, p, p.role_list + S.parse_roles([role], t))
     s.flush()
 
 

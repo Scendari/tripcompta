@@ -8,19 +8,18 @@
 <div class="orga-grid">
 <section class="card" id="roles" aria-labelledby="h-roles">
   <h3 id="h-roles">Rôles</h3>
-  <p class="hint" style="margin-top:0">Ils apparaissent à côté des noms et servent de raccourcis dans « Pour qui ? » d'une dépense. Clique sur un rôle pour voir et changer ses membres. Plongeur et accompagnant ne se suppriment pas.</p>
+  <p class="hint" style="margin-top:0">Ils apparaissent à côté des noms et servent de raccourcis dans « Pour qui ? » d'une dépense. Clique sur un rôle pour voir et changer ses membres. Un rôle ne change aucun montant : seules les personnes cochées dans chaque dépense comptent.</p>
   {% for rk, v in trip_roles.items() %}{% set members = role_members[rk] %}
   <div class="group-item">
     <div class="row" style="align-items:baseline;gap:.5rem;flex-wrap:nowrap">
       <button type="button" class="item-toggle" data-accordion data-toggle-row="#role-{{ loop.index }}" aria-expanded="false" aria-controls="role-{{ loop.index }}" title="{{ ROLE_TITLES.get(rk, '') }}"><span class="chev" aria-hidden="true">▸</span> <b>{{ v }}</b> <span class="muted small">{{ members|length }} pers.</span></button>
-      {% if rk not in ('plongeur', 'accompagnant') %}<span class="grow"></span><form method="post" action="/v/{{ trip.id }}/roles-du-voyage/supprimer" class="inline" data-confirm="Supprimer le rôle « {{ v }} » de ce voyage ? Il sera retiré des {{ members|length }} personne(s) qui l'ont."><input type="hidden" name="role" value="{{ rk }}"><button class="btn link danger small">Supprimer</button></form>{% endif %}
+      <span class="grow"></span><form method="post" action="/v/{{ trip.id }}/roles-du-voyage/supprimer" class="inline" data-confirm="Supprimer le rôle « {{ v }} » de ce voyage ? Il sera retiré des {{ members|length }} personne(s) qui l'ont."><input type="hidden" name="role" value="{{ rk }}"><button class="btn link danger small">Supprimer</button></form>
     </div>
     <form method="post" action="/v/{{ trip.id }}/roles/{{ rk|urlencode }}" id="role-{{ loop.index }}" class="group-form" hidden>
       <div class="check-col people-checks">
         {% for p in trip.participants %}<label><input type="{{ 'radio' if rk == 'organisateur' else 'checkbox' }}" name="members" value="{{ p.id }}" {{ 'checked' if p in members }}> {{ p.name }}</label>{% endfor %}
         {% if rk == 'organisateur' %}<label><input type="radio" name="members" value="" {{ 'checked' if not members }}> <i>personne</i></label>{% endif %}
       </div>
-      {% if rk in ('plongeur', 'accompagnant') %}<p class="hint">Cocher quelqu'un ici le retire des {{ 'accompagnants' if rk == 'plongeur' else 'plongeurs' }}.</p>{% endif %}
       <div class="row"><button class="btn small">Enregistrer</button><button type="button" class="btn small ghost" data-toggle-row="#role-{{ loop.index }}">Fermer</button></div>
     </form>
   </div>
@@ -29,7 +28,7 @@
     <summary class="btn small ghost">+ Nouveau rôle</summary>
     <form method="post" action="/v/{{ trip.id }}/roles-du-voyage" class="row group-form" style="gap:.5rem;flex-wrap:nowrap">
       <label for="role-new" class="sr-only">Nom du rôle</label>
-      <input type="text" id="role-new" name="name" placeholder="ex. Moniteur, Photographe, Chauffeur" required style="flex:1;min-width:0">
+      <input type="text" id="role-new" name="name" placeholder="ex. DP, Moniteur, Photographe, Chauffeur" required style="flex:1;min-width:0">
       <button class="btn small">Ajouter</button>
     </form>
   </details>

@@ -213,6 +213,9 @@ def import_trip(s, v: dict, z: zipfile.ZipFile, receipts_dir: Path) -> M.Trip:
         if row.get("participant_id") in P:
             s.add(_new(M.Adjustment, row, trip_id=t.id, participant_id=P[row["participant_id"]],
                        expense_id=E_.get(row.get("expense_id")), compensator_id=P.get(row.get("compensator_id"))))
+    s.flush()
+    s.expire(t, ["participants"])
+    S.convert_legacy_dp(t)                     # export d'avant : l'ancien rôle « DP » devient une étiquette
     for row in v.get("desistements") or []:
         if row.get("participant_id") in P:
             s.add(_new(M.Withdrawal, row, trip_id=t.id, participant_id=P[row["participant_id"]],

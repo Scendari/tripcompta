@@ -143,25 +143,24 @@ def remove_from_library(s, name) -> bool:
     return True
 
 
-# Rôles dans le groupe (un participant peut en cumuler plusieurs)
-# Plongeur et accompagnant sont des rôles comme les autres (l'un ou l'autre, ou aucun des deux).
+# Rôles dans le groupe (un participant peut en cumuler plusieurs). Ce sont des ÉTIQUETTES : elles aident à s'y
+# retrouver et à cocher vite les bonnes personnes ; la répartition, elle, ne suit que les personnes cochées dans
+# chaque dépense. Plongeur et accompagnant sont proposés d'office mais se retirent comme les autres.
 DIVER, COMPANION = "plongeur", "accompagnant"
-ORGANIZER, CO_ORGANIZER, DP = "organisateur", "co-organisateur", "dp"
-ROLES = {DIVER: "Plongeur", COMPANION: "Accompagnant", ORGANIZER: "Organisateur", CO_ORGANIZER: "Co-organisateur",
-         DP: "DP"}
-ROLE_TITLES = {DIVER: "Participe aux plongées", COMPANION: "Vient au voyage mais ne plonge pas",
-               ORGANIZER: "Organisateur du voyage", CO_ORGANIZER: "Co-organisateur du voyage",
-               DP: "Directeur de plongée"}
-ROLE_SHORT = {DIVER: "plong.", COMPANION: "acc.", ORGANIZER: "org.", CO_ORGANIZER: "co-org.", DP: "DP"}
-TEAM_ROLES = (ORGANIZER, CO_ORGANIZER, DP)
+ORGANIZER, CO_ORGANIZER = "organisateur", "co-organisateur"
+ROLES = {DIVER: "Plongeur", COMPANION: "Accompagnant", ORGANIZER: "Organisateur", CO_ORGANIZER: "Co-organisateur"}
+ROLE_TITLES = {DIVER: "Participe aux plongées", COMPANION: "Vient au voyage sans participer à l'activité",
+               ORGANIZER: "Organisateur du voyage", CO_ORGANIZER: "Co-organisateur du voyage"}
+ROLE_SHORT = {DIVER: "plong.", COMPANION: "acc.", ORGANIZER: "org.", CO_ORGANIZER: "co-org."}
+TEAM_ROLES = (ORGANIZER, CO_ORGANIZER)
 ROLE_PLURALS = {DIVER: "plongeurs", COMPANION: "accompagnants", ORGANIZER: "organisateurs",
-                CO_ORGANIZER: "co-organisateurs", DP: "dp"}
+                CO_ORGANIZER: "co-organisateurs"}
+LEGACY_DP, DP_NAME = "dp", "DP"     # ancien rôle « DP » (directeur de plongée) : devenu une étiquette ordinaire
 
 
-# Rôles propres à un voyage (« Moniteur »…) : clé « perso:Moniteur » dans participants.roles.
-# Organisateur, co-organisateur et DP peuvent être retirés d'un voyage (« masques ») ; plongeur et accompagnant non.
+# Rôles propres à un voyage (« Moniteur », « DP »…) : clé « perso:Moniteur » dans participants.roles.
+# Tous les rôles prévus peuvent être retirés d'un voyage (« masques »).
 CUSTOM = "perso:"
-FIXED_ROLES = (DIVER, COMPANION)
 
 
 def _roles_conf(trip) -> dict:
@@ -209,9 +208,7 @@ def add_trip_role(trip, name: str) -> str:
 
 
 def remove_trip_role(trip, key: str) -> None:
-    """Retire un rôle du voyage et de toutes les personnes qui l'avaient."""
-    if key in FIXED_ROLES:
-        raise ValueError("Plongeur et accompagnant ne se suppriment pas : ils servent à savoir qui plonge.")
+    """Retire un rôle du voyage et de toutes les personnes qui l'avaient (les dépenses ne changent pas)."""
     conf = _roles_conf(trip)
     if key in ROLES:
         if key not in conf["masques"]:
@@ -235,7 +232,7 @@ def parse_roles(value, trip=None) -> list:
         if not k:
             continue
         if k in ("dp", "directeur-de-plongee", "directeur-plongee", "directrice-de-plongee"):
-            found.add(DP)
+            found.add(_dp_role(trip))              # l'ancien rôle DP : une étiquette « DP » du voyage
         elif k.startswith("plongeu"):
             found.add(DIVER)
         elif k.startswith("accompagn"):
@@ -247,8 +244,9 @@ def parse_roles(value, trip=None) -> list:
         elif trip is not None and any(E.sort_key(n).replace(" ", "-") == k for n in _roles_conf(trip)["perso"]):
             found.add(next(CUSTOM + n for n in _roles_conf(trip)["perso"] if E.sort_key(n).replace(" ", "-") == k))
         else:
-            raise ValueError(f"Rôle inconnu : « {it} ». Rôles possibles : plongeur, accompagnant, organisateur, "
-                             f"co-organisateur, DP.")
+            known = ", ".join(v.lower() if k_ in ROLES else v for k_, v in trip_roles(trip).items()) if trip is not None \
+                else "plongeur, accompagnant, organisateur, co-organisateur"
+            raise ValueError(f"Rôle inconnu : « {it} ». Rôles possibles : {known}.")
     order = list(trip_roles(trip)) if trip is not None else list(ROLES)
     return [r for r in order if r in found] + sorted(r for r in found if r not in order)
 
@@ -257,14 +255,44 @@ def set_roles(trip: M.Trip, p: M.Participant, roles: list) -> None:
     """Donne ces rôles à p. Il n'y a qu'un organisateur : le donner à p le retire à l'ancien."""
     order = list(trip_roles(trip))
     roles = [r for r in order if r in roles]
-    if DIVER in roles and COMPANION in roles:          # l'un ou l'autre
-        roles.remove(DIVER)
     if ORGANIZER in roles:
         for o in trip.participants:
             if o.id != p.id and ORGANIZER in o.role_list:
                 o.roles = ",".join(r for r in o.role_list if r != ORGANIZER)
     p.roles = ",".join(roles)
     p.companion = COMPANION in roles                   # colonne historique, tenue à jour
+
+
+def _dp_role(trip) -> str:
+    """Clé de l'étiquette « DP » du voyage (créée au besoin) : ce qu'est devenu l'ancien rôle DP."""
+    if trip is None:
+        return CUSTOM + DP_NAME
+    conf = _roles_conf(trip)
+    have = next((n for n in conf["perso"] if E.sort_key(n) == E.sort_key(DP_NAME)), None)
+    if have:
+        return CUSTOM + have
+    return add_trip_role(trip, DP_NAME)
+
+
+def convert_legacy_dp(trip) -> bool:
+    """L'ancien rôle « DP » (directeur de plongée, prévu d'office) devient une étiquette ordinaire « DP », seulement
+    dans les voyages où quelqu'un l'a. True si quelque chose a changé."""
+    changed = False
+    try:
+        raw = json.loads(trip.roles_conf) if trip.roles_conf else {}
+    except ValueError:
+        raw = {}
+    if LEGACY_DP in (raw.get("masques") or []):
+        raw["masques"] = [x for x in raw["masques"] if x != LEGACY_DP]
+        trip.roles_conf = json.dumps(raw, ensure_ascii=False)
+        changed = True
+    for p in trip.participants:
+        rs = [r for r in (p.roles or "").split(",") if r]
+        if LEGACY_DP in rs:
+            key = _dp_role(trip)
+            p.roles = ",".join(dict.fromkeys(key if r == LEGACY_DP else r for r in rs))
+            changed = True
+    return changed
 
 
 def with_role(trip: M.Trip, role: str) -> list:
@@ -390,26 +418,43 @@ def everyone_expense(trip: M.Trip, expense: M.Expense) -> bool:
     return set(shares) == ids and all(w == 1 for w in shares.values())
 
 
-def audience_ids(trip: M.Trip, audience: str) -> set:
-    if audience == DIVERS:
-        return {p.id for p in trip.participants if DIVER in p.role_list}
-    if audience == COMPANIONS:
-        return {p.id for p in trip.participants if COMPANION in p.role_list}
-    return {p.id for p in trip.participants}
+def label_sets(trip: M.Trip) -> list:
+    """[(clé, libellé, {ids})] : tout le monde, chaque étiquette (rôle), chaque groupe, chaque famille."""
+    out = [("tous", "tout le monde", {p.id for p in trip.participants})]
+    for rk, v in trip_roles(trip).items():
+        out.append((f"role:{rk}", ROLE_PLURALS.get(rk, v).capitalize() if rk in ROLES else v,
+                    {p.id for p in with_role(trip, rk)}))
+    for g in trip_groups(trip):
+        out.append((f"groupe:{g['name']}", f"groupe {g['name']}", set(g["ids"])))
+    for f in trip.families:
+        out.append((f"famille:{f.id}", f"famille {f.name}", {m.id for m in f.members}))
+    return out
 
 
-def shared_expenses(trip: M.Trip) -> list:
-    """Dépenses « de groupe » auxquelles un nouveau venu peut être ajouté : tout le monde à 1 part,
-    ou bien tous les non-accompagnants (quand il y a des accompagnants)."""
-    divers = audience_ids(trip, DIVERS)
-    comps = audience_ids(trip, COMPANIONS)
-    out = []
-    for e in trip.expenses:
-        shares = {s_.participant_id: s_.weight for s_ in e.shares}
-        if not shares or any(w != 1 for w in shares.values()):
+def label_members(trip: M.Trip) -> dict:
+    """{clé: {ids}} : à garder AVANT un changement de personnes, d'étiquettes ou de groupes (join_suggestions)."""
+    return {k: set(ids) for k, _, ids in label_sets(trip)}
+
+
+def join_suggestions(trip: M.Trip, before: dict) -> list:
+    """Quelqu'un vient d'entrer dans le voyage, une étiquette, un groupe ou une famille : les dépenses qui
+    concernaient exactement les membres de cet ensemble (parts égales, sans montant fixé) lui sont proposées.
+    Rien n'est ajouté ici : [{pid, eid, why}], pré-cochés sur la page de confirmation."""
+    after = {k: (lbl, ids) for k, lbl, ids in label_sets(trip)}
+    present = {p.id for p in trip.participants}
+    out, seen = [], set()
+    for e in sorted(trip.expenses, key=lambda x: (x.date or dt.date.min, x.id)):
+        shares = list(e.shares)
+        if not shares or any(x.weight != 1 or x.fixed is not None for x in shares):
             continue
-        if everyone_expense(trip, e) or (comps and set(shares) in (divers, comps)):
-            out.append(e)
+        ids = {x.participant_id for x in shares}
+        for k, old in before.items():
+            if not old or ids != old or k not in after:
+                continue
+            for pid in sorted(after[k][1] - old):
+                if pid in present and pid not in ids and (pid, e.id) not in seen:
+                    seen.add((pid, e.id))
+                    out.append(dict(pid=pid, eid=e.id, why=after[k][0]))
     return out
 
 
@@ -453,18 +498,6 @@ def who_detail(trip: M.Trip, e: M.Expense, result: E.Result) -> list:
     if others and len(others) <= len(people):
         out += ["---", "Pas concernés : " + ", ".join(others)]
     return out
-
-
-def default_join(expense: M.Expense, companion: bool, trip: M.Trip = None) -> bool:
-    """Faut-il, par défaut, inclure un nouveau participant dans cette dépense de groupe ?
-    Selon le public de la catégorie, et à défaut selon qui partage déjà la dépense."""
-    if trip is not None and not everyone_expense(trip, expense):
-        ids = {s_.participant_id for s_ in expense.shares}
-        if ids == audience_ids(trip, DIVERS):
-            return not companion
-        if ids == audience_ids(trip, COMPANIONS):
-            return companion
-    return True
 
 
 def find_family(trip: M.Trip, name: str):
@@ -1156,7 +1189,7 @@ def trip_visuals(trip: M.Trip, result: E.Result) -> dict:
                          actual=a_, diff=a_ - p_, n=len(both), waiting=len(waiting)))
     plan.sort(key=lambda x: (-max(x["planned"], x["actual"]), x["name"]))
     plan_max = max([max(x["planned"], x["actual"]) for x in plan] + [1])
-    # 5. pour un plongeur : part médiane par catégorie (sans les désistements ni les accompagnants)
+    # 5. pour un participant : part médiane par catégorie (sans les désistements)
     diver = typical_diver(trip, r, legend, people)
     # chiffres clés
     payers = [p for p in r.people.values() if not p.withdrawn and p.share > 0]
@@ -1185,19 +1218,18 @@ def _median(values: list) -> int:
 
 
 def typical_diver(trip: M.Trip, result: E.Result, legend: list, people: list) -> dict | None:
-    """Ce que coûte le voyage « pour un plongeur » : pour chaque catégorie, la part médiane des plongeurs
-    (désistements et accompagnants exclus), arrondie à l'euro ; le total est la somme des lignes.
-    La médiane écarte d'elle-même les cas extrêmes et ne montre la part de personne en particulier.
-    None s'il y a moins de DIVER_MIN plongeurs."""
-    companion = {p.id: p.companion for p in trip.participants}
-    divers = [p for p in people if not p["withdrawn"] and not companion.get(p["id"])]
-    if len(divers) < DIVER_MIN:
+    """Ce que coûte le voyage « pour un participant » : pour chaque catégorie, la part médiane des participants
+    (désistements exclus), arrondie à l'euro ; le total est la somme des lignes. La médiane écarte d'elle-même les
+    cas extrêmes (une personne venue deux jours…) et ne montre la part de personne en particulier.
+    None s'il y a moins de DIVER_MIN participants."""
+    people_ = [p for p in people if not p["withdrawn"]]
+    if len(people_) < DIVER_MIN:
         return None
     names = [c["name"] for c in legend] + ["Arrondis et ajustements"]
     slots = {c["name"]: c["slot"] for c in legend}
     rows = []
     for name in names:
-        vals = [next((sg["cents"] for sg in p["segs"] if sg["name"] == name), 0) for p in divers]
+        vals = [next((sg["cents"] for sg in p["segs"] if sg["name"] == name), 0) for p in people_]
         euros = round(_median(vals) / 100)
         if euros > 0:
             rows.append(dict(name=name, slot=slots.get(name, 0), euros=euros))
@@ -1205,10 +1237,11 @@ def typical_diver(trip: M.Trip, result: E.Result, legend: list, people: list) ->
     total = sum(x["euros"] for x in rows)
     for x in rows:
         x["pct"] = round(x["euros"] * 100 / total) if total else 0
-    lines = [f"Combien a coûté « {trip.name} » pour un plongeur (environ) :"]
+    lines = [f"Combien a coûté « {trip.name} » pour un participant (environ) :"]
     lines += [f"- {x['name']} : {x['euros']} €" for x in rows]
-    lines += [f"Total : environ {total} €", f"(montant médian sur {len(divers)} plongeurs, désistements non comptés)"]
-    return dict(rows=rows, total=total, n=len(divers), text="\n".join(lines))
+    lines += [f"Total : environ {total} €",
+              f"(montant médian sur {len(people_)} participants, désistements non comptés)"]
+    return dict(rows=rows, total=total, n=len(people_), text="\n".join(lines))
 
 
 EXPORT_COLS = [            # clé, titre, cochée par défaut

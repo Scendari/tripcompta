@@ -1232,3 +1232,8 @@ a.cloud-chip:hover { color: var(--teal-strong); background: var(--bg); text-deco
 .demo-card { border-style: dashed; }
 button.setting-go.linkish { background: none; border: 0; font: inherit; color: var(--teal-strong); cursor: pointer; padding: 0; }
 form.card.setting { cursor: default; }
+
+/* « L'ajouter aussi à ces dépenses ? » : une dépense par ligne */
+.join-person .check-col { columns: 1; display: grid; gap: .45rem; }
+.join-item { display: flex; gap: .55rem; align-items: baseline; }
+.join-form > .row { margin-top: .9rem; }

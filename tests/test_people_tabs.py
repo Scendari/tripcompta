@@ -24,6 +24,11 @@ def env(tmp_path):
     return app, ops, tid, TestClient(app), P
 
 
+def add_dp(c, tid):
+    """« DP » n'est plus prévu d'office : une étiquette qu'on ajoute au voyage, comme « Moniteur »."""
+    c.post(f"/v/{tid}/roles-du-voyage", data={"name": "DP"})
+
+
 def test_three_tabs_everywhere(env):
     app, ops, tid, c, P = env
     for url, on in (("/participants", "Liste"), ("/participants/organisation", "Organisation"),
@@ -39,12 +44,14 @@ def test_three_tabs_everywhere(env):
 
 def test_edit_person_from_list_with_groups_and_roles(env):
     app, ops, tid, c, P = env
+    add_dp(c, tid)
     c.post(f"/v/{tid}/groupes", data={"name": "Minibus", "members": [P["Anne"]]})
     c.post(f"/v/{tid}/participants/{P['Bob']}", data={"name": "Bob", "phone": "0611", "email": "", "note": "",
-                                                     "family": "", "role": "plongeur", "roles_form": "1", "r_dp": "1",
-                                                     "groups_form": "1", "groups": ["Minibus"]})
+                                                     "family": "", "role": "plongeur", "roles_form": "1",
+                                                     "r_perso:DP": "1", "groups_form": "1", "groups": ["Minibus"]})
     d = ops.trip(tid)
-    assert d["groupes"] == {"Minibus": ["Anne", "Bob"]} and d["equipe"]["dp"] == ["Bob"]
+    bob = next(p for p in d["participants"] if p["nom"] == "Bob")
+    assert d["groupes"] == {"Minibus": ["Anne", "Bob"]} and bob["roles"] == ["DP"]
     c.post(f"/v/{tid}/participants/{P['Anne']}", data={"name": "Anne", "groups_form": "1"})   # plus aucun groupe
     assert ops.trip(tid)["groupes"] == {"Minibus": ["Bob"]}
 
@@ -76,7 +83,8 @@ def test_team_tab(env):
     r = c.post(f"/v/{tid}/roles", data={"organisateur": P["Anne"], f"co_{P['Bob']}": "1", f"dp_{P['Chloé']}": "1"},
                follow_redirects=True)
     assert "Équipe enregistrée" in clean(r.text)
-    assert ops.trip(tid)["equipe"] == {"organisateur": "Anne", "co_organisateurs": ["Bob"], "dp": ["Chloé"]}
+    assert ops.trip(tid)["equipe"] == {"organisateur": "Anne", "co_organisateurs": ["Bob"]}
+    assert next(p for p in ops.trip(tid)["participants"] if p["nom"] == "Chloé")["roles"] == ["DP"]   # ancien « dp_ »
 
 
 def test_accounts_tab_filter_and_old_link(env):
@@ -147,19 +155,23 @@ def test_add_one_person_with_everything(env):
     c.post(f"/v/{tid}/groupes", data={"name": "Minibus", "members": [P["Anne"]]})
     r = c.post(f"/v/{tid}/participants", data={"name": "Émile Roux", "phone": "06 01", "email": "e@x.fr",
                                                "note": "niveau 2", "family": "Roux", "role": "plongeur",
-                                               "r_dp": "1", "r_co-organisateur": "1", "groups": ["Minibus"]})
+                                               "r_co-organisateur": "1", "groups": ["Minibus"]})
     assert r.status_code == 200 or r.status_code == 303
+    # le Gîte était pour tout le monde : on propose (pré-coché) d'y ajouter Émile, puis retour à sa ligne
+    page = clean(r.text)
+    assert "L'ajouter aussi à ces dépenses ?" in page and "Gîte" in page and "maintenant dans « tout le monde »" in page
+    assert "%23pe" in re.search(r'name="next" value="([^"]+)"', r.text).group(1).replace("#", "%23")
+    # Émile n'a pas été ajouté au Gîte : il n'est plus « pour tout le monde », rien à proposer pour Fanny
     loc = c.post(f"/v/{tid}/participants", data={"name": "Fanny Roux", "family": "Roux", "role": "accompagnant"},
                  follow_redirects=False).headers["location"]
-    assert "ajout=1" not in loc and "#pe" in loc          # le formulaire se referme ; la liste revient
+    assert "ajout=1" not in loc and "#pe" in loc and "/rejoindre" not in loc   # le formulaire se referme
     page = clean(c.get(loc).text)
     assert "Fanny Roux ajouté (accompagnant) dans la famille Roux" in page
-    assert "pense à le cocher dans « Pour qui ? »" in page
     d = ops.trip(tid)
     e = next(p for p in d["participants"] if p["nom"] == "Émile Roux")
     assert (e["telephone"], e["email"], e["note"], e["famille"]) == ("06 01", "e@x.fr", "niveau 2", "Roux")
-    assert sorted(e["roles"]) == ["co-organisateur", "dp"] and d["groupes"]["Minibus"] == ["Anne", "Émile Roux"]
-    # pas inclus dans les dépenses déjà saisies : sa part est nulle
+    assert e["roles"] == ["co-organisateur"] and d["groupes"]["Minibus"] == ["Anne", "Émile Roux"]
+    # pas inclus d'office dans les dépenses déjà saisies (seulement proposé) : sa part est nulle
     assert e["sa_part"] == 0 and next(p for p in d["participants"] if p["nom"] == "Anne")["sa_part"] == 100.0
 
 
@@ -204,7 +216,7 @@ def test_none_chips_for_roles_and_groups(env):
     anne = page.split(f'id="pe{P["Anne"]}"')[1].split("</tr>")[0]
     bob = page.split(f'id="pe{P["Bob"]}"')[1].split("</tr>")[0]
     # rôles : « Plongeur » coché (pas « Aucun ») ; groupes : Minibus pour Anne, « Aucun » pour Bob
-    assert 'name="r_plongeur" value="1" data-pair="plonge" checked' in anne and anne.count("data-none checked") == 0
+    assert 'name="r_plongeur" value="1" checked' in anne and anne.count("data-none checked") == 0
     assert bob.count("data-none checked") == 1
 
 
@@ -231,17 +243,18 @@ def test_browser_none_chip_is_exclusive(env):
             form = pg.locator("#add-form")
             none = form.locator("[data-none-group]").first.locator("input[data-none]")
             assert none.is_checked()
-            form.locator("input[name=r_dp]").check()
+            org = form.locator("input[name=r_organisateur]")
+            org.check()
             assert not none.is_checked()
-            form.locator("input[name=r_dp]").uncheck()
+            org.uncheck()
             assert none.is_checked()                      # plus rien : « Aucun » revient
-            form.locator("input[name=r_dp]").check()
+            org.check()
             none.check()
-            assert not form.locator("input[name=r_dp]").is_checked()
-            # Plongeur / Accompagnant : l'un ou l'autre
+            assert not org.is_checked()
+            # Plongeur et Accompagnant : des étiquettes comme les autres, cumulables
             form.locator("input[name=r_plongeur]").check()
             form.locator("input[name=r_accompagnant]").check()
-            assert not form.locator("input[name=r_plongeur]").is_checked() and not none.is_checked()
+            assert form.locator("input[name=r_plongeur]").is_checked() and not none.is_checked()
             b.close()
     finally:
         srv.should_exit = True
@@ -253,12 +266,19 @@ def test_plongeur_accompagnant_are_roles_like_the_others(env):
     app, ops, tid, c, P = env
     add = c.get(f"/v/{tid}/participants").text.split('id="add-form"')[1].split("</form>")[0]
     labels = re.findall(r"> (Aucun|Plongeur|Accompagnant|Organisateur|Co-organisateur|DP)</label>", add)
-    assert labels[:6] == ["Aucun", "Plongeur", "Accompagnant", "Organisateur", "Co-organisateur", "DP"]
+    assert labels[:6] == ["Aucun", "Plongeur", "Accompagnant", "Organisateur", "Co-organisateur", "Aucun"]  # pas de DP
     assert 'type="radio" name="role"' not in add
-    # accompagnant + DP cochés ensemble
-    c.post(f"/v/{tid}/participants", data={"name": "Zoé", "role": "accompagnant", "roles_form": "1", "r_dp": "1"})
+    # accompagnant + DP (étiquette ajoutée) cochés ensemble
+    add_dp(c, tid)
+    c.post(f"/v/{tid}/participants", data={"name": "Zoé", "role": "accompagnant", "roles_form": "1", "r_perso:DP": "1"})
     z = next(p for p in ops.trip(tid)["participants"] if p["nom"] == "Zoé")
-    assert z["accompagnant"] and z["roles"] == ["dp"]
+    assert z["accompagnant"] and z["roles"] == ["DP"]
+    # plongeur ET accompagnant : permis (ce sont des étiquettes)
+    c.post(f"/v/{tid}/participants/{z['id']}", data={"name": "Zoé", "roles_form": "1", "r_plongeur": "1",
+                                                     "r_accompagnant": "1"})
+    with app.state.db.Session() as s:
+        from compta import models as M
+        assert next(p for p in s.get(M.Trip, tid).participants if p.name == "Zoé").role_list == ["plongeur", "accompagnant"]
     # « Aucun » : ni rôle d'équipe ni accompagnant (compté avec les plongeurs)
     c.post(f"/v/{tid}/participants/{z['id']}", data={"name": "Zoé", "roles_form": "1"})
     z = next(p for p in ops.trip(tid)["participants"] if p["nom"] == "Zoé")
@@ -314,25 +334,28 @@ def test_roles_card_in_organisation(env):
     app, ops, tid, c, P = env
     page = clean(c.get(f"/v/{tid}/participants/organisation").text)
     assert "Équipe" not in page and 'id="h-roles">Rôles' in page
-    for role in ("Plongeur", "Accompagnant", "Organisateur", "Co-organisateur", "DP"):
+    for role in ("Plongeur", "Accompagnant", "Organisateur", "Co-organisateur"):
         assert f">{role}</b>" in page
+    assert ">DP</b>" not in page                                 # plus prévu d'office
     assert ">Plongeur</b> <span class=\"muted small\">4 pers.</span>" in page          # tous plongeurs par défaut
     assert "Anne, Bob, Chloé, Denis" not in page                # les noms ne sont listés qu'une fois : dans le détail
-    # Chloé devient accompagnante : elle quitte les plongeurs
+    # Chloé devient accompagnante : elle reste plongeuse (deux étiquettes indépendantes)
     r = c.post(f"/v/{tid}/roles/accompagnant", data={"members": [P["Chloé"]]}, follow_redirects=True)
     assert "Accompagnant : 1 personne" in clean(r.text)
     d = {p["nom"]: p for p in ops.trip(tid)["participants"]}
     assert d["Chloé"]["accompagnant"] and d["Anne"]["accompagnant"] is False
     with app.state.db.Session() as s:
         from compta import models as M
-        assert [p.name for p in S.with_role(s.get(M.Trip, tid), "plongeur")] == ["Anne", "Bob", "Denis"]
-    # deux DP, un organisateur (un seul accepté)
-    c.post(f"/v/{tid}/roles/dp", data={"members": [P["Anne"], P["Bob"]]})
+        assert [p.name for p in S.with_role(s.get(M.Trip, tid), "plongeur")] == ["Anne", "Bob", "Chloé", "Denis"]
+    # deux DP (étiquette ajoutée), un organisateur (un seul accepté)
+    add_dp(c, tid)
+    c.post(f"/v/{tid}/roles/perso%3ADP", data={"members": [P["Anne"], P["Bob"]]})
     r = c.post(f"/v/{tid}/roles/organisateur", data={"members": [P["Anne"], P["Bob"]]}, follow_redirects=True)
     assert "Un seul organisateur" in clean(r.text)
     c.post(f"/v/{tid}/roles/organisateur", data={"members": [P["Denis"]]})
     eq = ops.trip(tid)["equipe"]
-    assert eq["dp"] == ["Anne", "Bob"] and eq["organisateur"] == "Denis"
+    assert eq["organisateur"] == "Denis"
+    assert [p["nom"] for p in ops.trip(tid)["participants"] if "DP" in p["roles"]] == ["Anne", "Bob"]
 
 
 def test_browser_organisation_accordion(env):
@@ -343,6 +366,7 @@ def test_browser_organisation_accordion(env):
     import uvicorn
     from playwright.sync_api import sync_playwright
     app, ops, tid, c, P = env
+    add_dp(c, tid)
     with socket.socket() as so:
         so.bind(("127.0.0.1", 0))
         port = so.getsockname()[1]
@@ -395,15 +419,14 @@ def test_add_and_remove_roles(env):
     c.post(f"/v/{tid}/roles-du-voyage/supprimer", data={"role": "perso:Moniteur"})
     assert all("Moniteur" not in x["roles"] for x in ops.trip(tid)["participants"])
     assert ">Moniteur</button>" not in c.get(f"/v/{tid}/depenses/nouvelle").text
-    # DP retiré du voyage, puis remis en recréant un rôle « DP »
-    c.post(f"/v/{tid}/roles/dp", data={"members": [P["Bob"]]})
-    c.post(f"/v/{tid}/roles-du-voyage/supprimer", data={"role": "dp"})
-    assert ">DP</b>" not in c.get(f"/v/{tid}/participants/organisation").text and ops.trip(tid)["equipe"]["dp"] == []
-    c.post(f"/v/{tid}/roles-du-voyage", data={"name": "dp"})
-    assert ">DP</b>" in c.get(f"/v/{tid}/participants/organisation").text
-    # plongeur ne se supprime pas
+    # Plongeur se supprime comme les autres (retiré de tous), puis se remet en recréant « Plongeur »
+    before = {d["libelle"]: d["pour"] for d in ops.trip(tid)["depenses"]}
     r = c.post(f"/v/{tid}/roles-du-voyage/supprimer", data={"role": "plongeur"}, follow_redirects=True)
-    assert "ne se suppriment pas" in clean(r.text)
+    assert "Rôle « Plongeur » supprimé" in clean(r.text)
+    assert ">Plongeur</b>" not in c.get(f"/v/{tid}/participants/organisation").text
+    assert {d["libelle"]: d["pour"] for d in ops.trip(tid)["depenses"]} == before      # aucune dépense ne change
+    c.post(f"/v/{tid}/roles-du-voyage", data={"name": "plongeur"})
+    assert ">Plongeur</b>" in c.get(f"/v/{tid}/participants/organisation").text
 
 
 def test_no_default_date_today(env):

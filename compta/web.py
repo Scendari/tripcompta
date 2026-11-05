@@ -535,6 +535,17 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
                 url += "#" + frag
         return RedirectResponse(url, status_code=303)
 
+    def _then_join(t: M.Trip, before: dict, url: str, msg: str):
+        """Après un ajout de personne, d'étiquette, de groupe ou de famille : s'il y a des dépenses qui concernaient
+        exactement cet ensemble, la page « L'ajouter aussi à ces dépenses ? » (tout pré-coché) ; sinon, retour."""
+        sug = S.join_suggestions(t, before)
+        if not sug:
+            return back(url, msg)
+        whys = list(dict.fromkeys(x["why"] for x in sug))
+        q = "s=" + quote(",".join(f"{x['pid']}.{x['eid']}.{whys.index(x['why'])}" for x in sug)) \
+            + "&w=" + quote("|".join(w.replace("|", " ") for w in whys)) + "&next=" + quote(url)
+        return back(f"/v/{t.id}/rejoindre?{q}", msg)
+
     def trip_or_404(s: Session, tid: int) -> M.Trip:
         t = s.get(M.Trip, tid)
         if not t:
@@ -1669,9 +1680,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
                       pgroups={p.id: [g["name"] for g in groups if p.id in g["ids"]] for p in t.participants},
                       withdrawn={w.participant_id for w in t.withdrawals},
                       withdrawn_dates={w.participant_id: w.date for w in t.withdrawals},
-                      has_expenses=bool(t.expenses), shared=S.shared_expenses(t),
-                      join_default={e.id: (S.default_join(e, False, t), S.default_join(e, True, t))
-                                    for e in t.expenses})
+                      has_expenses=bool(t.expenses))
 
     @app.get("/v/{tid}/participants/avances", response_class=HTMLResponse)
     def people_advances(tid: int, request: Request, s: Session = Depends(get_s)):
@@ -1714,7 +1723,8 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
 
     @app.post("/v/{tid}/roles/{role}")
     async def save_role_members(tid: int, role: str, request: Request, s: Session = Depends(get_s)):
-        """Onglet Organisation : les membres d'un rôle (organisateur : un seul ; plongeur / accompagnant : l'un ou l'autre)."""
+        """Onglet Organisation : les membres d'un rôle (organisateur : un seul). Ceux qui y entrent se voient proposer
+        les dépenses qui concernaient exactement ce rôle."""
         t = trip_or_404(s, tid)
         if role not in S.trip_roles(t):
             raise HTTPException(404, "Rôle inconnu")
@@ -1722,18 +1732,16 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         if role == S.ORGANIZER and len(ids) > 1:
             return back(f"/v/{tid}/participants/organisation#roles", "Un seul organisateur : choisis une personne")
         db.snapshot(f"rôle {S.role_label(role)}")
-        other = {S.DIVER: S.COMPANION, S.COMPANION: S.DIVER}.get(role)
+        before = S.label_members(t)
         for p in t.participants:
             rs = [r for r in p.role_list if r != role]
             if p.id in ids:
                 rs.append(role)
-                if other:
-                    rs = [r for r in rs if r != other]
             S.set_roles(t, p, rs)
         s.commit()
         n = len(ids)
-        return back(f"/v/{tid}/participants/organisation#roles",
-                    f"{S.role_label(role)} : {n} personne{'s' if n > 1 else ''}")
+        return _then_join(t, before, f"/v/{tid}/participants/organisation#roles",
+                          f"{S.role_label(role)} : {n} personne{'s' if n > 1 else ''}")
 
     @app.post("/v/{tid}/familles")
     async def create_family(tid: int, request: Request, s: Session = Depends(get_s)):
@@ -1766,14 +1774,15 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         f = await request.form()
         old = f.get("old_name") or None
         db.snapshot(f"groupe « {f.get('name') or old} »")
+        before = S.label_members(t)
         try:
             S.save_group(t, f.get("name") or "", f.getlist("members"), old)
         except ValueError as e:
             return back(f"/v/{tid}/participants/organisation#groupes", str(e))
         s.commit()
         g = S.find_group(t, f.get("name"))
-        return back(f"/v/{tid}/participants/organisation#groupes",
-                    f"Groupe « {g['name']} » enregistré ({len(g['ids'])} personne{'s' if len(g['ids']) > 1 else ''})")
+        return _then_join(t, before, f"/v/{tid}/participants/organisation#groupes",
+                          f"Groupe « {g['name']} » enregistré ({len(g['ids'])} personne{'s' if len(g['ids']) > 1 else ''})")
 
     @app.post("/v/{tid}/groupes/supprimer")
     async def delete_group_route(tid: int, request: Request, s: Session = Depends(get_s)):
@@ -1814,17 +1823,17 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         if not people:
             return back(f"/v/{tid}/participants?ajout=1#ajout", "Coche au moins une personne")
         db.snapshot(f"reprise de {len(people)} participant(s) d'autres voyages")
+        before = S.label_members(t)
         added = [M.Participant(name=x["name"], phone=x["phone"], email=x["email"], companion=x["companion"])
                  for x in people]
         t.participants.extend(added)
         s.flush()
         for p in added:
-            S.set_roles(t, p, [S.COMPANION if p.companion else S.DIVER])
+            dflt = S.COMPANION if p.companion else S.DIVER
+            S.set_roles(t, p, [dflt] if dflt in S.trip_roles(t) else [])
         s.commit()
         msg = f"{added[0].name} ajouté" if len(added) == 1 else f"{len(added)} participants ajoutés"
-        if t.expenses:
-            msg += " — pense à les cocher dans « Pour qui ? » des dépenses qui les concernent"
-        return back(f"/v/{tid}/participants", msg)
+        return _then_join(t, before, f"/v/{tid}/participants", msg)
 
     @app.post("/v/{tid}/participants")
     async def add_participants(tid: int, request: Request, s: Session = Depends(get_s)):
@@ -1844,11 +1853,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         companion = S.COMPANION in roles_in
         family = (_family_from_form(f) or "").strip()
         db.snapshot(f"ajout de {len(new)} participant(s)")
-        shared = S.shared_expenses(t)
-        if "join_form" in f:
-            join = [e for e in shared if f.get(f"join_{e.id}")]
-        else:  # ancien formulaire : case unique
-            join = shared if f.get("join_all") else []
+        before = S.label_members(t)
         kp = S.known_person(t, new[0]) if len(new) == 1 else None   # déjà venu sur un autre voyage ?
         added = [M.Participant(name=n, companion=companion) for n in new]
         t.participants.extend(added)
@@ -1857,8 +1862,6 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             S.set_roles(t, p, roles_in)
             if family:
                 S.set_family(s, t, p, family)
-            for e in join:
-                e.shares.append(M.ExpenseShare(participant_id=p.id, weight=1.0))
         if len(added) == 1 and "name" in f:      # formulaire « un participant » : toutes ses infos
             p = added[0]
             p.phone, p.email, p.note = (f.get(k, "").strip() for k in ("phone", "email", "note"))
@@ -1873,11 +1876,23 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             msg = f"{len(new)} {'accompagnant' if companion else 'participant'}(s) ajouté(s)"
         if family:
             msg += f" dans la famille {S.find_family(t, family).name}"
-        if join:
-            msg += f", inclus dans {len(join)} dépense(s) de groupe"
-        elif t.expenses and "name" in f:
-            msg += " — pense à le cocher dans « Pour qui ? » des dépenses qui le concernent"
-        return back(f"/v/{tid}/participants#pe{added[0].id}" if len(added) == 1 else f"/v/{tid}/participants", msg)
+        if "join_form" in f or f.get("join_all"):   # ancien envoi (scripts) : les dépenses à rejoindre sont données
+            mine = {p.id for p in added}
+            if "join_form" in f:
+                pairs = [(pid, e) for e in t.expenses if f.get(f"join_{e.id}") for pid in mine]
+            else:
+                exps = {e.id: e for e in t.expenses}
+                pairs = [(x["pid"], exps[x["eid"]]) for x in S.join_suggestions(t, before) if x["pid"] in mine]
+            for pid, e in pairs:
+                if pid not in {x.participant_id for x in e.shares}:
+                    e.shares.append(M.ExpenseShare(participant_id=pid, weight=1.0))
+            s.commit()
+            n = len({e.id for _, e in pairs})
+            if n:
+                msg += f", inclus dans {n} dépense(s) de groupe"
+            return back(f"/v/{tid}/participants#pe{added[0].id}" if len(added) == 1 else f"/v/{tid}/participants", msg)
+        return _then_join(t, before, f"/v/{tid}/participants#pe{added[0].id}" if len(added) == 1
+                          else f"/v/{tid}/participants", msg)
 
     @app.post("/v/{tid}/participants/{pid}")
     async def edit_participant(tid: int, pid: int, request: Request, s: Session = Depends(get_s)):
@@ -1887,6 +1902,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             raise HTTPException(404, "Participant introuvable")
         f = await request.form()
         db.snapshot(f"modification de {p.name}")
+        before = S.label_members(t)
         p.name = (f.get("name") or p.name).strip()
         p.phone = f.get("phone", "").strip()
         p.email = f.get("email", "").strip()
@@ -1902,7 +1918,66 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         if "groups_form" in f:
             S.set_person_groups(t, p.id, f.getlist("groups"))
         s.commit()
-        return back(f"/v/{tid}/participants", f"{p.name} modifié")
+        return _then_join(t, before, f"/v/{tid}/participants", f"{p.name} modifié")
+
+    def _safe_next(tid: int, url: str) -> str:
+        url = str(url or "")
+        return url if url.startswith(f"/v/{tid}/") or url == f"/v/{tid}" else f"/v/{tid}/participants"
+
+    @app.get("/v/{tid}/rejoindre", response_class=HTMLResponse)
+    def join_page(tid: int, request: Request, s: Session = Depends(get_s)):
+        """« Julie est maintenant dans Plongeurs : l'ajouter aussi à ces dépenses ? » (pré-coché)."""
+        t = trip_or_404(s, tid)
+        q = request.query_params
+        nxt = _safe_next(tid, q.get("next"))
+        whys = (q.get("w") or "").split("|")
+        people = {p.id: p for p in t.participants}
+        exps = {e.id: e for e in t.expenses}
+        r = S.compute_trip(t)
+        rows: dict = {}
+        for item in (q.get("s") or "").split(","):
+            try:
+                pid, eid, wi = (int(x) for x in item.split("."))
+            except ValueError:
+                continue
+            p, e = people.get(pid), exps.get(eid)
+            if p is None or e is None or pid in {x.participant_id for x in e.shares}:
+                continue
+            rows.setdefault(pid, dict(p=p, whys=[], items=[]))
+            why = whys[wi] if 0 <= wi < len(whys) else ""
+            if why and why not in rows[pid]["whys"]:
+                rows[pid]["whys"].append(why)
+            rows[pid]["items"].append(dict(e=e, why=why, total=r.expense_totals.get(e.id, 0), n=len(e.shares)))
+        if not rows:
+            return RedirectResponse(nxt, status_code=303)
+        return render(request, "join.html", trip=t, rows=list(rows.values()), next_url=nxt)
+
+    @app.post("/v/{tid}/rejoindre")
+    async def join_save(tid: int, request: Request, s: Session = Depends(get_s)):
+        t = trip_or_404(s, tid)
+        f = await request.form()
+        nxt = _safe_next(tid, f.get("next"))
+        people = {p.id: p for p in t.participants}
+        exps = {e.id: e for e in t.expenses}
+        wanted = []
+        for v in f.getlist("add"):
+            try:
+                pid, eid = (int(x) for x in str(v).split("."))
+            except ValueError:
+                continue
+            e = exps.get(eid)
+            if pid in people and e is not None and pid not in {x.participant_id for x in e.shares}:
+                wanted.append((pid, e))
+        if not wanted:
+            return back(nxt, "Aucune dépense changée")
+        db.snapshot("ajout aux dépenses")
+        for pid, e in wanted:
+            e.shares.append(M.ExpenseShare(participant_id=pid, weight=1.0))
+        s.commit()
+        names = list(dict.fromkeys(people[pid].name for pid, _ in wanted))
+        n = len({e.id for _, e in wanted})
+        who = names[0] if len(names) == 1 else f"{len(names)} personnes"
+        return back(nxt, f"{who} ajouté{'s' if len(names) > 1 else ''} à {n} dépense{'s' if n > 1 else ''}")
 
     @app.post("/v/{tid}/roles")
     async def save_roles(tid: int, request: Request, s: Session = Depends(get_s)):
@@ -1916,9 +1991,9 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
                 rs.append(S.ORGANIZER)
             if f.get(f"co_{p.id}"):
                 rs.append(S.CO_ORGANIZER)
-            if f.get(f"dp_{p.id}"):
-                rs.append(S.DP)
             keep_custom = [r for r in p.role_list if r.startswith(S.CUSTOM)]
+            if f.get(f"dp_{p.id}"):                    # ancien formulaire : DP est devenu une étiquette ordinaire
+                keep_custom += [r for r in S.parse_roles(["dp"], t) if r not in keep_custom]
             p.roles = ",".join([r for r in S.ROLES if r in rs] + keep_custom)
         s.commit()
         return back(f"/v/{tid}/participants/organisation#equipe", "Équipe enregistrée")
@@ -1932,13 +2007,14 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
         f = await request.form()
         if "members" in f:                      # onglet Organisation : nom, membres, qui paie
             db.snapshot(f"modification de la famille {fam.name}")
+            before = S.label_members(t)
             try:
                 S.save_family(s, t, f.get("name"), f.getlist("members"), f.get("referent"), fam)
             except ValueError as e:
                 s.rollback()
                 return back(f"/v/{tid}/participants/organisation#familles", str(e))
             s.commit()
-            return back(f"/v/{tid}/participants/organisation#familles", f"Famille {fam.name} modifiée")
+            return _then_join(t, before, f"/v/{tid}/participants/organisation#familles", f"Famille {fam.name} modifiée")
         name = (f.get("name") or "").strip()
         if name.lower().startswith("famille "):
             name = name[8:].strip()
@@ -2774,7 +2850,8 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             else:
                 rows.append(dict(date=e.date, label=f"Paiement : {e.label}{part}", inc=None, out=asso_part,
                                  note=e.category.name if e.category else "", eid=e.id))
-        rows.sort(key=lambda x: (x["date"] or dt.date.min))
+        # sans date d'abord (à compléter), puis la plus récente en haut
+        rows.sort(key=lambda x: (x["date"] is not None, -(x["date"].toordinal() if x["date"] else 0)))
         total_in = sum(x["inc"] or 0 for x in rows)
         total_out = sum(x["out"] or 0 for x in rows)
         advances = S.advances(t)

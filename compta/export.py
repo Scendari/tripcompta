@@ -163,9 +163,7 @@ def trip_pdf(trip: M.Trip, mode: str = E.ACTUAL) -> bytes:
                         f"Organisé par {org}" if org else ""] if x]
     pdf.para("  ·  ".join(info), 10, color=MUTED)
     co = [p.name for p in S.with_role(trip, S.CO_ORGANIZER)]
-    dp = [p.name for p in S.with_role(trip, S.DP)]
-    team = ([f"Co-organisation : {', '.join(co)}"] if co else []) + \
-           ([f"Directeur{'s' if len(dp) > 1 else ''} de plongée (DP) : {', '.join(dp)}"] if dp else [])
+    team = [f"Co-organisation : {', '.join(co)}"] if co else []
     if team:
         pdf.para("  ·  ".join(team), 10, color=MUTED)
     if trip.note:
@@ -260,10 +258,10 @@ def trip_pdf(trip: M.Trip, mode: str = E.ACTUAL) -> bytes:
             p = a.members[0]
             rows.append([pname(p), _m(p.share), _m(p.paid), _m(p.advanced), _m(p.refunded), _status(p)])
     legend = []
-    if rmap:
-        legend.append("org. = organisateur, co-org. = co-organisateur, DP = directeur de plongée")
+    if any(x in S.TEAM_ROLES for rs in rmap.values() for x in rs):
+        legend.append("org. = organisateur, co-org. = co-organisateur")
     if any(p.companion for p in r.people.values()):
-        legend.append("acc. = accompagnant (vient au voyage mais ne plonge pas)")
+        legend.append("acc. = accompagnant")
     if legend:
         pdf.para(" ; ".join(legend) + ".", 8.5, color=MUTED)
     if r.families:

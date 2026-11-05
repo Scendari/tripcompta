@@ -120,7 +120,8 @@ def build_server(data_dir: Optional[str] = None, home: Optional[str] = None):
                              simulation: bool = False, famille: Optional[str] = None,
                              accompagnant: bool = False) -> dict:
         """Ajoute des participants (les noms déjà présents sont ignorés). Si inclure_dans_depenses_communes,
-        ils sont aussi ajoutés aux dépenses partagées par tout le monde (sauf la plongée pour les accompagnants).
+        ils sont aussi ajoutés aux dépenses de tout le monde, et à celles qui concernaient exactement un rôle,
+        un groupe ou une famille qu'ils rejoignent.
         famille = nom de famille commun (« Lebrun ») : ses membres règlent leurs comptes ensemble avec l'asso.
         accompagnant = True pour des personnes qui ne plongent pas."""
         return ops.add_participants(voyage, noms, inclure_dans_depenses_communes, simulation, famille, accompagnant)
@@ -239,7 +240,7 @@ def build_server(data_dir: Optional[str] = None, home: Optional[str] = None):
     @_safe
     def definir_roles(voyage: Ref, participant: Ref, roles: list[str], simulation: bool = False) -> dict:
         """Rôles d'un participant dans le groupe : « organisateur » (un seul par voyage), « co-organisateur »,
-        « dp » (directeur de plongée). Liste vide = aucun rôle. Remplace ses rôles actuels."""
+        un rôle du voyage (« DP », « Moniteur »…). Liste vide = aucun rôle. Remplace ses rôles actuels."""
         return ops.set_roles(voyage, participant, roles, simulation)
 
     @mcp.tool()

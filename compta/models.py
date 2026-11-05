@@ -361,3 +361,14 @@ def _trip_asso_name(mapper, connection, target):
     if not (target.asso_name or "").strip():
         v = connection.execute(text("SELECT value FROM settings WHERE key = :k"), {"k": ASSO_NAME_KEY}).scalar()
         target.asso_name = (v or "").strip()[:100]
+
+
+@event.listens_for(Trip, "before_insert")
+def _trip_roles(mapper, connection, target):
+    """Un nouveau voyage reprend les rôles (étiquettes) du dernier voyage créé : ceux ajoutés (« DP », « Moniteur »…)
+    et ceux retirés. Le voyage d'exemple ne compte pas. Un voyage importé garde les siens."""
+    if not (target.roles_conf or "").strip():
+        v = connection.execute(text("SELECT roles_conf FROM trips WHERE is_demo = 0 AND roles_conf != '' "
+                                    "ORDER BY created DESC, id DESC LIMIT 1")).scalar()
+        if v:
+            target.roles_conf = v

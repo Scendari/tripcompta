@@ -121,7 +121,7 @@ class ReceiptIn(BaseModel):
 
 
 class RolesIn(BaseModel):
-    roles: list[str] = Field(..., description="« organisateur », « co-organisateur », « dp » (liste vide = aucun)")
+    roles: list[str] = Field(..., description="« organisateur », « co-organisateur », « plongeur », « accompagnant » ou un rôle du voyage (« DP »…) ; liste vide = aucun")
     simulation: bool = False
 
 

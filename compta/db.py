@@ -136,6 +136,7 @@ class Database:
                             c.exec_driver_sql("UPDATE trips SET asso_name = COALESCE((SELECT substr(trim(value), 1, 100) "
                                               "FROM settings WHERE key = 'nom_asso'), '')")
             self._migrate_roles(c)
+            self._migrate_dp(c)
             self._migrate_fixed_adjustments(c)
 
     @staticmethod
@@ -152,6 +153,45 @@ class Database:
                 rs.insert(0, "accompagnant" if comp else "plongeur")
                 c.exec_driver_sql("UPDATE participants SET roles=? WHERE id=?", (",".join(rs), pid))
         c.exec_driver_sql("INSERT INTO settings (key, value) VALUES ('roles_plongeur', '1')")
+
+    @staticmethod
+    def _migrate_dp(c):
+        """L'ancien rôle « DP » (directeur de plongée, prévu d'office) devient une étiquette ordinaire « DP » du voyage,
+        seulement là où quelqu'un l'a (mêmes personnes ; les dépenses ne changent pas). Sans effet la 2e fois."""
+        import json
+        tables = {r[0] for r in c.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")}
+        if not {"trips", "participants"} <= tables:
+            return
+        cols = {r[1] for r in c.exec_driver_sql("PRAGMA table_info(trips)")}
+        if "roles_conf" not in cols:
+            return
+        for tid, raw in c.exec_driver_sql("SELECT id, roles_conf FROM trips").fetchall():
+            try:
+                conf = json.loads(raw) if raw else {}
+            except ValueError:
+                conf = {}
+            if not isinstance(conf, dict):
+                conf = {}
+            changed = False
+            if "dp" in (conf.get("masques") or []):
+                conf["masques"] = [x for x in conf["masques"] if x != "dp"]
+                changed = True
+            rows = [(pid, [r for r in (roles or "").split(",") if r]) for pid, roles in
+                    c.exec_driver_sql("SELECT id, roles FROM participants WHERE trip_id=?", (tid,)).fetchall()]
+            rows = [(pid, rs) for pid, rs in rows if "dp" in rs]
+            if rows:
+                perso = [str(x) for x in conf.get("perso") or []]
+                name = next((n for n in perso if n.strip().lower() == "dp"), None)
+                if name is None:
+                    name = "DP"
+                    perso.append(name)
+                    conf["perso"] = perso
+                    changed = True
+                for pid, rs in rows:
+                    new = ",".join(dict.fromkeys(f"perso:{name}" if r == "dp" else r for r in rs))
+                    c.exec_driver_sql("UPDATE participants SET roles=? WHERE id=?", (new, pid))
+            if changed:
+                c.exec_driver_sql("UPDATE trips SET roles_conf=? WHERE id=?", (json.dumps(conf, ensure_ascii=False), tid))
 
     @staticmethod
     def _migrate_fixed_adjustments(c):
