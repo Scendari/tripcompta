@@ -4,7 +4,7 @@
 <p class="muted">Ces dépenses concernent un groupe qu'{{ 'ils viennent' if rows|length > 1 else 'il ou elle vient' }} de rejoindre (indiqué sur chaque ligne). Coche celles qui {{ 'les' if rows|length > 1 else 'le' }} concernent : rien n'est ajouté sans ton accord.</p></div></div>
 {% if n_checks %}
 {% set who = rows|map(attribute='p.name')|join(', ') if rows|length > 1 else rows[0].p.name %}
-<div class="join-warn" role="alert">⚠️ <b>{{ n_checks }} dépense{{ 's' if n_checks > 1 }} à vérifier</b> : les montants y sont répartis à la main ; ajoute la part de {{ who }} toi-même si {{ 'ces dépenses les concernent' if rows|length > 1 else ('ces dépenses concernent ' if n_checks > 1 else 'cette dépense concerne ') ~ who }}. {{ 'Elles restent signalées' if n_checks > 1 else 'Elle reste signalée' }} dans les Dépenses.</div>
+<div class="join-warn" role="alert">⚠️ <b>{{ n_checks }} dépense{{ 's' if n_checks > 1 }} à vérifier</b> : les montants y sont répartis à la main ; ajoute la part de {{ who }} toi-même si besoin. {{ 'Elles restent signalées' if n_checks > 1 else 'Elle reste signalée' }} dans les Dépenses.</div>
 {% endif %}
 <form method="post" action="/v/{{ trip.id }}/rejoindre" class="join-form" data-join>
   <input type="hidden" name="next" value="{{ next_url }}">
