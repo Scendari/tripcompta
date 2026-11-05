@@ -155,6 +155,10 @@ def free_port(preferred: int) -> int:
 
 
 def main():
+    if len(sys.argv) == 3 and sys.argv[1] == "--diagnostic-msix":     # ESSAI (branche essai-msix)
+        from compta import diag_msix
+        diag_msix.run(sys.argv[2])
+        return
     if "--apres-maj" in sys.argv[1:]:
         # relancé par l'installeur Windows après une mise à jour : les options d'avant, à la même adresse
         from compta import updater as U

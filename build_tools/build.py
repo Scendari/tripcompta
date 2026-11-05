@@ -79,6 +79,7 @@ def main():
         "--hidden-import", "compta.mcp_server",
         "--hidden-import", "compta.fenetre",
         "--hidden-import", "compta._build",
+        "--hidden-import", "compta.diag_msix",
         "--distpath", str(dist),
         "--workpath", str(ROOT / "build"),
         "--specpath", str(ROOT / "build"),

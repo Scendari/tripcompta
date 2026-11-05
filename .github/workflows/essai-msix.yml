@@ -1,0 +1,36 @@
+# ESSAI (branche essai-msix, jamais fusionnée) : Trip Compta en MSIX sur un vrai Windows, pour l'étude Store.
+name: Essai MSIX
+
+on:
+  push:
+    branches: [essai-msix]
+  workflow_dispatch:
+
+jobs:
+  msix:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Installer
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
+      - name: Fabriquer l'application
+        run: python build_tools/build.py
+      - name: MSIX : emballer, installer, mesurer
+        shell: bash
+        run: |
+          V="$(python -c 'from compta import __version__; print(__version__)')-dev"
+          python build_tools/msix/essai_msix.py "$V"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: msix-rapport
+          path: msix-rapport.json
+          if-no-files-found: ignore

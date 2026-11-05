@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ESSAI (branche essai-msix) : Trip Compta en MSIX « full trust », pour l'étude Microsoft Store. -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap5 desktop rescap">
+  <Identity Name="TripCompta.Essai" Publisher="CN=TripComptaEssai" Version="{VERSION}" ProcessorArchitecture="x64"/>
+  <Properties>
+    <DisplayName>Trip Compta</DisplayName>
+    <PublisherDisplayName>Trip Compta</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0"/>
+  </Dependencies>
+  <Resources>
+    <Resource Language="fr-fr"/>
+  </Resources>
+  <Applications>
+    <Application Id="TripCompta" Executable="TripCompta.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Trip Compta" Description="La comptabilité des voyages de l'asso"
+        BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png"/>
+      <Extensions>
+        <uap5:Extension Category="windows.appExecutionAlias" Executable="TripCompta.exe"
+          EntryPoint="Windows.FullTrustApplication">
+          <uap5:AppExecutionAlias>
+            <uap5:ExecutionAlias Alias="tripcompta.exe"/>
+          </uap5:AppExecutionAlias>
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust"/>
+  </Capabilities>
+</Package>
