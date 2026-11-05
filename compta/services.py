@@ -472,10 +472,7 @@ def join_suggestions(trip: M.Trip, before: dict) -> list:
       personnes : others = leurs noms) ou « verifier » (parts inégales ou montant fixé : à faire à la main)."""
     after = {k: (lbl, ids) for k, lbl, ids in label_sets(trip)}
     names = {p.id: p.name for p in trip.participants}
-    # organisateur, co-organisateur : des rôles d'équipe, pas des groupes de dépenses (sinon, nommer un
-    # co-organisateur proposerait toutes les dépenses de l'organisateur)
-    team = {f"role:{r}" for r in TEAM_ROLES}
-    old = {k: ids for k, ids in before.items() if ids and k in after and k not in team}
+    old = {k: ids for k, ids in before.items() if ids and k in after}   # organisateur compris : une étiquette
     out, seen = [], set()
     for e in sorted(trip.expenses, key=lambda x: (x.date or dt.date.min, x.id)):
         shares = list(e.shares)

@@ -359,3 +359,15 @@ def _alerts(app, tid):
     with app.state.db.Session() as s_:
         t = s_.get(M.Trip, tid)
         return S.alerts(t, S.compute_trip(t))
+
+
+def test_organizer_is_a_label_like_the_others(env):
+    """Organisateur, co-organisateur : des étiquettes comme les autres (l'organisateur peut ne pas partir). Anne
+    co-organisatrice ; Bob le devient aussi : les dépenses où l'étiquette est allumée lui sont proposées."""
+    app, ops, tid, c, P, E = env
+    c.post(f"/v/{tid}/roles/co-organisateur", data={"members": [P["Anne"]]})
+    ops.add_expense(tid, "Repérage", montant_reel="50", pour=["Anne"])
+    E = {x["libelle"]: x["id"] for x in ops.trip(tid)["depenses"]}
+    r = c.post(f"/v/{tid}/roles/co-organisateur", data={"members": [P["Anne"], P["Bob"]]}, follow_redirects=True)
+    assert (P["Bob"], E["Repérage"]) in proposal(r)
+    assert "Co-organisateurs" in clean(r.text)
