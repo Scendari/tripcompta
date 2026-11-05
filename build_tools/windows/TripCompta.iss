@@ -4,8 +4,8 @@
 ; - Installation pour l'utilisateur seul (pas de droits administrateur) : %LOCALAPPDATA%\Programs\TripCompta,
 ;   raccourcis menu Démarrer (et Bureau), désinstalleur dans « Applications installées ». Les voyages (Documents\
 ;   TripCompta ou le dossier choisi) ne sont jamais touchés, ni par l'installation ni par la désinstallation.
-; - Fichiers installés par l'installeur : pas de marque « téléchargé depuis Internet » (le blocage « Débloquer »
-;   d'un .zip ne se pose plus).
+; - Fichiers installés par l'installeur : pas de marque « téléchargé depuis Internet » (.NET les charge sans
+;   « Débloquer »).
 ; - WebView2 (la fenêtre de Trip Compta) installé s'il manque (Windows 10 ancien).
 ; - Mise à jour (lancée par Trip Compta lui-même, compta/updater.py) :
 ;     TripCompta-windows-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ATTENDRE=<pid> /ECHEC=<fichier>

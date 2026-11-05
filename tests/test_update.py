@@ -21,7 +21,7 @@ RELEASE = dict(tag_name="v1.1.0", body="- Nouveau : le mail au trésorier\n- Cor
                html_url="https://github.com/Scendari/tripcompta/releases/tag/v1.1.0",
                published_at="2026-11-02T10:00:00Z",
                assets=[{"name": n, "browser_download_url": f"https://exemple.invalid/{n}"} for n in
-                       ("TripCompta-mac-arm64.zip", "TripCompta-mac-intel.zip", "TripCompta-windows.zip",
+                       ("TripCompta-mac-arm64.zip", "TripCompta-mac-intel.zip",
                         "TripCompta-windows-setup.exe", "TripCompta-linux.tar.gz", "SHA256SUMS.txt")])
 
 
@@ -93,10 +93,10 @@ def test_asset_for_each_computer():
 def test_release_info_and_sums():
     info = U.release_info(RELEASE)
     assert info["version"] == "1.1.0" and info["date"] == "2026-11-02" and "trésorier" in info["notes"]
-    assert info["assets"]["SHA256SUMS.txt"].endswith("SHA256SUMS.txt") and len(info["assets"]) == 6
+    assert info["assets"]["SHA256SUMS.txt"].endswith("SHA256SUMS.txt") and len(info["assets"]) == 5
     a, b = "a" * 64, "B" * 64
-    sums = U.parse_sums(f"{a}  TripCompta-windows.zip\n{b} *TripCompta-mac-arm64.zip\n\nn'importe quoi\n")
-    assert sums == {"TripCompta-windows.zip": a, "TripCompta-mac-arm64.zip": "b" * 64}
+    sums = U.parse_sums(f"{a}  TripCompta-windows-setup.exe\n{b} *TripCompta-mac-arm64.zip\n\nn'importe quoi\n")
+    assert sums == {"TripCompta-windows-setup.exe": a, "TripCompta-mac-arm64.zip": "b" * 64}
 
 
 def test_install_location():
@@ -564,7 +564,6 @@ def test_install_windows_runs_the_installer(tmp_path, monkeypatch):
     cmd = U.installer_command(kw["installer"], kw["work"], kw["current"], 4242)
     assert cmd[0] == str(kw["installer"]) and "/VERYSILENT" in cmd and "/ATTENDRE=4242" in cmd
     assert f"/ANCIEN={target / 'TripCompta.exe'}" in cmd and f"/ECHEC={kw['work'] / 'echec.txt'}" in cmd
-    assert f"/DIR={target}" in cmd                              # au même endroit (raccourcis d'un .zip gardés)
 
 
 def test_windows_install_needs_no_admin(monkeypatch, tmp_path):
@@ -589,10 +588,10 @@ def test_relaunched_after_update_reads_options(monkeypatch, tmp_path):
     import argparse
     monkeypatch.setattr(argparse.ArgumentParser, "parse_args", fake_parse)
     monkeypatch.setattr(_sys, "argv", ["TripCompta.exe", "--apres-maj"])
-    monkeypatch.delenv("TRIPCOMPTA_RESTARTED", raising=False)
+    import os
+    monkeypatch.setenv("TRIPCOMPTA_RESTARTED", "")              # rétabli tel quel à la fin du test
+    monkeypatch.delenv("TRIPCOMPTA_RESTARTED")
     with pytest.raises(SystemExit):
         run_mod.main()
     assert seen["argv"] == ["--navigateur", "--port", "8791", "--no-browser"]
-    import os
     assert os.environ.get("TRIPCOMPTA_RESTARTED") == "1"
-    monkeypatch.delenv("TRIPCOMPTA_RESTARTED", raising=False)

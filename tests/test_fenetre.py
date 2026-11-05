@@ -268,7 +268,7 @@ def test_open_in_browser_route_and_hidden_card(tmp_path):
 
 @pytest.mark.skipif(not fenetre.available(), reason="pywebview absent")
 def test_window_impossible_falls_back_to_browser(tmp_path, monkeypatch):
-    """La fenêtre ne peut pas s'ouvrir (PC Windows : zip non débloqué, .NET refuse Python.Runtime.dll ; ou WebView2
+    """La fenêtre ne peut pas s'ouvrir (PC Windows : .NET refuse Python.Runtime.dll ; ou WebView2
     absent) : pas de plantage, Trip Compta s'ouvre dans le navigateur et explique pourquoi."""
     import socket
     import webview
@@ -294,11 +294,11 @@ def test_window_impossible_falls_back_to_browser(tmp_path, monkeypatch):
     assert opened == [f"http://127.0.0.1:{port}/"]
     with urllib.request.urlopen(opened[0], timeout=5) as r:
         page = r.read().decode()
-    assert 'id="fenetre-bloquee"' in page and ("Débloquer" if sys.platform == "win32" else "WebView2") in page
+    assert 'id="fenetre-bloquee"' in page and (".NET" if sys.platform == "win32" else "WebView2") in page
     assert app.state.fenetres is None                     # un 2e lancement ouvrira un onglet, pas une fenêtre
     app.state.fenetre_impossible = "dotnet"
     page = TestClient(app).get("/").text
-    assert "Débloquer" in page and "TripCompta-windows.zip" in page
+    assert ".NET" in page and "TripCompta-windows-setup.exe" in page
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows")

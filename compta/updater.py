@@ -1,8 +1,7 @@
 """Mises à jour : savoir s'il y a une nouvelle version, puis l'installer en un clic.
 
 Les versions publiées sont les « Releases » GitHub du dépôt public. Chacune contient un fichier par système
-(TripCompta-mac-arm64.zip, TripCompta-mac-intel.zip, TripCompta-windows-setup.exe, TripCompta-linux.tar.gz ; et
-TripCompta-windows.zip, version sans installation, pour les versions 1.3 qui se mettent à jour avec) et
+(TripCompta-mac-arm64.zip, TripCompta-mac-intel.zip, TripCompta-windows-setup.exe, TripCompta-linux.tar.gz) et
 SHA256SUMS.txt (l'empreinte de chaque fichier, pour vérifier que le téléchargement est intact).
 
 - La vérification se fait au plus une fois par jour, en arrière-plan ; hors ligne ou en cas d'erreur : rien.
@@ -432,12 +431,10 @@ def relaunch_args(work: Path | None = None) -> list[str]:
 
 
 def installer_command(installer: Path, work: Path, current: Path, pid: int) -> list[str]:
-    """Installée au même endroit que la version qui tourne (installée, ou dépliée d'un .zip : ses raccourcis restent
-    bons), si Trip Compta peut y écrire ; sinon à l'endroit habituel (%LOCALAPPDATA%\\Programs\\TripCompta)."""
-    here = [f"/DIR={current.parent}"] if os.access(current.parent, os.W_OK) else []
+    """L'installeur reprend de lui-même le dossier de l'installation précédente."""
     return [str(installer), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-",
             f"/LOG={work / 'installation.log'}", f"/ATTENDRE={pid}", f"/ECHEC={work / 'echec.txt'}",
-            f"/ANCIEN={current}", *here]
+            f"/ANCIEN={current}"]
 
 
 def launch_installer(installer: Path, work: Path, current: Path, pid: int | None = None):
