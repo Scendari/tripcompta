@@ -5,6 +5,9 @@ import os
 import socket
 import subprocess
 import sys
+import threading
+import time
+import urllib.request
 from pathlib import Path
 
 import pytest
@@ -260,3 +263,38 @@ def test_open_in_browser_route_and_hidden_card(tmp_path):
     calls = []
     app.state.fenetres = type("F", (), {"open_in_browser": lambda self: calls.append(1)})()
     assert c.post("/fenetre/navigateur").json() == {"ok": True} and calls == [1]
+
+
+@pytest.mark.skipif(not fenetre.available(), reason="pywebview absent")
+def test_window_impossible_falls_back_to_browser(tmp_path, monkeypatch):
+    """La fenêtre ne peut pas s'ouvrir (PC Windows : zip non débloqué, .NET refuse Python.Runtime.dll ; ou WebView2
+    absent) : pas de plantage, Trip Compta s'ouvre dans le navigateur et explique pourquoi."""
+    import socket
+    import webview
+    from fastapi.testclient import TestClient
+    from compta.web import create_app
+
+    def boom(*a, **k):
+        raise RuntimeError("Failed to resolve Python.Runtime.Loader.Initialize")
+    monkeypatch.setattr(webview, "start", boom)
+    monkeypatch.setattr(fenetre, "_mac_hooks", lambda *a: None)
+    monkeypatch.setattr(fenetre, "_win_hooks", boom)              # Windows : .NET refuse de se charger
+    monkeypatch.setattr(fenetre, "DISCRETE", False)
+    opened = []
+    monkeypatch.setattr(fenetre.webbrowser, "open", opened.append)
+    app = create_app(tmp_path / "d")
+    with socket.socket() as so:
+        so.bind(("127.0.0.1", 0))
+        port = so.getsockname()[1]
+    threading.Thread(target=fenetre.run, args=(app, "127.0.0.1", port), daemon=True).start()
+    end = time.time() + 20
+    while not opened and time.time() < end:
+        time.sleep(0.1)
+    assert opened == [f"http://127.0.0.1:{port}/"]
+    with urllib.request.urlopen(opened[0], timeout=5) as r:
+        page = r.read().decode()
+    assert 'id="fenetre-bloquee"' in page and ("Débloquer" if sys.platform == "win32" else "WebView2") in page
+    assert app.state.fenetres is None                     # un 2e lancement ouvrira un onglet, pas une fenêtre
+    app.state.fenetre_impossible = "dotnet"
+    page = TestClient(app).get("/").text
+    assert "Débloquer" in page and "TripCompta-windows.zip" in page

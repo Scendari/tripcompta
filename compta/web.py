@@ -486,6 +486,7 @@ def create_app(data_dir=None, restart=None, updater=None, cloud=None) -> FastAPI
             ctx["msg"], sync.notice = sync.notice, None
         ctx.setdefault("app_version", upd.label)
         ctx.setdefault("update_banner", None if upd.job else upd.banner())
+        ctx.setdefault("window_blocked", getattr(app.state, "fenetre_impossible", None))
         if not upd.dev and not app.state.update_notice:
             app.state.update_notice = upd.failure_notice()
         if app.state.update_notice and not ctx.get("msg"):
