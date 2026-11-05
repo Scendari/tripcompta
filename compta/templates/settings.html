@@ -6,13 +6,14 @@
 </div><a class="btn ghost small" href="/">← Mes voyages</a></div>
 
 <div class="settings">
-  <a class="card setting" href="/reglages/donnees">
+  {# le chemin complet au survol (et sur la page « Où sont mes voyages ») ; ici, sa fin, sur une ligne #}
+  {% set parts = data_dir.parts %}
+  {% set short = ('…/' ~ parts[-2] ~ '/' ~ parts[-1]) if parts|length > 3 else data_dir|string %}
+  <a class="card setting" href="/reglages/donnees" title="{{ data_dir }}">
     <span class="setting-ico" aria-hidden="true">📁</span>
     <span class="setting-body">
       <b>Où sont mes voyages</b>
-      <span class="setting-state"><span class="break">{{ data_dir }}</span>
-          {% if dossier.saved %} · enregistré automatiquement {{ 'le' if '/' in dossier.saved else 'à' }} {{ dossier.saved }}{% endif %}
-      </span>
+      <span class="setting-state one-line">{{ short }}{% if dossier.saved %} · enregistré automatiquement {{ 'le' if '/' in dossier.saved else 'à' }} {{ dossier.saved }}{% endif %}</span>
       <span class="setting-hint">Les ranger dans un autre dossier, par exemple un dossier Cloud (un seul ordinateur à la fois).</span>
     </span>
     <span class="setting-go">{{ 'Changer' if source in ('defaut', 'choisi') else 'Voir' }} ›</span>
