@@ -388,7 +388,10 @@ class Coffre:
                 pass
         for name in (DB, f"{DB}-journal", f"{DB}-wal", f"{DB}-shm", ".reception.db", ".envoi.db",
                      ".verif-conflit.db", ".base.db", ".protection.db"):
-            _unlink(self.local / name)
+            try:
+                _unlink(self.local / name)
+            except OSError:                      # Windows : encore ouvert par un autre programme (l'IA) ; au
+                pass                             # prochain verrouillage ou démarrage
         for d in (self.local_receipts, self.local / ".vignettes", self.local / ".verrouille"):
             shutil.rmtree(d, ignore_errors=True)
 
