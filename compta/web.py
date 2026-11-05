@@ -670,7 +670,10 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     @app.get("/ping")
     def ping():
         """Sert à reconnaître Trip Compta (script de redémarrage) et à recharger l'onglet après un redémarrage."""
-        return {"app": "tripcompta", "boot": boot_id, "version": upd.version}
+        out = {"app": "tripcompta", "boot": boot_id, "version": upd.version}
+        if getattr(app.state, "fenetre_vue", None):          # la vraie fenêtre a affiché sa 1re page
+            out["fenetre"] = app.state.fenetre_vue
+        return out
 
     # ------------------------------------------------------------------ à propos, mises à jour
     def _about(request, **ctx):

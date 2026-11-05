@@ -62,6 +62,13 @@ jobs:
         run: |
           V="$(python -c 'from compta import __version__; print(__version__)')-dev"
           python build_tools/smoke.py "${{ matrix.exe }}" "$V"
+      - name: "La vraie fenêtre (Mac : WebKit ; Windows : WebView2 + .NET), en mode discret"
+        if: runner.os != 'Linux'
+        shell: bash
+        run: |
+          V="$(python -c 'from compta import __version__; print(__version__)')-dev"
+          if [ -n "${TRIPCOMPTA_RELEASE:-}" ] || [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then V="${GITHUB_REF_NAME#v}"; fi
+          python build_tools/smoke.py "${{ matrix.exe }}" "$V" --fenetre
       - name: "Installeur Windows (Inno Setup) : installation, mise à jour silencieuse, désinstallation, pour de vrai"
         if: runner.os == 'Windows'
         shell: pwsh
