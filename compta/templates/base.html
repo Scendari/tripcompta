@@ -39,9 +39,9 @@
 {% endif %}
 {% if window_blocked == "dotnet" %}
 <div class="update-banner" role="status" id="fenetre-bloquee">
-  <span>🪟 <b>Trip Compta s'est ouvert sans sa fenêtre habituelle</b> (dans Edge ou ton navigateur) : Windows a bloqué sa fenêtre, parce que le fichier
-  téléchargé n'a pas été « débloqué ». Tout marche quand même ici. Pour avoir la fenêtre : arrête Trip Compta, fais un
-  clic droit sur <b>TripCompta-windows.zip</b> → Propriétés → coche <b>Débloquer</b> → OK, puis extrais-le de nouveau. Plus simple : installe Trip Compta avec <b>TripCompta-windows-setup.exe</b> (rien à débloquer).</span>
+  <span>🪟 <b>Trip Compta s'est ouvert sans sa fenêtre habituelle</b> (dans Edge ou ton navigateur) : Windows a refusé de
+  charger un de ses composants (.NET). Tout marche quand même ici. Pour retrouver la fenêtre : arrête Trip Compta et
+  réinstalle-le avec <b>TripCompta-windows-setup.exe</b>.</span>
 </div>
 {% elif window_blocked %}
 <div class="update-banner" role="status" id="fenetre-bloquee">

@@ -67,10 +67,6 @@ Il utilise WebView2, le moteur d'Edge, présent dans Windows 10 et 11 ; s'il man
 Les mises à jour s'installent ensuite toutes seules, en un clic (**ℹ️ À propos**). Pour le désinstaller :
 **Paramètres → Applications installées → Trip Compta** ; tes voyages (dossier **Documents\TripCompta**) restent.
 
-**Sans installation** (clé USB…) : `TripCompta-windows.zip`. Avant de l'extraire : clic droit sur le fichier →
-**Propriétés** → coche **Débloquer** → **OK** (sinon Windows bloque la fenêtre de Trip Compta, qui s'ouvre alors
-dans le navigateur). Extrais-le dans un dossier à toi, puis double-clique sur **TripCompta.exe**.
-
 ---
 
 ## Linux

@@ -474,7 +474,7 @@ def open_app_window(url: str) -> str:
 
 def _browser_instead(app, base: str, th: threading.Thread, why: str) -> None:
     """La fenêtre ne peut pas s'ouvrir sur ce PC : Trip Compta marche quand même, dans le navigateur. Cause la plus
-    fréquente sous Windows : le zip téléchargé n'a pas été « débloqué » avant l'extraction, et .NET refuse alors de
+    fréquente sous Windows (avant l'installeur) : un zip téléchargé non « débloqué », et .NET refuse alors de
     charger Python.Runtime.dll ; la page d'accueil explique comment faire (app.state.fenetre_impossible)."""
     import traceback
     print(f"fenêtre impossible ({why}) : ouverture dans le navigateur", flush=True)

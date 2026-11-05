@@ -55,7 +55,7 @@ Pour essayer en local : `APPLE_SIGN_IDENTITY="Developer ID Application: …" pyt
 
 ## Windows : les options (rien n'est mis en place sans accord)
 
-L'installeur (`TripCompta-windows-setup.exe`) règle déjà le blocage « Débloquer » du .zip ; seul reste
+L'installeur (`TripCompta-windows-setup.exe`) évite déjà tout blocage des fichiers installés ; seul reste
 l'avertissement SmartScreen au premier lancement de l'installeur. Pour le supprimer, il faut signer l'installeur
 (et `TripCompta.exe`) avec un certificat reconnu par Windows :
 

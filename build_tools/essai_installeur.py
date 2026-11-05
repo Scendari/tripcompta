@@ -100,14 +100,16 @@ def main():
     port2 = free_port()
     U.write_relaunch(work, port2, ["--navigateur"])
     old = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(4)"])      # « l'appli qui se ferme »
-    cmd = U.installer_command(setup, work, exe, old.pid)
-    check(f"/DIR={inst}" in cmd, "mise à jour au même endroit")
+    cmd = U.installer_command(setup, work, exe, old.pid)          # sans /DIR : l'installeur reprend « inst »
+    before = exe.stat().st_mtime
     t0 = time.time()
     subprocess.Popen(cmd, env=env)
     check(wait_ping(port2, version, 180), "après la mise à jour, Trip Compta est relancé à la même adresse")
     check(old.poll() is not None and time.time() - t0 >= 3.5, "l'installeur a attendu la fermeture de l'ancienne")
     check(not (work / U.RELAUNCH).exists(), "options de relance lues (et effacées)")
     check(not (work / "echec.txt").exists(), "pas d'échec signalé")
+    check(exe.stat().st_mtime != before or (inst / "unins000.dat").stat().st_mtime > t0 - 1,
+          "mise à jour installée au même endroit que la première installation")
     quit_app(port2)
     time.sleep(2)
 
