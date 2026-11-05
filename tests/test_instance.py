@@ -28,7 +28,8 @@ def ping(port):
 
 
 def env_for(tmp_path, **extra):
-    env = dict(os.environ, TRIPCOMPTA_CONFIG=str(tmp_path / "conf" / "reglages.json"), TRIPCOMPTA_NO_UPDATE_CHECK="1")
+    env = dict(os.environ, TRIPCOMPTA_CONFIG=str(tmp_path / "conf" / "reglages.json"), TRIPCOMPTA_NO_UPDATE_CHECK="1",
+               PYTHONIOENCODING="utf-8")   # sortie lue en UTF-8 quel que soit le réglage du poste
     env.pop("TRIPCOMPTA_DATA_DIR", None)
     env.pop("TRIPCOMPTA_RESTARTED", None)
     env.pop("TRIPCOMPTA_PORT_WAIT", None)
@@ -39,7 +40,7 @@ def env_for(tmp_path, **extra):
 def launch(tmp_path, port, data="voyages", **extra):
     return subprocess.Popen([sys.executable, "-u", str(ROOT / "run.py"), "--no-browser", "--data-dir",
                              str(tmp_path / data), "--port", str(port)], env=env_for(tmp_path, **extra),
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
 
 
 def wait_ping(port, timeout=20):
