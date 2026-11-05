@@ -1,14 +1,18 @@
 """Mises à jour : savoir s'il y a une nouvelle version, puis l'installer en un clic.
 
 Les versions publiées sont les « Releases » GitHub du dépôt public. Chacune contient un fichier par système
-(TripCompta-mac-arm64.zip, TripCompta-mac-intel.zip, TripCompta-windows.zip, TripCompta-linux.tar.gz) et
+(TripCompta-mac-arm64.zip, TripCompta-mac-intel.zip, TripCompta-windows-setup.exe, TripCompta-linux.tar.gz ; et
+TripCompta-windows.zip, version sans installation, pour les versions 1.3 qui se mettent à jour avec) et
 SHA256SUMS.txt (l'empreinte de chaque fichier, pour vérifier que le téléchargement est intact).
 
 - La vérification se fait au plus une fois par jour, en arrière-plan ; hors ligne ou en cas d'erreur : rien.
 - Une version de développement ne se met jamais à jour toute seule.
-- L'installation : sauvegarde de la base, téléchargement, contrôle de l'empreinte, puis un petit script (sh ou
-  PowerShell) attend que l'application soit fermée, la remplace, la relance et vérifie qu'elle répond ; sinon il
-  remet l'ancienne. Les données (dossier TripCompta) ne sont jamais touchées.
+- L'installation : sauvegarde de la base, téléchargement, contrôle de l'empreinte, puis
+  - Mac, Linux : un petit script (remplacer.sh) attend que l'application soit fermée, la remplace, la relance et
+    vérifie qu'elle répond ; sinon il remet l'ancienne ;
+  - Windows : l'installeur, en silencieux (build_tools/windows/TripCompta.iss), attend que l'application soit
+    fermée, installe, relance ; s'il échoue, il remet tout en place et relance l'ancienne.
+  Les données (dossier TripCompta) ne sont jamais touchées.
 """
 from __future__ import annotations
 
@@ -53,7 +57,7 @@ def asset_name(system: str | None = None, machine: str | None = None) -> str | N
     if system == "darwin":
         return "TripCompta-mac-arm64.zip" if machine in ("arm64", "aarch64") else "TripCompta-mac-intel.zip"
     if system == "win32":
-        return "TripCompta-windows.zip" if machine in ("amd64", "x86_64", "") else None
+        return "TripCompta-windows-setup.exe" if machine in ("amd64", "x86_64", "") else None
     if system.startswith("linux"):
         return "TripCompta-linux.tar.gz" if machine in ("x86_64", "amd64") else None
     return None
@@ -182,6 +186,8 @@ class Updater:
         if loc is None:
             return False, "L'application ne tourne pas depuis une version installée."
         target, _ = loc
+        if sys.platform == "win32":
+            return True, ""                      # l'installeur installe pour l'utilisateur (pas de droits admin)
         if "/AppTranslocation/" in target.as_posix():  # Mac : app ouverte depuis Téléchargements, isolée par macOS
             return False, ("Trip Compta tourne depuis le dossier où tu l'as téléchargée : macOS l'empêche de se "
                            "remplacer. Glisse-la dans le dossier Applications, puis relance-la.")
@@ -218,6 +224,13 @@ class Updater:
             if sums.get(name) != got:
                 raise UpdateError("Le fichier téléchargé est abîmé (son empreinte ne correspond pas). "
                                   "Rien n'a été changé : réessaie plus tard.")
+            if name.endswith(".exe"):            # Windows : l'installeur fait le reste (et relance)
+                self.job["step"] = "redemarrage"
+                (work / PENDING).write_text(info["version"], encoding="utf-8")
+                write_relaunch(work, port, app_args)
+                (launch or launch_installer)(installer=archive, work=work, current=target / exe_rel)
+                quit_app()
+                return
             self.job["step"] = "preparation"
             out = work / "nouvelle"
             extract(archive, out)
@@ -395,20 +408,51 @@ def clean_args(argv: list[str]) -> list[str]:
     return out
 
 
+RELAUNCH = "relance.json"
+
+
+def write_relaunch(work: Path, port: int, app_args: list[str]) -> None:
+    """Pour l'installeur Windows : comment relancer (lu par « TripCompta.exe --apres-maj », voir relaunch_args)."""
+    (work / RELAUNCH).write_text(json.dumps({"port": port, "args": app_args}), encoding="utf-8")
+
+
+def relaunch_args(work: Path | None = None) -> list[str]:
+    """« --apres-maj » (relancé par l'installeur) : les options d'avant la mise à jour, à la même adresse, sans
+    rouvrir d'onglet (la page ouverte se recharge seule)."""
+    f = (work or work_dir()) / RELAUNCH
+    try:
+        data = json.loads(f.read_text(encoding="utf-8"))
+        f.unlink()
+    except (OSError, ValueError):
+        return ["--no-browser"]
+    args = [str(a) for a in data.get("args") or []]
+    if data.get("port"):
+        args += ["--port", str(int(data["port"]))]
+    return args + ["--no-browser"]
+
+
+def installer_command(installer: Path, work: Path, current: Path, pid: int) -> list[str]:
+    """Installée au même endroit que la version qui tourne (installée, ou dépliée d'un .zip : ses raccourcis restent
+    bons), si Trip Compta peut y écrire ; sinon à l'endroit habituel (%LOCALAPPDATA%\\Programs\\TripCompta)."""
+    here = [f"/DIR={current.parent}"] if os.access(current.parent, os.W_OK) else []
+    return [str(installer), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-",
+            f"/LOG={work / 'installation.log'}", f"/ATTENDRE={pid}", f"/ECHEC={work / 'echec.txt'}",
+            f"/ANCIEN={current}", *here]
+
+
+def launch_installer(installer: Path, work: Path, current: Path, pid: int | None = None):
+    """Windows : lance l'installeur en silencieux, détaché (il attend que Trip Compta soit fermé)."""
+    flags = 0x00000008 | 0x00000200 | 0x08000000   # DETACHED_PROCESS | NEW_PROCESS_GROUP | NO_WINDOW
+    return subprocess.Popen(installer_command(installer, work, current, pid or os.getpid()),
+                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            creationflags=flags, close_fds=True)
+
+
 def launch_script(target: Path, new: Path, exe_rel: str, port: int, version: str, work: Path, app_args: list[str],
-                  pid: int | None = None, system: str | None = None):
-    """Lance le script de remplacement, détaché : il survit à la fermeture de l'application."""
-    system = system or sys.platform
+                  pid: int | None = None):
+    """Mac, Linux : lance le script de remplacement, détaché : il survit à la fermeture de l'application."""
     pid = pid or os.getpid()
     log = open(work / "script.log", "ab")
-    if system == "win32":
-        script = work / "remplacer.ps1"
-        shutil.copy2(SCRIPTS / "remplacer.ps1", script)
-        cmd = ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File",
-               str(script), str(pid), str(target), str(new), exe_rel, str(port), version, str(work)] + app_args
-        flags = 0x00000008 | 0x00000200 | 0x08000000   # DETACHED_PROCESS | NEW_PROCESS_GROUP | NO_WINDOW
-        return subprocess.Popen(cmd, stdout=log, stderr=log, stdin=subprocess.DEVNULL, creationflags=flags,
-                                close_fds=True)
     script = work / "remplacer.sh"
     shutil.copy2(SCRIPTS / "remplacer.sh", script)
     cmd = ["/bin/sh", str(script), str(pid), str(target), str(new), exe_rel, str(port), version, str(work)] + app_args

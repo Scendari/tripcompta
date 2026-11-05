@@ -11,6 +11,8 @@ on:
       - "compta/crypto.py"
       - "compta/coffre.py"
       - "compta/dossier.py"
+      - "compta/updater.py"
+      - "run.py"
       - ".github/workflows/fabrication.yml"
   workflow_dispatch:
 
@@ -60,3 +62,11 @@ jobs:
         run: |
           V="$(python -c 'from compta import __version__; print(__version__)')-dev"
           python build_tools/smoke.py "${{ matrix.exe }}" "$V"
+      - name: "Installeur Windows (Inno Setup) : installation, mise à jour silencieuse, désinstallation, pour de vrai"
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+          $V = "$(python -c 'from compta import __version__; print(__version__)')-dev"
+          python build_tools/installeur_windows.py $V
+          python build_tools/essai_installeur.py dist/TripCompta-windows-setup.exe $V

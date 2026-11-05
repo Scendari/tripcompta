@@ -1,6 +1,6 @@
-"""Script de remplacement (remplacer.sh / remplacer.ps1), de bout en bout, avec de fausses applications :
-un petit serveur qui répond sur /ping avec sa version. Tourne sur Mac et Linux (sh) et sous Windows (PowerShell) :
-GitHub Actions le lance sur les trois systèmes avant de fabriquer l'application."""
+"""Script de remplacement (remplacer.sh, Mac et Linux), de bout en bout, avec de fausses applications :
+un petit serveur qui répond sur /ping avec sa version. Windows : c'est l'installeur qui met à jour (voir
+build_tools/essai_installeur.py, lancé par GitHub Actions)."""
 import json
 import os
 import socket
@@ -12,6 +12,8 @@ import urllib.request
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="Windows : mise à jour par l'installeur")
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "compta" / "scripts"
 WIN = sys.platform == "win32"

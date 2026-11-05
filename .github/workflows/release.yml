@@ -3,7 +3,7 @@
 #   git tag -a v1.2.0 -m "Les nouveautés, une par ligne"     (v1.2.0-beta1 : version d'essai, non proposée)
 #   git push origin v1.2.0
 #
-# 1. Les tests (rien n'est publié s'ils échouent) ; 2. les quatre applications ; 3. la Release GitHub, avec
+# 1. Les tests (rien n'est publié s'ils échouent) ; 2. les applications (Windows : installeur et .zip) ; 3. la Release GitHub, avec
 # SHA256SUMS.txt. Les applications déjà installées proposent ensuite la mise à jour toutes seules.
 name: Publier une version
 
@@ -113,6 +113,22 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: Compress-Archive -Path "dist/TripCompta" -DestinationPath "${{ matrix.asset }}"
+      - name: Installeur Windows (Inno Setup), essayé pour de vrai
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+          $V = "${env:GITHUB_REF_NAME}".TrimStart("v")
+          python build_tools/installeur_windows.py $V
+          python build_tools/essai_installeur.py dist/TripCompta-windows-setup.exe $V
+          Copy-Item dist/TripCompta-windows-setup.exe TripCompta-windows-setup.exe
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: TripCompta-windows-setup.exe
+          path: TripCompta-windows-setup.exe
+          if-no-files-found: error
+          retention-days: 7
       - name: Emballer (Linux)
         if: runner.os == 'Linux'
         run: tar -czf "${{ matrix.asset }}" -C dist "TripCompta"
@@ -138,7 +154,7 @@ jobs:
         run: |
           sha256sum TripCompta-* > SHA256SUMS.txt
           cat SHA256SUMS.txt
-          test "$(ls TripCompta-* | wc -l)" -eq 4
+          test "$(ls TripCompta-* | wc -l)" -eq 5      # Mac ×2, Windows (installeur + .zip sans installation), Linux
       - name: Créer la Release
         env:
           GH_TOKEN: ${{ github.token }}
