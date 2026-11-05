@@ -423,6 +423,55 @@ def _mac_shortcuts():
     AppHelper.callAfter(add)
 
 
+def edge_path(reg=None, exists=os.path.exists, env=None) -> str | None:
+    """Windows : msedge.exe (inscrit dans « App Paths », sinon les dossiers habituels). None s'il est absent (Edge
+    est désinstallable dans l'Union européenne). reg, exists, env : pour les essais."""
+    env = os.environ if env is None else env
+    found = []
+    if reg is None:
+        def reg(root_name, key):
+            import winreg
+            root = getattr(winreg, root_name)
+            with winreg.OpenKey(root, key) as k:
+                return winreg.QueryValue(k, None)
+    for root in ("HKEY_CURRENT_USER", "HKEY_LOCAL_MACHINE"):
+        try:
+            found.append(reg(root, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe"))
+        except Exception:
+            pass
+    for var in ("ProgramFiles(x86)", "ProgramFiles", "LOCALAPPDATA"):
+        if env.get(var):
+            found.append(os.path.join(env[var], "Microsoft", "Edge", "Application", "msedge.exe"))
+    for p in found:
+        p = (p or "").strip().strip('"')
+        if p and exists(p):
+            return p
+    return None
+
+
+def open_app_window(url: str) -> str:
+    """Repli quand la vraie fenêtre est impossible : Windows → Edge « en mode application » (une fenêtre sans barre
+    d'adresse ni onglets, presque comme la vraie) ; sinon, ou sans Edge → le navigateur par défaut. Renvoie
+    « edge » ou « navigateur »."""
+    if sys.platform == "win32":
+        edge = edge_path()
+        if edge:
+            import subprocess
+            try:
+                subprocess.Popen([edge, f"--app={url}"], close_fds=True,
+                                 creationflags=0x00000008 | 0x00000200)   # DETACHED_PROCESS | NEW_PROCESS_GROUP
+                return "edge"
+            except OSError:
+                pass
+        try:
+            os.startfile(url)                    # le navigateur par défaut, sans passer par une console
+            return "navigateur"
+        except OSError:
+            pass
+    webbrowser.open(url)
+    return "navigateur"
+
+
 def _browser_instead(app, base: str, th: threading.Thread, why: str) -> None:
     """La fenêtre ne peut pas s'ouvrir sur ce PC : Trip Compta marche quand même, dans le navigateur. Cause la plus
     fréquente sous Windows : le zip téléchargé n'a pas été « débloqué » avant l'extraction, et .NET refuse alors de
@@ -433,7 +482,7 @@ def _browser_instead(app, base: str, th: threading.Thread, why: str) -> None:
     app.state.fenetre_impossible = why
     app.state.fenetres = None
     if not DISCRETE:
-        webbrowser.open(base)
+        app.state.fenetre_repli = open_app_window(base)
     th.join()                                  # « Arrêter » termine le processus
 
 

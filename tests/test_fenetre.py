@@ -282,7 +282,7 @@ def test_window_impossible_falls_back_to_browser(tmp_path, monkeypatch):
     monkeypatch.setattr(fenetre, "_win_hooks", boom)              # Windows : .NET refuse de se charger
     monkeypatch.setattr(fenetre, "DISCRETE", False)
     opened = []
-    monkeypatch.setattr(fenetre.webbrowser, "open", opened.append)
+    monkeypatch.setattr(fenetre, "open_app_window", lambda u: opened.append(u) or "edge")   # Windows : Edge --app
     app = create_app(tmp_path / "d")
     with socket.socket() as so:
         so.bind(("127.0.0.1", 0))
@@ -316,3 +316,32 @@ def test_ping_tells_what_the_real_window_shows(tmp_path):
     assert "fenetre" not in c.get("/ping").json()
     app.state.fenetre_vue = {"titre": "Trip Compta", "moteur": "WebView2"}
     assert c.get("/ping").json()["fenetre"] == {"titre": "Trip Compta", "moteur": "WebView2"}
+
+
+def test_fallback_opens_edge_app_window(monkeypatch):
+    """Repli Windows : Edge « en mode application » (fenêtre sans barre d'adresse), trouvé dans « App Paths » ou
+    les dossiers habituels ; sans Edge (désinstallable dans l'UE) : le navigateur par défaut."""
+    reg = {("HKEY_LOCAL_MACHINE", r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe"):
+           r'"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"'}
+
+    def fake_reg(root, key):
+        return reg[(root, key)]
+    there = {r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"}
+    assert fenetre.edge_path(reg=fake_reg, exists=there.__contains__, env={}) == next(iter(there))
+    # pas dans le registre : dossier habituel
+    env = {"ProgramFiles": r"C:\PF"}
+    import os
+    p = os.path.join(r"C:\PF", "Microsoft", "Edge", "Application", "msedge.exe")
+    assert fenetre.edge_path(reg=lambda *a: (_ for _ in ()).throw(OSError()), exists={p}.__contains__, env=env) == p
+    assert fenetre.edge_path(reg=lambda *a: (_ for _ in ()).throw(OSError()), exists=lambda x: False, env=env) is None
+
+    started, opened = [], []
+    import subprocess
+    monkeypatch.setattr(fenetre.sys, "platform", "win32")
+    monkeypatch.setattr(fenetre, "edge_path", lambda: r"C:\Edge\msedge.exe")
+    monkeypatch.setattr(subprocess, "Popen", lambda cmd, **k: started.append(cmd))
+    assert fenetre.open_app_window("http://127.0.0.1:8765/") == "edge"
+    assert started == [[r"C:\Edge\msedge.exe", "--app=http://127.0.0.1:8765/"]]
+    monkeypatch.setattr(fenetre, "edge_path", lambda: None)
+    monkeypatch.setattr(fenetre.os, "startfile", lambda u: opened.append(u), raising=False)
+    assert fenetre.open_app_window("http://127.0.0.1:8765/") == "navigateur" and opened == ["http://127.0.0.1:8765/"]
