@@ -126,14 +126,14 @@ def default_data_dir() -> Path:
 
 
 class Database:
-    """`data_dir` : où l'app travaille. `home` (dossier synchronisé, voir cloud.py) : là où sont rangés la version
-    publiée de la base et les justificatifs ; la base, l'historique « Annuler », les sauvegardes et les vignettes
-    restent alors dans `data_dir`, sur l'ordinateur. Sans `home`, tout est dans `data_dir` (comme avant)."""
+    """`data_dir` : où l'app travaille (le dossier des voyages). `home` (voyages protégés, voir coffre.py) : le
+    dossier des voyages, quand `data_dir` est la copie de travail déchiffrée sur cet ordinateur. Sans `home`, tout est
+    dans `data_dir`."""
 
     def __init__(self, data_dir: Path | str | None = None, app_version: str | None = None,
                  home: Path | str | None = None, receipts_in_home: bool = True):
         """receipts_in_home=False (dossier protégé par un mot de passe) : les justificatifs en clair restent dans
-        `data_dir`, sur l'ordinateur ; le dossier ne contient que leurs versions chiffrées (voir cloud.py)."""
+        `data_dir`, sur l'ordinateur ; le dossier ne contient que leurs versions chiffrées (voir coffre.py)."""
         from . import version as V
         self._args = (data_dir, app_version, home, receipts_in_home)
         self.dir = Path(data_dir) if data_dir else default_data_dir()

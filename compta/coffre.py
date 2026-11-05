@@ -223,6 +223,11 @@ class Coffre:
                 return "erreur"
             try:
                 cur = file_hash(self.shared_db) if self.shared_db.exists() else None
+                if cur is not None and st.get("shared") is None:
+                    # cet ordinateur n'a jamais repris la version du dossier : il la reprend d'abord (une copie de
+                    # travail d'origine inconnue est déposée à côté, jamais enregistrée par-dessus)
+                    self.pull()
+                    return "inchangé"
                 if cur is not None and cur != st.get("shared"):
                     kept = self._deposit_conflict(snap)
                     self._remember_base(snap)        # déjà gardée à côté : pas une 2e fois en reprenant le dossier
