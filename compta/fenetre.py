@@ -419,70 +419,76 @@ def _mac_shortcuts():
     AppHelper.callAfter(add)
 
 
-def edge_path(reg=None, exists=os.path.exists, env=None) -> str | None:
-    """Windows : msedge.exe (inscrit dans « App Paths », sinon les dossiers habituels). None s'il est absent (Edge
-    est désinstallable dans l'Union européenne). reg, exists, env : pour les essais."""
-    env = os.environ if env is None else env
-    found = []
+WEBVIEW2_ID = "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+# programme d'installation officiel de WebView2 (Microsoft, 2 Mo : il télécharge le reste) ; le même que l'installeur
+WEBVIEW2_URL = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+
+
+def webview2_installed(reg=None) -> bool:
+    """Windows : WebView2 (le moteur de la fenêtre) est-il installé ? Même clé que l'installeur (build_tools/windows).
+    reg(racine, clé) → version : pour les essais."""
     if reg is None:
         def reg(root_name, key):
             import winreg
-            root = getattr(winreg, root_name)
-            with winreg.OpenKey(root, key) as k:
-                return winreg.QueryValue(k, None)
-    for root in ("HKEY_CURRENT_USER", "HKEY_LOCAL_MACHINE"):
+            with winreg.OpenKey(getattr(winreg, root_name), key) as k:
+                return winreg.QueryValueEx(k, "pv")[0]
+    for root, key in (("HKEY_LOCAL_MACHINE", rf"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{WEBVIEW2_ID}"),
+                      ("HKEY_LOCAL_MACHINE", rf"SOFTWARE\Microsoft\EdgeUpdate\Clients\{WEBVIEW2_ID}"),
+                      ("HKEY_CURRENT_USER", rf"Software\Microsoft\EdgeUpdate\Clients\{WEBVIEW2_ID}")):
         try:
-            found.append(reg(root, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe"))
+            v = reg(root, key)
         except Exception:
-            pass
-    for var in ("ProgramFiles(x86)", "ProgramFiles", "LOCALAPPDATA"):
-        if env.get(var):
-            found.append(os.path.join(env[var], "Microsoft", "Edge", "Application", "msedge.exe"))
-    for p in found:
-        p = (p or "").strip().strip('"')
-        if p and exists(p):
-            return p
-    return None
+            continue
+        if v and v != "0.0.0.0":
+            return True
+    return False
 
 
-def open_app_window(url: str) -> str:
-    """Repli quand la vraie fenêtre est impossible : Windows → Edge « en mode application » (une fenêtre sans barre
-    d'adresse ni onglets, presque comme la vraie) ; sinon, ou sans Edge → le navigateur par défaut. Renvoie
-    « edge » ou « navigateur »."""
-    if DISCRETE:                               # essais : rien ne doit s'ouvrir sur l'écran de l'utilisateur
-        print(f"(essai) aurait ouvert : {url}", flush=True)
-        return "navigateur"
+def failure_message(webview2: bool) -> tuple[str, bool]:
+    """(texte, proposer d'installer WebView2 ?) quand la fenêtre ne peut pas s'ouvrir."""
+    if not webview2:
+        return ("Trip Compta a besoin de Microsoft WebView2 pour afficher sa fenêtre, et il n'est pas installé sur "
+                "cet ordinateur.\n\nVeux-tu le télécharger maintenant chez Microsoft ? Lance ensuite le fichier "
+                "téléchargé, puis rouvre Trip Compta. (Une connexion Internet est nécessaire.)", True)
+    from . import paths
+    log = paths.config_file().parent / "tripcompta.log"
+    return ("Trip Compta ne peut pas ouvrir sa fenêtre sur cet ordinateur.\n\nRéinstalle-le avec "
+            f"TripCompta-windows-setup.exe. Si ça ne suffit pas, le journal est ici :\n{log}", False)
+
+
+def _ask(text: str, offer: bool) -> bool:
+    """Le message du système (Windows : MessageBox ; Mac : alerte). True : « Oui » (télécharger WebView2)."""
+    if DISCRETE:                                  # essais : jamais de fenêtre devant l'utilisateur
+        return False
     if sys.platform == "win32":
-        edge = edge_path()
-        if edge:
-            import subprocess
-            try:
-                subprocess.Popen([edge, f"--app={url}"], close_fds=True,
-                                 creationflags=0x00000008 | 0x00000200)   # DETACHED_PROCESS | NEW_PROCESS_GROUP
-                return "edge"
-            except OSError:
-                pass
-        try:
-            os.startfile(url)                    # le navigateur par défaut, sans passer par une console
-            return "navigateur"
-        except OSError:
-            pass
-    webbrowser.open(url)
-    return "navigateur"
+        import ctypes
+        flags = (0x4 if offer else 0x0) | 0x30 | 0x10000   # MB_YESNO ou MB_OK, MB_ICONWARNING, MB_SETFOREGROUND
+        return ctypes.windll.user32.MessageBoxW(None, text, TITLE, flags) == 6     # IDYES
+    if sys.platform == "darwin":
+        import subprocess
+        subprocess.run(["osascript", "-e", f'display alert "{TITLE}" message {json.dumps(text)} as warning'],
+                       capture_output=True)
+    return False
 
 
-def _browser_instead(app, base: str, th: threading.Thread, why: str) -> None:
-    """La fenêtre ne peut pas s'ouvrir sur ce PC : Trip Compta marche quand même, dans le navigateur. Cause la plus
-    fréquente sous Windows (avant l'installeur) : un zip téléchargé non « débloqué », et .NET refuse alors de
-    charger Python.Runtime.dll ; la page d'accueil explique comment faire (app.state.fenetre_impossible)."""
+def _cannot_open(app, server, th: threading.Thread, why: str, webview2: bool = True) -> None:
+    """La fenêtre ne peut pas s'ouvrir : on le dit clairement (et on propose WebView2 s'il manque), puis Trip Compta
+    s'arrête proprement. Pas de repli dans le navigateur : il apporterait d'autres problèmes."""
     import traceback
-    print(f"fenêtre impossible ({why}) : ouverture dans le navigateur", flush=True)
+    print(f"fenêtre impossible ({why}) : arrêt", flush=True)
     traceback.print_exc()
-    app.state.fenetre_impossible = why
     app.state.fenetres = None
-    if not DISCRETE:
-        app.state.fenetre_repli = open_app_window(base)
-    th.join()                                  # « Arrêter » termine le processus
+    text, offer = failure_message(webview2)
+    if _ask(text, offer):
+        try:
+            os.startfile(WEBVIEW2_URL)
+        except Exception:
+            webbrowser.open(WEBVIEW2_URL)
+    arreter = getattr(app.state, "arreter", None)
+    if arreter:
+        arreter()
+    server.should_exit = True
+    th.join(timeout=5)
 
 
 def run(app, host: str, port: int, log_level: str = "warning", on_start=None) -> None:
@@ -507,10 +513,12 @@ def run(app, host: str, port: int, log_level: str = "warning", on_start=None) ->
             from webview.platforms import cocoa
             cocoa.BrowserView.app.setActivationPolicy_(2)     # « prohibited » : jamais au premier plan
     elif sys.platform == "win32":
+        if not webview2_installed():             # installé sans Internet sur un vieux Windows 10, par exemple
+            return _cannot_open(app, server, th, "webview2", webview2=False)
         try:
-            _win_hooks(f)                      # charge .NET (pythonnet) : peut échouer sur certains PC
+            _win_hooks(f)                      # charge .NET (pythonnet)
         except Exception:
-            return _browser_instead(app, base, th, "dotnet")
+            return _cannot_open(app, server, th, "dotnet")
         if DISCRETE:
             _win_discreet()
     f.new()
@@ -537,7 +545,8 @@ def run(app, host: str, port: int, log_level: str = "warning", on_start=None) ->
     except Exception:
         if started:
             raise
-        return _browser_instead(app, base, th, "webview")
+        return _cannot_open(app, server, th, "webview",
+                            webview2=webview2_installed() if sys.platform == "win32" else True)
     arreter()                                  # dernière fenêtre fermée : enregistre et rend la main
     server.should_exit = True
     th.join(timeout=5)
@@ -605,13 +614,18 @@ def run_early(prepare, host: str, port: int, log_level: str = "warning") -> None
     webview.settings["ALLOW_DOWNLOADS"] = True
     webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True
 
-    def fallback(why):
+    def fallback(why, webview2=True):
+        """Fenêtre impossible : message clair (WebView2 proposé s'il manque), puis arrêt propre."""
         ready.wait()
-        if "app" not in box:
+        if "server" not in box:
+            if _ask(*failure_message(webview2)):
+                os.startfile(WEBVIEW2_URL)
             raise SystemExit(1)
-        return _browser_instead(box["app"], base, box["th"], why)
+        return _cannot_open(box["app"], box["server"], box["th"], why, webview2)
+    if not webview2_installed():               # installé sans Internet sur un vieux Windows 10, par exemple
+        return fallback("webview2", webview2=False)
     try:
-        _win_hooks(f)                          # charge .NET (pythonnet) : peut échouer sur certains PC
+        _win_hooks(f)                          # charge .NET (pythonnet)
     except Exception:
         return fallback("dotnet")
     if DISCRETE:
@@ -636,7 +650,7 @@ def run_early(prepare, host: str, port: int, log_level: str = "warning") -> None
     except Exception:
         if started:
             raise
-        return fallback("webview")
+        return fallback("webview", webview2=webview2_installed())
     ready.wait(timeout=30)                     # fermée pendant « Chargement… » : laisser finir l'ouverture de la base
     if "app" in box:
         (getattr(box["app"].state, "arreter", None) or (lambda: None))()   # enregistre et rend la main

@@ -151,13 +151,6 @@ def window(exe: str, expected: str) -> int:
                         break
                 time.sleep(1)
             print("Action dans la fenêtre (contrôle d'origine) :", "ok" if ok else "ÉCHEC")
-        try:
-            with urllib.request.urlopen(base, timeout=5) as r:
-                if 'id="fenetre-bloquee"' in r.read().decode("utf-8"):
-                    print("Repli dans le navigateur : la fenêtre n'a pas pu s'ouvrir")
-                    ok = False
-        except OSError:
-            pass
         return 0 if ok else 1
     finally:
         try:

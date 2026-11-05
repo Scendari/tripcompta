@@ -261,38 +261,66 @@ def test_no_open_in_browser_anymore(tmp_path):
     assert c.post("/fenetre/navigateur").status_code in (404, 405)
 
 
-def test_window_impossible_falls_back_to_browser(tmp_path, monkeypatch):
-    """La fenêtre ne peut pas s'ouvrir (PC Windows : .NET refuse Python.Runtime.dll ; ou WebView2
-    absent) : pas de plantage, Trip Compta s'ouvre dans le navigateur et explique pourquoi."""
+def test_window_impossible_says_so_and_stops(tmp_path, monkeypatch):
+    """La fenêtre ne peut pas s'ouvrir : pas de repli dans le navigateur. Un message clair, puis arrêt propre
+    (enregistré) ; le serveur ne tourne plus."""
     import socket
     import webview
-    from fastapi.testclient import TestClient
     from compta.web import create_app
 
     def boom(*a, **k):
         raise RuntimeError("Failed to resolve Python.Runtime.Loader.Initialize")
     monkeypatch.setattr(webview, "start", boom)
     monkeypatch.setattr(fenetre, "_mac_hooks", lambda *a: None)
-    monkeypatch.setattr(fenetre, "_win_hooks", boom)              # Windows : .NET refuse de se charger
-    monkeypatch.setattr(fenetre, "DISCRETE", False)
-    opened = []
-    monkeypatch.setattr(fenetre, "open_app_window", lambda u: opened.append(u) or "edge")   # Windows : Edge --app
+    monkeypatch.setattr(fenetre, "_win_hooks", boom)
+    monkeypatch.setattr(fenetre, "webview2_installed", lambda reg=None: True)
+    asked, stopped, opened = [], [], []
+    monkeypatch.setattr(fenetre, "_ask", lambda text, offer: asked.append((text, offer)) or False)
+    monkeypatch.setattr(fenetre.webbrowser, "open", opened.append)
     app = create_app(tmp_path / "d")
+    app.state.arreter = lambda: stopped.append(1)
     with socket.socket() as so:
         so.bind(("127.0.0.1", 0))
         port = so.getsockname()[1]
-    threading.Thread(target=fenetre.run, args=(app, "127.0.0.1", port), daemon=True).start()
-    end = time.time() + 20
-    while not opened and time.time() < end:
-        time.sleep(0.1)
-    assert opened == [f"http://127.0.0.1:{port}/"]
-    with urllib.request.urlopen(opened[0], timeout=5) as r:
-        page = r.read().decode()
-    assert 'id="fenetre-bloquee"' in page and (".NET" if sys.platform == "win32" else "WebView2") in page
-    assert app.state.fenetres is None                     # un 2e lancement ouvrira un onglet, pas une fenêtre
-    app.state.fenetre_impossible = "dotnet"
-    page = TestClient(app).get("/").text
-    assert ".NET" in page and "TripCompta-windows-setup.exe" in page
+    th = threading.Thread(target=fenetre.run, args=(app, "127.0.0.1", port), daemon=True)
+    th.start()
+    th.join(30)
+    assert not th.is_alive() and stopped == [1] and opened == []
+    assert len(asked) == 1 and "ne peut pas ouvrir sa fenêtre" in asked[0][0] and asked[0][1] is False
+    assert "TripCompta-windows-setup.exe" in asked[0][0]
+    with socket.socket() as so:                                   # le serveur est arrêté
+        assert so.connect_ex(("127.0.0.1", port)) != 0
+
+
+def test_missing_webview2_offers_to_install_it(tmp_path, monkeypatch):
+    """Windows sans WebView2 (installé sans Internet sur un vieux Windows 10) : on propose de le télécharger chez
+    Microsoft (« Oui » ouvre le lien officiel), puis arrêt propre."""
+    key = "SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\" + fenetre.WEBVIEW2_ID
+
+    def reg_with(version):
+        def reg(root, k):
+            if (root, k) == ("HKEY_LOCAL_MACHINE", key):
+                return version
+            raise OSError("absent")
+        return reg
+    assert fenetre.webview2_installed(reg_with("131.0.2903.70")) is True
+    assert fenetre.webview2_installed(reg_with("0.0.0.0")) is False             # désinstallé : version « 0.0.0.0 »
+    assert fenetre.webview2_installed(reg_with(None)) is False
+    text, offer = fenetre.failure_message(webview2=False)
+    assert offer and "WebView2" in text and "connexion Internet" in text
+    started = []
+    monkeypatch.setattr(fenetre, "_ask", lambda t, o: True)                   # « Oui »
+    monkeypatch.setattr(fenetre.os, "startfile", started.append, raising=False)
+    monkeypatch.setattr(fenetre.webbrowser, "open", started.append)
+
+    class S:
+        should_exit = False
+    th = threading.Thread(target=lambda: None)
+    th.start()
+    app = type("A", (), {"state": type("St", (), {"arreter": lambda self=None: None})()})()
+    fenetre._cannot_open(app, S, th, "webview2", webview2=False)
+    assert started == [fenetre.WEBVIEW2_URL] and S.should_exit
+    assert fenetre.WEBVIEW2_URL.startswith("https://go.microsoft.com/")
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows")
@@ -310,32 +338,3 @@ def test_ping_tells_what_the_real_window_shows(tmp_path):
     assert "fenetre" not in c.get("/ping").json()
     app.state.fenetre_vue = {"titre": "Trip Compta", "moteur": "WebView2"}
     assert c.get("/ping").json()["fenetre"] == {"titre": "Trip Compta", "moteur": "WebView2"}
-
-
-def test_fallback_opens_edge_app_window(monkeypatch):
-    """Repli Windows : Edge « en mode application » (fenêtre sans barre d'adresse), trouvé dans « App Paths » ou
-    les dossiers habituels ; sans Edge (désinstallable dans l'UE) : le navigateur par défaut."""
-    reg = {("HKEY_LOCAL_MACHINE", r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe"):
-           r'"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"'}
-
-    def fake_reg(root, key):
-        return reg[(root, key)]
-    there = {r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"}
-    assert fenetre.edge_path(reg=fake_reg, exists=there.__contains__, env={}) == next(iter(there))
-    # pas dans le registre : dossier habituel
-    env = {"ProgramFiles": r"C:\PF"}
-    import os
-    p = os.path.join(r"C:\PF", "Microsoft", "Edge", "Application", "msedge.exe")
-    assert fenetre.edge_path(reg=lambda *a: (_ for _ in ()).throw(OSError()), exists={p}.__contains__, env=env) == p
-    assert fenetre.edge_path(reg=lambda *a: (_ for _ in ()).throw(OSError()), exists=lambda x: False, env=env) is None
-
-    started, opened = [], []
-    import subprocess
-    monkeypatch.setattr(fenetre.sys, "platform", "win32")
-    monkeypatch.setattr(fenetre, "edge_path", lambda: r"C:\Edge\msedge.exe")
-    monkeypatch.setattr(subprocess, "Popen", lambda cmd, **k: started.append(cmd))
-    assert fenetre.open_app_window("http://127.0.0.1:8765/") == "edge"
-    assert started == [[r"C:\Edge\msedge.exe", "--app=http://127.0.0.1:8765/"]]
-    monkeypatch.setattr(fenetre, "edge_path", lambda: None)
-    monkeypatch.setattr(fenetre.os, "startfile", lambda u: opened.append(u), raising=False)
-    assert fenetre.open_app_window("http://127.0.0.1:8765/") == "navigateur" and opened == ["http://127.0.0.1:8765/"]
