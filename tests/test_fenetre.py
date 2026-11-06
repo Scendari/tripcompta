@@ -265,7 +265,7 @@ def test_window_impossible_says_so_and_stops(tmp_path, monkeypatch):
     """La fenêtre ne peut pas s'ouvrir : pas de repli dans le navigateur. Un message clair, puis arrêt propre
     (enregistré) ; le serveur ne tourne plus."""
     import socket
-    import webview
+    webview = pytest.importorskip("webview")
     from compta.web import create_app
 
     def boom(*a, **k):
