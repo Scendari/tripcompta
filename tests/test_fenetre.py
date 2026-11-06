@@ -292,7 +292,7 @@ def test_window_impossible_says_so_and_stops(tmp_path, monkeypatch):
         assert so.connect_ex(("127.0.0.1", port)) != 0
 
 
-def test_missing_webview2_offers_to_install_it(tmp_path, monkeypatch):
+def test_missing_webview2_offers_to_install_it(tmp_path, monkeypatch, capsys):
     """Windows sans WebView2 (installé sans Internet sur un vieux Windows 10) : on propose de le télécharger chez
     Microsoft (« Oui » ouvre le lien officiel), puis arrêt propre."""
     key = "SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\" + fenetre.WEBVIEW2_ID
@@ -321,6 +321,7 @@ def test_missing_webview2_offers_to_install_it(tmp_path, monkeypatch):
     fenetre._cannot_open(app, S, th, "webview2", webview2=False)
     assert started == [fenetre.WEBVIEW2_URL] and S.should_exit
     assert fenetre.WEBVIEW2_URL.startswith("https://go.microsoft.com/")
+    assert "NoneType: None" not in capsys.readouterr().err                   # pas de trace vide dans le journal
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows")
@@ -338,3 +339,14 @@ def test_ping_tells_what_the_real_window_shows(tmp_path):
     assert "fenetre" not in c.get("/ping").json()
     app.state.fenetre_vue = {"titre": "Trip Compta", "moteur": "WebView2"}
     assert c.get("/ping").json()["fenetre"] == {"titre": "Trip Compta", "moteur": "WebView2"}
+
+
+def test_no_emoji_too_recent_for_windows_10():
+    """Windows 10 (police Segoe UI Emoji) n'affiche pas les emojis récents (🪟, U+1FA70 et au-delà) : case vide."""
+    import re
+    from pathlib import Path
+    root = Path(fenetre.__file__).parent
+    bad = [(str(f.relative_to(root)), hex(ord(ch))) for f in [*root.rglob("*.html"), *root.rglob("*.py"),
+                                                          *root.rglob("*.js"), *root.rglob("*.css")]
+           for ch in set(re.findall(r"[\U0001FA70-\U0001FAFF]", f.read_text(encoding="utf-8")))]
+    assert not bad
