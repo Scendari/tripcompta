@@ -70,7 +70,7 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - os: macos-14
+          - os: macos-15
             asset: TripCompta-mac-arm64.zip
             exe: dist/TripCompta.app/Contents/MacOS/TripCompta
           - os: macos-15-intel
@@ -124,6 +124,9 @@ jobs:
         env:
           TRIPCOMPTA_RELEASE: ${{ github.ref_name }}
         run: python build_tools/build.py
+      - name: "macOS minimal : pas plus récent que macOS 13 (sinon les Mac plus anciens ne l'ouvriraient plus)"
+        if: runner.os == 'macOS'
+        run: python build_tools/macos_minimum.py --max 13.0 dist/TripCompta.app
       - name: Vérifier qu'elle démarre
         shell: bash
         run: |
