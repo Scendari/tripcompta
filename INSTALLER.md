@@ -28,7 +28,7 @@ tout en bas, dans « Assets ».
 2. Copie-colle cette ligne, puis appuie sur Entrée :
 
    ```
-   A=$(uname -m | sed 's/x86_64/intel/'); curl -fL -o /tmp/TripCompta.zip "https://github.com/Scendari/tripcompta/releases/latest/download/TripCompta-mac-$A.zip" && ditto -x -k /tmp/TripCompta.zip /Applications && open /Applications/TripCompta.app
+   A=$(uname -m | sed 's/x86_64/intel/'); curl -fL -o /tmp/TripCompta.zip "https://github.com/Scendari/tripcompta/releases/latest/download/TripCompta-mac-$A.zip" && rm -rf /Applications/TripCompta.app && ditto -x -k /tmp/TripCompta.zip /Applications && open /Applications/TripCompta.app
    ```
 
    Elle télécharge la bonne version pour ton Mac, la range dans **Applications** et la lance.
