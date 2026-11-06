@@ -476,7 +476,8 @@ def _cannot_open(app, server, th: threading.Thread, why: str, webview2: bool = T
     s'arrête proprement. Pas de repli dans le navigateur : il apporterait d'autres problèmes."""
     import traceback
     print(f"fenêtre impossible ({why}) : arrêt", flush=True)
-    traceback.print_exc()
+    if sys.exc_info()[0] is not None:            # seulement si une erreur est en cours (sinon « NoneType: None »)
+        traceback.print_exc()
     app.state.fenetres = None
     text, offer = failure_message(webview2)
     if _ask(text, offer):
