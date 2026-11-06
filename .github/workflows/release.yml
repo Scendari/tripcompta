@@ -20,6 +20,7 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.14"
+  PYTHON_ORG_VERSION: "3.14.10"             # Mac Intel : Python de python.org (voir plus bas)
   TZ: Europe/Paris
 
 jobs:
@@ -85,10 +86,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        if: matrix.os != 'macos-15-intel'
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
           cache-dependency-path: requirements*.txt
+      # Mac Intel : le Python de GitHub y est lié à l'OpenSSL de Homebrew, fabriqué pour macOS 15 (l'app ne s'ouvrirait
+      # pas sur un Mac Intel en macOS 13 ou 14). Celui de python.org embarque son propre OpenSSL (macOS 11 et plus).
+      - name: "Python de python.org (Mac Intel)"
+        if: matrix.os == 'macos-15-intel'
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/python.pkg" "https://www.python.org/ftp/python/${PYTHON_ORG_VERSION}/python-${PYTHON_ORG_VERSION}-macos11.pkg"
+          sudo installer -pkg "$RUNNER_TEMP/python.pkg" -target /
+          /Library/Frameworks/Python.framework/Versions/${PYTHON_VERSION}/bin/python3 -m venv "$RUNNER_TEMP/venv"
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/venv/bin/python" -c "import ssl, sys; print(sys.version); print(ssl.OPENSSL_VERSION)"
       - name: Installer
         run: |
           python -m pip install --upgrade pip
