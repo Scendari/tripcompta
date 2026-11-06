@@ -7,6 +7,9 @@ fpdf2>=2.8
 Pillow>=10
 mcp>=2.3
 pypdfium2>=4
-cryptography>=43
+# Mac Intel : cryptography 49 et plus n'a plus de paquet tout fait pour Intel (il serait compilé contre l'OpenSSL de
+# Homebrew, fait pour macOS 15) ; la 48.0.1 a un paquet universel avec son propre OpenSSL (macOS 10.9 et plus)
+cryptography>=43; sys_platform != "darwin" or platform_machine != "x86_64"
+cryptography>=43,<49; sys_platform == "darwin" and platform_machine == "x86_64"
 keyring>=25
 pywebview==6.2.1; sys_platform == "darwin" or sys_platform == "win32"  # épinglé : compta/fenetre.py touche ses rouages internes (essayer toute nouvelle version : smoke.py --fenetre)
