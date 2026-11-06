@@ -110,6 +110,36 @@ class InstanceLock:
         return None
 
 
+def take_over_older(url: str, mine: str | None = None, wait: float = 15) -> bool:
+    """Une Trip Compta PLUS ANCIENNE tourne déjà (l'utilisateur vient de la remplacer par une nouvelle version sans
+    la quitter) : on lui demande de s'arrêter proprement (elle enregistre), puis c'est la nouvelle qui démarre.
+    Sinon (même version, ou plus récente) : False, on remet simplement sa fenêtre devant."""
+    import json
+    import urllib.request
+    from compta import version as V
+    mine = mine or V.build_info()["version"]
+    try:
+        with urllib.request.urlopen(url + "ping", timeout=2) as r:
+            theirs = json.load(r).get("version")
+    except Exception:
+        return False
+    if not V.is_newer(mine, theirs):
+        return False
+    print(f"Trip Compta {theirs} est encore ouvert : arrêt propre, puis ouverture de la {mine}")
+    try:
+        urllib.request.urlopen(urllib.request.Request(url + "quitter", data=b"", method="POST"), timeout=5).close()
+    except Exception:
+        pass
+    end = time.time() + wait
+    while time.time() < end:
+        try:
+            urllib.request.urlopen(url + "ping", timeout=0.5).close()
+        except Exception:
+            return True                            # elle ne répond plus : arrêtée
+        time.sleep(0.2)
+    return False
+
+
 def show_running_window(url: str) -> bool:
     """Windows : un 2e lancement demande à Trip Compta déjà ouvert de remettre sa fenêtre devant (False si celui-ci
     tourne dans le navigateur)."""
@@ -191,18 +221,22 @@ def main():
     # après un redémarrage (mise à jour, changement de dossier…), l'ancienne n'a peut-être pas encore rendu la main
     if lock is not None and not lock.acquire(wait=30 if (restarted or os.environ.get("TRIPCOMPTA_PORT_WAIT")) else 0):
         url = lock.running_url()
-        if url:
-            print(f"Trip Compta est déjà ouvert : {url}")
-            if not (window and show_running_window(url)) and not a.no_browser and not fenetre.DISCRETE:
-                webbrowser.open(url)           # (essais discrets : rien sur l'écran de l'utilisateur)
-        else:
-            print("Trip Compta est déjà en train de s'ouvrir sur ces voyages.")
-        return
+        # une version plus ancienne encore ouverte (remplacée sans être quittée) : elle s'arrête, on prend sa place
+        if not (url and take_over_older(url) and lock.acquire(wait=20)):
+            if url:
+                print(f"Trip Compta est déjà ouvert : {url}")
+                if not (window and show_running_window(url)) and not a.no_browser and not fenetre.DISCRETE:
+                    webbrowser.open(url)       # (essais discrets : rien sur l'écran de l'utilisateur)
+            else:
+                print("Trip Compta est déjà en train de s'ouvrir sur ces voyages.")
+            return
     main.lock = lock                           # garder le verrou jusqu'à la fin du programme
 
     # une version plus ancienne (sans verrou) déjà ouverte sur le port habituel ? on montre celle-là
     if (a.port == 8765 and not a.data_dir and not restarted and not os.environ.get("TRIPCOMPTA_DATA_DIR")):
         url = running_instance()
+        if url and take_over_older(url):
+            url = None                             # ancienne version arrêtée : on continue, à sa place
         if url:
             print(f"Trip Compta est déjà ouvert : {url}")
             if window and show_running_window(url):

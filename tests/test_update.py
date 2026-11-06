@@ -214,6 +214,7 @@ def test_newer_database_page(tmp_path):
     assert r.status_code == 409
     assert "trop ancienne pour tes données" in r.text and "Trip Compta 2.0.0" in r.text and "Rien n'a été modifié" in r.text
     assert "Télécharger la dernière version" in r.text and U.RELEASES_PAGE in r.text
+    assert "ferme cette fenêtre" in r.text                     # sinon l'ancienne reste ouverte, sans qu'on le voie
     assert c.get("/v/1/depenses").status_code == 409
     assert c.get("/ping").json()["version"] == "1.0.0"
     assert stored_version(d / "compta.db") == "2.0.0"

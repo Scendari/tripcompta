@@ -36,7 +36,8 @@ tout en bas, dans « Assets ».
 ### Ou bien à la main
 
 1. Télécharge le fichier `.zip` (voir le tableau plus haut) et double-clique dessus : **TripCompta** apparaît.
-2. Glisse **TripCompta** dans le dossier **Applications**.
+2. Si Trip Compta est ouvert, quitte-le (**⌘Q**). Puis glisse **TripCompta** dans le dossier **Applications**
+   (s'il y est déjà : **Remplacer**).
 3. Double-clique sur **TripCompta**. La première fois, macOS affiche :
    *« TripCompta » n'a pas pu être ouvert car Apple ne peut pas vérifier qu'il ne contient pas de logiciel
    malveillant.* C'est normal : l'application n'est pas enregistrée (payante) chez Apple. Clique sur **Terminé**.
@@ -44,6 +45,9 @@ tout en bas, dans « Assets ».
    *« TripCompta » a été bloqué…* et clique sur **Ouvrir quand même**, puis confirme avec ton mot de passe.
 
 Ces étapes 3 et 4 ne sont à faire **qu'une fois** : les mises à jour faites par l'application ne redemandent rien.
+
+Oublié de quitter l'ancienne version avant de la remplacer ? Depuis la 1.5.0, la nouvelle s'en charge : à son
+ouverture, elle ferme proprement l'ancienne (tout est enregistré) et prend sa place.
 
 Au premier lancement, macOS peut demander si Trip Compta peut accéder au dossier **Documents** : réponds
 **Autoriser** (c'est là que sont rangées tes données).
