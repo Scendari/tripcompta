@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Sauvegardes · Trip Compta{% endblock %}
+{% block page %}
+<div class="page-head"><div class="grow">
+  <h1>🛟 Sauvegardes</h1>
+  <p class="lead">Chaque jour où tu ouvres Trip Compta, une copie de tous tes voyages est mise de côté. Si quelque chose s'est mal passé (une suppression, un import raté, une erreur vue trop tard), tu peux revenir à l'une d'elles.</p>
+</div><a class="btn ghost small" href="/reglages">← Réglages</a></div>
+
+<div style="max-width:860px">
+<div class="card backup-now">
+  <b>Aujourd'hui, tes voyages contiennent :</b>
+  {{ now.trips }} voyage{{ 's' if now.trips > 1 }} · {{ now.expenses }} dépense{{ 's' if now.expenses > 1 }} · {{ now.receipts }} justificatif{{ 's' if now.receipts > 1 }}
+  <p class="hint" style="margin:.35rem 0 0">Pour annuler seulement ta dernière action, le bouton « Défaire » suffit : il apparaît juste après chaque modification. Cette page sert à remonter plus loin.</p>
+</div>
+
+{% if backups %}
+<h2 class="sec-sep">Revenir à une sauvegarde</h2>
+<ul class="backup-list" id="sauvegardes">
+  {% for b in backups %}
+  <li class="card backup{% if not b.readable %} unreadable{% endif %}" data-kind="{{ b.kind }}">
+    <div class="grow">
+      <b>{{ b.title }}</b>
+      {% if b.ago %}<span class="muted small">· faite {{ b.ago }}</span>{% endif %}
+      {% if b.readable %}
+      <div class="backup-what">{{ b.trips|length }} voyage{{ 's' if b.trips|length > 1 }}{% if b.trips %} ({{ b.trips[:4]|join(', ') }}{% if b.trips|length > 4 %}…{% endif %}){% endif %} · {{ b.expenses }} dépense{{ 's' if b.expenses > 1 }} · {{ b.receipts }} justificatif{{ 's' if b.receipts > 1 }}</div>
+      {% if b.missing_receipts %}<div class="backup-warn">⚠️ {{ b.missing_receipts }} justificatif{{ 's' if b.missing_receipts > 1 }} de cette sauvegarde {{ 'sont introuvables' if b.missing_receipts > 1 else 'est introuvable' }} : {{ 'ils seront' if b.missing_receipts > 1 else 'il sera' }} à rajouter.</div>{% endif %}
+      {% else %}
+      <div class="backup-warn">⚠️ Cette sauvegarde est illisible : elle ne peut pas être reprise.</div>
+      {% endif %}
+    </div>
+    {% if b.readable %}
+    <form method="post" action="/reglages/sauvegardes/revenir">
+      <input type="hidden" name="nom" value="{{ b.name }}">
+      <button class="btn small" data-confirm="Revenir à cette sauvegarde{% if b.ago %} (faite {{ b.ago }}){% endif %} ? Tout ce qui a été saisi depuis disparaîtra de tes voyages. L'état actuel est gardé : tu pourras défaire ce retour.">Revenir à cette sauvegarde</button>
+    </form>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="card">Aucune sauvegarde pour l'instant : la première sera faite à la prochaine ouverture de Trip Compta.</p>
+{% endif %}
+
+<h2 class="sec-sep">Bon à savoir</h2>
+<ul class="backup-notes">
+  <li>Revenir à une sauvegarde remplace <b>tous</b> les voyages par ce qu'ils étaient ce jour-là. Pour un seul voyage, exporte-le d'abord (« Exporter le voyage »), reviens à la sauvegarde, puis réimporte-le.</li>
+  <li>Les {{ keep }} dernières sauvegardes quotidiennes sont gardées ; les plus anciennes sont effacées au fur et à mesure.</li>
+  {% if complete %}
+  <li>Elles contiennent aussi les <b>justificatifs</b>, et sont rangées sur cet ordinateur, <b>à part du dossier de tes voyages</b> : si ce dossier est effacé ou abîmé, elles restent là.</li>
+  <li>Elles ne quittent pas cet ordinateur. Pour une copie à ranger ailleurs (clé USB, autre ordinateur), ouvre un voyage, puis « Exporter le voyage » : un fichier à emporter, avec ses justificatifs.</li>
+  {% else %}
+  <li>Tes voyages sont protégés par un mot de passe : les sauvegardes le sont aussi (chiffrées quand Trip Compta est verrouillé), sur cet ordinateur. Les justificatifs restent, chiffrés, dans le dossier de tes voyages.</li>
+  {% endif %}
+</ul>
+<form method="post" action="/reglages/sauvegardes/ouvrir" class="backup-where">
+  <span class="muted small">Rangées dans : <span class="path">{{ where }}</span></span>
+  <button class="btn ghost small">Ouvrir ce dossier</button>
+</form>
+</div>
+{% endblock %}

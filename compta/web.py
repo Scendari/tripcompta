@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from . import db as D
 from . import engine as E
 from . import fichiers
 from . import journal
@@ -943,12 +944,66 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         with db.Session() as s_:
             demo = s_.query(M.Trip).filter(M.Trip.is_demo.is_(True)).first()
             demo_trip = {"id": demo.id, "name": demo.name} if demo else None
+        saved = db.backups()
         return render(request, "settings.html", data_dir=db.home, source=data_source,
-                      demo_trip=demo_trip,
+                      demo_trip=demo_trip, backups_count=len(saved),
+                      last_backup=(human_when(saved[0]["when"]) if saved[0]["timed"]
+                                   else f"le {saved[0]['when']:%d/%m/%Y}") if saved else None,
                       protected=vault_box is not None,
                       remembered=bool(vault_box is not None and vault_box.vault is not None and K.recall(vault_box.vault.id)),
                       info=upd, available=upd.available(), latest=upd.latest(),
                       checked=dt.datetime.fromtimestamp(checked).strftime("%d/%m/%Y") if checked else None)
+
+    # ------------------------------------------------------------------ revenir à une sauvegarde
+    @app.get("/reglages/sauvegardes", response_class=HTMLResponse)
+    def backups_page(request: Request):
+        items = db.backups()
+        for b in items:
+            b["ago"] = human_when(b["when"]) if b["timed"] else None
+            if b["ago"] and b["kind"] == "jour" and b["ago"].startswith("le "):     # le jour est déjà dans le titre
+                b["ago"] = f"à {b['when'].hour} h {b['when'].minute:02d}"
+        with db.Session() as s_:
+            now = dict(trips=s_.query(M.Trip).count(), expenses=s_.query(M.Expense).count(),
+                       receipts=s_.query(M.Receipt).count())
+        return render(request, "backups.html", backups=items, now=now, where=db.backups_dir,
+                      complete=db.complete_backups, keep=D.BACKUP_KEEP)
+
+    @app.post("/reglages/sauvegardes/revenir")
+    async def backup_restore(request: Request):
+        f = await request.form()
+        try:
+            res = db.restore_backup(str(f.get("nom") or ""))
+        except D.BackupError as err:
+            return refuse("/reglages/sauvegardes", str(err))
+        if vault_box is not None and not vault_box.locked:
+            vault_box.receipts_down()                # voyages protégés : les justificatifs chiffrés du dossier
+        journal.log.info("retour à la sauvegarde « %s »", f.get("nom"))
+        msg = f"Tes voyages sont revenus à l'état du {res['when']:%d/%m/%Y}"
+        msg += f" à {res['when'].hour} h {res['when'].minute:02d}." if res["timed"] else "."
+        if res["receipts_back"]:
+            n = res["receipts_back"]
+            msg += f" {n} justificatif{'s' if n > 1 else ''} remis à sa place." if n == 1 else f" {n} justificatifs remis à leur place."
+        if res["receipts_missing"]:
+            n = res["receipts_missing"]
+            msg += (f" ⚠️ {n} justificatif{'s' if n > 1 else ''} de cette sauvegarde "
+                    f"{'sont introuvables' if n > 1 else 'est introuvable'} : à rajouter depuis les originaux.")
+        return back("/reglages/sauvegardes", msg + " Tu peux encore défaire ce retour.")
+
+    @app.post("/reglages/sauvegardes/ouvrir")
+    def backups_open(request: Request):
+        import subprocess
+        import sys as _sys
+        target = str(db.backups_dir)
+        try:
+            if _sys.platform == "darwin":
+                subprocess.Popen(["open", target])
+            elif _sys.platform == "win32":
+                os.startfile(target)                     # Explorateur Windows
+            else:
+                subprocess.Popen(["xdg-open", target])
+        except Exception:
+            return refuse("/reglages/sauvegardes", f"Impossible d'ouvrir le dossier : {target}")
+        return back("/reglages/sauvegardes", "Dossier des sauvegardes ouvert")
 
     @app.get("/reglages/protection", response_class=HTMLResponse)
     def protection_settings(request: Request):
@@ -1048,6 +1103,12 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             _copy_voyages(target, target / C.RECEIPTS, target / "brouillons_ia")
         except (OSError, Exception) as e:
             return _data_page(request, error=f"Impossible de copier les voyages vers ce dossier : {e}", value=raw)
+        try:                                           # les sauvegardes (sur l'ordinateur) suivent les voyages
+            import shutil as _sh
+            _sh.copytree(db.backups_dir, D.backups_dir_for(target), dirs_exist_ok=True,
+                         ignore=_sh.ignore_patterns("A LIRE.txt"))
+        except OSError as exc:
+            journal.log.warning("sauvegardes pas recopiées pour le nouveau dossier : %s", exc)
         PATHS.write_config(data_dir=conf)
         return _restart_page(request, f"Tes voyages ont été copiés dans « {target} ». L'ancien dossier "
                                       f"« {db.home} » n'a pas été touché : tu pourras le supprimer quand tu auras "
@@ -1218,6 +1279,13 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             if src.is_dir():
                 _sh.copytree(src, local / name, dirs_exist_ok=True)
                 _sh.rmtree(src, ignore_errors=True)
+        # les sauvegardes complètes (en clair, à part sur l'ordinateur) : les bases rejoignent la copie de travail
+        # (chiffrées juste après), la copie en clair des justificatifs est effacée (ils sont chiffrés dans le dossier)
+        if db.complete_backups and db.backups_dir.is_dir():
+            (local / "sauvegardes").mkdir(parents=True, exist_ok=True)
+            for p_ in db.backups_dir.glob("*.db"):
+                _sh.copy2(p_, local / "sauvegardes" / p_.name)
+            _sh.rmtree(db.backups_dir, ignore_errors=True)
         _sh.rmtree(F / "imports_en_attente", ignore_errors=True)
         for name in (C.DB, f"{C.DB}-journal", f"{C.DB}-wal", f"{C.DB}-shm"):
             (F / name).unlink(missing_ok=True)
@@ -1339,7 +1407,11 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         for name in CF.PRIVATE:
             src = vault_box.local / name
             if src.is_dir():
-                _sh.copytree(src, F / name, dirs_exist_ok=True)
+                dst = F / name
+                if name == "sauvegardes":            # voyages ordinaires : sauvegardes à part, sur l'ordinateur
+                    dst = D.backups_dir_for(F)
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                _sh.copytree(src, dst, dirs_exist_ok=True)
         vault_box.vault = None
         vault_box.wipe_working_copy()
         for name in CF.PRIVATE:
@@ -1347,6 +1419,10 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         (vault_box.local / CF.STATE).unlink(missing_ok=True)
         vault_box = app.state.coffre = None
         db.reopen(F, receipts_in_home=True)          # jusqu'au redémarrage : directement dans le dossier
+        try:
+            db.mirror_receipts(force=True)           # les sauvegardes redeviennent complètes (avec les justificatifs)
+        except OSError:
+            pass
         return _restart_page(request, "La protection est retirée : tes voyages sont de nouveau des fichiers normaux.")
 
     OLD_VERSIONS = "Anciennes versions"

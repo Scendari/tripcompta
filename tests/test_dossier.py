@@ -85,7 +85,8 @@ def test_works_directly_in_the_chosen_folder(env):
     tid = seed(app)
     assert trip_names(shared / C.DB) == ["Sortie test"]                    # écrit dans le dossier, tout de suite
     assert amounts(app, tid) == EXPECTED
-    assert (shared / "sauvegardes").is_dir() and not (shared / "Justificatifs à trier").exists()
+    assert not (shared / "sauvegardes").exists() and not (shared / "Justificatifs à trier").exists()
+    assert app.state.db.backups_dir.is_dir() and shared not in app.state.db.backups_dir.parents   # à part
     assert not (tmp / "reglages" / "copies").exists()                      # aucune copie de travail
     assert not list(shared.glob("tripcompta-verrou*"))                     # aucun verrou
     page = TestClient(app).get("/").text

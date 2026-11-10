@@ -166,6 +166,17 @@ form.inline { display: inline; }
 .alerts li.info { background: var(--blue-bg); border-color: var(--ocean); }
 .alerts li.error { background: var(--err-bg); border-color: var(--coral); }
 .ai-notes li { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.backup-list { list-style: none; padding: 0; margin: 0; display: grid; gap: .6rem; }
+.backup-list .backup { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; padding: .75rem 1rem; }
+.backup-list .backup .grow { flex: 1 1 22rem; }
+.backup-list .backup form { margin: 0 0 0 auto; }
+.backup-list .backup.unreadable { opacity: .8; }
+.backup-what { font-size: .9rem; color: var(--muted); margin-top: .15rem; }
+.backup-warn { font-size: .9rem; color: var(--err); margin-top: .15rem; }
+.backup-now { margin-bottom: 1rem; }
+.backup-notes { padding-left: 1.2rem; display: grid; gap: .35rem; font-size: .92rem; }
+.backup-where { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; margin-top: 1rem; }
+.backup-where .path { word-break: break-all; }
 .ai-notes li form { margin: 0; }
 .ai-privacy { background: var(--amber-bg); border-left: 4px solid var(--amber); border-radius: 9px; padding: .55rem .85rem; font-size: .9rem; margin: .5rem 0 .7rem; }
 .alerts a { color: inherit; text-decoration: underline; }

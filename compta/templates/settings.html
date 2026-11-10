@@ -29,6 +29,16 @@
     <span class="setting-go">{{ 'Gérer' if protected else 'Protéger' }} ›</span>
   </a>
 
+  <a class="card setting" href="/reglages/sauvegardes" id="carte-sauvegardes">
+    <span class="setting-ico" aria-hidden="true">🛟</span>
+    <span class="setting-body">
+      <b>Sauvegardes</b>
+      <span class="setting-state">{% if last_backup %}Dernière : {{ last_backup }} · {{ backups_count }} gardée{{ 's' if backups_count > 1 }}{% else %}Aucune pour l'instant{% endif %}</span>
+      <span class="setting-hint">Une copie de tes voyages est gardée chaque jour. Tu peux revenir à l'une d'elles si quelque chose s'est mal passé.</span>
+    </span>
+    <span class="setting-go">Voir ›</span>
+  </a>
+
   {% if demo_trip %}
   <a class="card setting" href="/v/{{ demo_trip.id }}">
     <span class="setting-ico" aria-hidden="true">🧭</span>

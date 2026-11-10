@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import os
+import shutil
 import sqlite3
 from pathlib import Path
 
@@ -15,6 +17,8 @@ from .models import Base
 
 UNDO_KEEP = 30
 BACKUP_KEEP = 10
+BEFORE_RETURN_KEEP = 3                 # états gardés « juste avant un retour à une sauvegarde »
+RECEIPTS_POOL = "justificatifs"        # dans le dossier des sauvegardes : la copie des justificatifs
 VERSION_KEY = "app_version"
 # Numéro de la structure de la base (tables, colonnes), gardé dans le fichier lui-même (PRAGMA user_version).
 # À augmenter de 1 à chaque changement de structure : une application qui connaît un numéro plus petit refuse
@@ -109,6 +113,27 @@ def human_when(d: dt.datetime, now: dt.datetime | None = None) -> str:
     return f"le {d:%d/%m/%Y} à {hm}" if d.year != now.year else f"le {d:%d/%m} à {hm}"
 
 
+def long_date(d: dt.date) -> str:
+    """« mardi 3 novembre 2026 »"""
+    days = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
+    months = ("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre",
+              "novembre", "décembre")
+    return f"{days[d.weekday()]} {d.day}{'er' if d.day == 1 else ''} {months[d.month - 1]} {d.year}"
+
+
+def backups_dir_for(folder: Path | str) -> Path:
+    """Où sont rangées les sauvegardes des voyages de `folder` : sur cet ordinateur, à côté des réglages de Trip
+    Compta, JAMAIS dans le dossier des voyages. Un dossier effacé, déplacé ou mal recopié n'emporte donc pas ses
+    sauvegardes avec lui."""
+    from . import paths
+    key = hashlib.sha1(os.path.abspath(Path(folder).expanduser()).encode("utf-8")).hexdigest()[:12]
+    return paths.config_file().parent / "sauvegardes" / key
+
+
+class BackupError(Exception):
+    """Cette sauvegarde ne peut pas être reprise (introuvable, abîmée, faite par une version plus récente)."""
+
+
 def stored_version(path: Path) -> str | None:
     """La version de Trip Compta qui a ouvert cette base en dernier (lecture seule, sans rien créer)."""
     if not path.exists():
@@ -184,11 +209,29 @@ class Database:
         self.dir.mkdir(parents=True, exist_ok=True)
         self.receipts_dir = (self.home if receipts_in_home else self.dir) / "justificatifs"
         self.thumbs_dir = (self.receipts_dir if self.home == self.dir else self.dir) / ".vignettes"
+        # Sauvegardes. Voyages ordinaires : complètes (base + justificatifs) et rangées à part, sur l'ordinateur.
+        # Voyages protégés par un mot de passe : `data_dir` est déjà la copie de travail sur l'ordinateur ; les
+        # sauvegardes y restent (chiffrées au verrouillage), et les justificatifs chiffrés du dossier ne sont
+        # jamais effacés : on ne les recopie pas en clair ailleurs.
+        self.complete_backups = self.home == self.dir
         self.backups_dir = self.dir / "sauvegardes"
+        if self.complete_backups:
+            try:
+                apart = backups_dir_for(self.dir)
+                apart.mkdir(parents=True, exist_ok=True)
+                note = apart / "A LIRE.txt"
+                if not note.exists():
+                    note.write_text("Sauvegardes de Trip Compta pour les voyages rangés dans :\n"
+                                    f"{self.dir}\n\nPour revenir à l'une d'elles : dans Trip Compta, Réglages, "
+                                    "« Sauvegardes ».\n", encoding="utf-8")
+                self.backups_dir = apart
+            except OSError:                      # réglages de l'ordinateur inaccessibles : à côté de la base
+                pass
+        self._mirror_sig = None
         self.undo_dir = self.dir / ".annuler"
         self.redo_dir = self.dir / ".retablir"
         for d in (self.backups_dir, self.undo_dir, self.redo_dir):
-            d.mkdir(exist_ok=True)
+            d.mkdir(parents=True, exist_ok=True)
         try:                                     # dossier synchronisé introuvable : ne rien y créer
             if self.home == self.dir or self.home.is_dir() or not receipts_in_home:
                 self.receipts_dir.mkdir(exist_ok=True)
@@ -304,16 +347,155 @@ class Database:
                 f"gardé à côté : « {self.recovered['damaged'].name} ».")
 
     def daily_backup(self) -> Path | None:
+        """Une sauvegarde par jour (les 10 dernières sont gardées), et les justificatifs qui n'y sont pas encore."""
         if not self.path.exists():
             return None
         target = self.backups_dir / f"compta-{dt.date.today().isoformat()}.db"
-        if target.exists():
-            return target
-        self._copy(self.path, target)
-        backups = sorted(self.backups_dir.glob("compta-*.db"))
-        for old in backups[:-BACKUP_KEEP]:
-            old.unlink()
+        if not target.exists():
+            self._copy(self.path, target)
+            backups = sorted(self.backups_dir.glob("compta-*.db"))
+            for old in backups[:-BACKUP_KEEP]:
+                old.unlink()
+        self.mirror_receipts()
         return target
+
+    def mirror_receipts(self, force: bool = False) -> int:
+        """Recopie dans les sauvegardes les justificatifs qui n'y sont pas encore (jamais d'effacement : un
+        justificatif retiré d'une dépense reste récupérable). Renvoie le nombre de fichiers copiés. Ne fait rien
+        tant que le dossier des justificatifs n'a pas bougé depuis le dernier passage."""
+        if not self.complete_backups or not self.receipts_dir.is_dir():
+            return 0
+        try:
+            sig = self.receipts_dir.stat().st_mtime_ns
+        except OSError:
+            return 0
+        if not force and sig == self._mirror_sig:
+            return 0
+        pool = self.backups_dir / RECEIPTS_POOL
+        pool.mkdir(exist_ok=True)
+        copied, complete = 0, True
+        with os.scandir(self.receipts_dir) as entries:
+            for e in entries:
+                if e.name.startswith("."):
+                    continue
+                try:
+                    if not e.is_file():
+                        continue
+                    dst = pool / e.name
+                    if dst.exists() and dst.stat().st_size == e.stat().st_size:
+                        continue
+                    tmp = pool / f".{e.name}.copie"
+                    shutil.copyfile(e.path, tmp)
+                    os.replace(tmp, dst)
+                    copied += 1
+                except OSError:                  # fichier pas encore téléchargé, disque plein… : au prochain passage
+                    complete = False
+        self._mirror_sig = sig if complete else None
+        return copied
+
+    # ---------------------------------------------------------- revenir à une sauvegarde
+    @staticmethod
+    def _backup_summary(path: Path) -> dict | None:
+        """Ce que contient une sauvegarde : noms des voyages, nombre de dépenses, justificatifs. None si illisible."""
+        try:
+            c = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+            try:
+                trips = [r[0] for r in c.execute("SELECT name FROM trips ORDER BY id")]
+                expenses = c.execute("SELECT COUNT(*) FROM expenses").fetchone()[0]
+                receipts = [r[0] for r in c.execute("SELECT stored_name FROM receipts")]
+            finally:
+                c.close()
+            return dict(trips=trips, expenses=expenses, receipts=receipts)
+        except sqlite3.Error:
+            return None
+
+    def backups(self) -> list[dict]:
+        """Les sauvegardes disponibles, de la plus récente à la plus ancienne :
+        {name, when, timed, kind, title, trips, expenses, receipts, missing_receipts, readable}.
+        `timed` : l'heure de `when` est fiable (pour une sauvegarde du jour dont le fichier a été recopié depuis,
+        seul le jour, écrit dans son nom, l'est)."""
+        out = []
+        for p in self.backups_dir.glob("*.db"):
+            try:
+                when = dt.datetime.fromtimestamp(p.stat().st_mtime)
+            except OSError:
+                continue
+            stem = p.stem
+            timed = True
+            if stem.startswith("compta-"):
+                try:
+                    day = dt.date.fromisoformat(stem[len("compta-"):])
+                except ValueError:
+                    day = when.date()
+                if day != when.date():
+                    when, timed = dt.datetime.combine(day, dt.time(12, 0)), False
+                kind, title = "jour", f"Sauvegarde du {long_date(day)}"
+            elif stem.startswith("avant-maj-"):
+                kind, title = "maj", f"Avant la mise à jour vers Trip Compta {stem[len('avant-maj-'):]}"
+            elif stem.startswith("avant-retour-"):
+                kind, title = "retour", "Juste avant ton dernier retour à une sauvegarde"
+            elif stem.startswith("pas-encore-enregistree-"):
+                kind, title = "attente", "Modifications qui n'avaient pas pu être enregistrées dans le dossier"
+            else:
+                kind, title = "autre", stem
+            info = self._backup_summary(p)
+            names = (info or {}).get("receipts", [])
+            pool = self.backups_dir / RECEIPTS_POOL
+            missing = sum(1 for n in names if not (self.receipts_dir / n).exists() and not (pool / n).exists()) \
+                if self.complete_backups else 0
+            out.append(dict(name=p.name, when=when, timed=timed, kind=kind, title=title, readable=info is not None,
+                            trips=(info or {}).get("trips", []), expenses=(info or {}).get("expenses", 0),
+                            receipts=len(names), missing_receipts=missing))
+        out.sort(key=lambda b: b["when"], reverse=True)
+        return out
+
+    def restore_backup(self, name: str) -> dict:
+        """Revenir à une sauvegarde : l'état actuel est d'abord gardé (« Défaire » le rend, et une copie « juste
+        avant ton retour » reste dans la liste), puis la base est remplacée et les justificatifs qui manquent sont
+        remis. Renvoie {title, when, timed, receipts_back, receipts_missing}."""
+        found = next((b for b in self.backups() if b["name"] == name), None)
+        src = self.backups_dir / name if found else None
+        if src is None or not src.is_file():
+            raise BackupError("Cette sauvegarde est introuvable.")
+        if not db_intact(src):
+            raise BackupError("Cette sauvegarde est abîmée : elle ne peut pas être reprise. Choisis-en une autre.")
+        if (stored_schema(src) or 0) > self.schema:
+            raise BackupError("Cette sauvegarde a été faite par une version plus récente de Trip Compta : mets "
+                              "l'application à jour pour la reprendre.")
+        now = dt.datetime.now()
+        self._copy(self.path, self.backups_dir / f"avant-retour-{now:%Y%m%d-%H%M%S-%f}.db")
+        for old in sorted(self.backups_dir.glob("avant-retour-*.db"))[:-BEFORE_RETURN_KEEP]:
+            old.unlink()
+        when = found["when"]
+        self.snapshot(f"retour à la sauvegarde du {when:%d/%m/%Y}")
+        self.engine.dispose()
+        self._copy(src, self.path)
+        self.after_replace()
+        self.mark_writer()
+        back, missing = self.restore_receipts()
+        return dict(title=found["title"], when=when, timed=found["timed"], receipts_back=back,
+                    receipts_missing=missing)
+
+    def restore_receipts(self) -> tuple[int, int]:
+        """Remet dans le dossier des justificatifs ceux que la base connaît et qui n'y sont plus, depuis les
+        sauvegardes. Renvoie (remis, toujours introuvables)."""
+        info = self._backup_summary(self.path) or {}
+        pool = self.backups_dir / RECEIPTS_POOL
+        back = missing = 0
+        for n in info.get("receipts", []):
+            dst = self.receipts_dir / n
+            if dst.exists():
+                continue
+            src = pool / n
+            try:
+                if not src.is_file():
+                    raise OSError("absent des sauvegardes")
+                self.receipts_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(src, dst)
+                back += 1
+            except OSError:
+                missing += 1
+        return back, missing
 
     @staticmethod
     def _copy(src: Path, dst: Path):

@@ -87,14 +87,14 @@ def test_recovery_skips_damaged_backups(tmp_path):
     db = f / "compta.db"
     for p in (f / ".annuler").glob("*.db"):
         p.unlink()
-    good = f / "sauvegardes" / "compta-2026-01-01.db"
+    good = D.backups_dir_for(f) / "compta-2026-01-01.db"
     D.Database._copy(db, good)
-    bad = f / "sauvegardes" / "compta-2026-01-02.db"
+    bad = D.backups_dir_for(f) / "compta-2026-01-02.db"
     D.Database._copy(db, bad)
     damage(bad)
     os.utime(good, (time.time() - 3600, time.time() - 3600))
     os.utime(bad, (time.time() - 60, time.time() - 60))                 # la plus récente… mais abîmée
-    for p in (f / "sauvegardes").glob("compta-2*.db"):
+    for p in D.backups_dir_for(f).glob("compta-2*.db"):
         if p not in (good, bad):
             p.unlink()
     damage(db)
@@ -107,8 +107,8 @@ def test_recovery_skips_damaged_backups(tmp_path):
 def test_damaged_without_backup_explains_and_touches_nothing(tmp_path):
     f = tmp_path / "voyages"
     seed(f, ["Hendaye"])
-    for d in ("sauvegardes", ".annuler"):
-        for p in (f / d).glob("*"):
+    for d in (D.backups_dir_for(f), f / ".annuler"):
+        for p in d.glob("*.db"):
             p.unlink()
     damage(f / "compta.db")
     before = (f / "compta.db").read_bytes()
@@ -225,10 +225,10 @@ def test_daily_backup_while_app_stays_open(tmp_path):
     f = tmp_path / "voyages"
     app = create_app(f)
     c = TestClient(app)
-    for p in (f / "sauvegardes").glob("*.db"):
+    for p in D.backups_dir_for(f).glob("*.db"):
         p.unlink()                                                     # comme le lendemain matin
     c.post("/voyages", data={"name": "Hendaye"})
-    today = f / "sauvegardes" / f"compta-{dt.date.today().isoformat()}.db"
+    today = D.backups_dir_for(f) / f"compta-{dt.date.today().isoformat()}.db"
     assert today.exists() and D.db_intact(today)
 
 
