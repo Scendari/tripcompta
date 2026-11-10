@@ -22,6 +22,10 @@
     <svg viewBox="0 0 24 24" width="1.05em" height="1.05em" aria-hidden="true"><path d="M5 4h11l3 3v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4z M8 4v5h7V4 M8 20v-6h8v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span class="lbl">{{ dossier.saved }}</span></a>
   {% endif %}
   {% if dossier and dossier.protected and not dossier.locked %}<form method="post" action="/verrouiller" class="inline"><button class="iconbtn" title="Verrouiller : le mot de passe sera redemandé">🔒 Verrouiller</button></form>{% endif %}
+  {% if full_app %}
+  <a class="iconbtn undo-btn{{ ' on' if request.url.path == '/historique' }}" href="/historique" title="Défaire une modification : voir les dernières, et revenir en arrière" aria-label="Défaire une modification">↶<span class="lbl"> Défaire</span></a>
+  <a class="iconbtn help-btn{{ ' on' if request.url.path == '/aide' }}" href="/aide" title="Aide : premiers pas, les mots de Trip Compta, astuces, tes données" aria-label="Aide">❓<span class="lbl"> Aide</span></a>
+  {% endif %}
   <a class="iconbtn settings-btn{{ ' on' if request.url.path.startswith('/reglages') or request.url.path.startswith('/protection') }}" href="/reglages" title="Réglages : où sont tes voyages, mot de passe, mises à jour" aria-label="Réglages">⚙️<span class="lbl"> Réglages</span></a>
   <button class="iconbtn text-size-btn" data-text-size title="Agrandir le texte (trois tailles)" aria-label="Agrandir le texte"><span aria-hidden="true">A<b>A</b></span><span class="lbl"> Agrandir le texte</span></button>
   <button class="iconbtn" data-theme-toggle title="Thème clair / sombre">◐</button>

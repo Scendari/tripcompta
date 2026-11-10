@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Aide · Trip Compta{% endblock %}
+{% block page %}
+<div class="help-page">
+<div class="page-head"><div class="grow">
+  <h1>❓ Aide</h1>
+  <p class="lead">L'essentiel pour tenir les comptes d'un voyage, sans être comptable.</p>
+  <p class="help-nav">
+    <a class="btn ghost small" href="#premiers-pas">Premiers pas</a>
+    <a class="btn ghost small" href="#mots">Les mots de Trip Compta</a>
+    <a class="btn ghost small" href="#astuces">Astuces et raccourcis</a>
+    <a class="btn ghost small" href="#donnees">Tes données</a>
+    <a class="btn ghost small" href="#probleme">En cas de problème</a>
+  </p>
+</div><a class="btn ghost small" href="/">← Mes voyages</a></div>
+
+<h2 id="premiers-pas">Premiers pas</h2>
+<div class="card">
+<ol>
+  <li><b>Crée un voyage</b> (page « Mes voyages ») et dis qui tient la caisse : une association, ou une personne du voyage.</li>
+  <li><b>Ajoute les participants.</b> Tu peux en coller plusieurs d'un coup, un par ligne.</li>
+  <li><b>Note les dépenses</b> : le logement, le transport, les repas… D'abord le montant prévu si tu ne connais pas encore le vrai, puis le montant payé. Pour chaque dépense, tu dis qui l'a payée et qui est concerné.</li>
+  <li><b>Note l'argent reçu</b> : chaque acompte ou versement d'un participant, au fur et à mesure.</li>
+  <li><b>Regarde « Où j'en suis »</b> : ce que le voyage coûte, ce qui a été versé, ce qu'il reste à recevoir ou à rendre.</li>
+  <li><b>Envoie à chacun son compte</b> (« Envoyer les comptes ») : un message et un PDF par personne, avec ce qu'il reste à payer et comment payer.</li>
+</ol>
+<p class="small" style="margin:.6rem 0 0">Pour essayer sans risque : ouvre le <b>voyage d'exemple</b> (dans les Réglages). Il est entièrement fictif et se retire d'un clic.</p>
+</div>
+
+<h2 id="mots">Les mots de Trip Compta</h2>
+<div class="card">
+<dl>
+  <dt>La caisse</dt><dd>Celui ou celle qui reçoit l'argent des participants et paie les dépenses du voyage : une association (un club), ou une personne du voyage.</dd>
+  <dt>La part</dt><dd>Ce que le voyage coûte à une personne : la somme de ses morceaux de chaque dépense qui la concerne.</dd>
+  <dt>Montant prévu, montant payé</dt><dd>Le prévu est une estimation, pour annoncer un prix avant le départ. Le payé est le vrai montant, une fois la facture connue : c'est lui qui compte dès qu'il est saisi.</dd>
+  <dt>Une avance</dt><dd>Une dépense du voyage payée par un participant de sa poche (un plein d'essence, des courses). Elle est déduite de ce qu'il doit.</dd>
+  <dt>Un versement</dt><dd>De l'argent donné par un participant à la caisse (acompte, solde).</dd>
+  <dt>Un remboursement</dt><dd>De l'argent rendu par la caisse à un participant, quand il a trop versé ou trop avancé.</dd>
+  <dt>Le reste à régler</dt><dd>Sa part, moins ses versements et ses avances. S'il est négatif, c'est la caisse qui lui doit de l'argent.</dd>
+  <dt>Une remise, un supplément</dt><dd>Un montant en moins ou en plus pour une personne (un tarif étudiant, une chambre seule). Tu choisis qui le compense : la caisse, les autres participants, ou une personne précise.</dd>
+  <dt>Un désistement</dt><dd>Quelqu'un qui ne vient plus. Tu décides ce qu'il paie quand même (un acompte non remboursable, par exemple) ; le reste est réparti ou pris en charge par la caisse.</dd>
+  <dt>Une famille</dt><dd>Plusieurs participants qui règlent ensemble : une seule personne paie et reçoit le compte pour toute la famille.</dd>
+  <dt>Une étiquette</dt><dd>Un petit mot collé sur des participants (« Conducteur », « Enfant »…) pour les choisir d'un coup dans une dépense.</dd>
+  <dt>Un justificatif</dt><dd>La photo ou le PDF d'une facture ou d'un ticket. Chaque justificatif reçoit un numéro (J01, J02…) et se rattache à une ou plusieurs dépenses.</dd>
+  <dt>Entre nous</dt><dd>Des petits comptes entre quelques participants, qui ne passent pas par la caisse (un restaurant partagé à quatre, par exemple).</dd>
+  <dt>Les centimes d'arrondi</dt><dd>100 € à partager en trois, cela fait 33,33 € et il reste un centime. Trip Compta le donne à quelqu'un au hasard, ou à la caisse si tu préfères : les totaux tombent toujours juste.</dd>
+</dl>
+</div>
+
+<h2 id="astuces">Astuces et raccourcis</h2>
+<div class="card">
+<ul>
+  <li><b>Une erreur ?</b> Juste après chaque modification, un bouton « ↶ Défaire » apparaît dans le message. Plus tard, le bouton <a href="/historique">↶ Défaire</a>, en haut, montre les {{ keep_undo }} dernières modifications et permet de revenir en arrière. Pour remonter à hier ou à la semaine dernière : <a href="/reglages/sauvegardes">les sauvegardes</a>.</li>
+  <li><b>Les montants</b> s'écrivent avec une virgule ou un point : 12,50 ou 12.50.</li>
+  <li><b>Les dates</b> : le bouton « Aujourd'hui », à côté de chaque date, la remplit d'un clic.</li>
+  <li><b>Texte trop petit ?</b> « Agrandir le texte », en haut, propose trois tailles. Le bouton ◐ passe du thème clair au thème sombre.</li>
+  <li><b>Rien ne s'enregistre « à la main »</b> : chaque modification est enregistrée tout de suite. L'heure du dernier enregistrement est affichée en haut.</li>
+  <li><b>Plusieurs participants d'un coup</b> : sur la page Participants, colle une liste, un nom par ligne.</li>
+  <li><b>Au clavier</b> : <kbd>{{ '⌘' if mac else 'Ctrl' }} Z</kbd> ouvre les dernières modifications (quand tu n'es pas en train d'écrire dans un champ){% if in_window %} ; <kbd>{{ '⌘' if mac else 'Ctrl' }} F</kbd> cherche un mot dans la page ; <kbd>{{ '⌘' if mac else 'Ctrl' }} N</kbd> ouvre une deuxième fenêtre, pour regarder deux pages en même temps{% endif %} ; <kbd>Échap</kbd> ferme une bulle d'explication.</li>
+  <li><b>Une IA peut t'aider à saisir</b> (page « IA » d'un voyage) : tu copies un message, tu le colles dans l'IA de ton choix avec tes notes ou tes factures, et tu recolles sa réponse. Tu vois tout avant d'enregistrer.</li>
+</ul>
+</div>
+
+<h2 id="donnees">Tes données</h2>
+<div class="card">
+<ul>
+  <li><b>Elles sont sur ton ordinateur</b>, dans ce dossier : <span class="data-path">{{ data_dir }}</span>. Tu peux le changer dans <a href="/reglages/donnees">Réglages › Où sont mes voyages</a>.</li>
+  <li><b>Rien n'est envoyé sur Internet.</b> Deux exceptions, que tu décides : la vérification des mises à jour (elle demande seulement quelle est la dernière version, sans rien envoyer de tes voyages), et ce que tu colles toi-même dans une IA.</li>
+  <li><b>Une sauvegarde par jour</b> est gardée sur cet ordinateur ({{ keep_backups }} jours), justificatifs compris : <a href="/reglages/sauvegardes">Réglages › Sauvegardes</a>.</li>
+  <li><b>Changer d'ordinateur, ou donner un voyage à quelqu'un</b> : « Exporter le voyage » fabrique un fichier à emporter ; sur l'autre ordinateur, « Importer un voyage ».</li>
+  <li><b>Un mot de passe</b>, si tu le souhaites, rend tes voyages illisibles sans lui : <a href="/reglages/protection">Réglages › Mot de passe</a>.</li>
+</ul>
+</div>
+
+<h2 id="probleme">En cas de problème</h2>
+<div class="card">
+<ul>
+  <li><b>Un chiffre t'étonne ?</b> Ouvre « Qui paie quoi » : chaque case montre la part d'une personne pour une dépense, et un clic ouvre la dépense.</li>
+  <li><b>L'application a affiché un problème ?</b> Rien de ce qui était enregistré n'est perdu. <a href="/reglages/diagnostic.txt" download>Exporte un diagnostic</a> (un fichier texte, sans nom ni montant) et envoie-le à la personne qui t'aide.</li>
+  <li><b>Le guide complet</b>, avec des images, est en ligne : <a href="{{ guide_url }}" target="_blank" rel="noopener">{{ guide_url|replace('https://', '') }}</a>.</li>
+</ul>
+</div>
+</div>
+{% endblock %}

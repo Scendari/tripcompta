@@ -630,6 +630,15 @@
   function showWindowOnly() { document.querySelectorAll("[data-window-only]").forEach((n) => { n.hidden = !inWindow(); }); }
   showWindowOnly();
   window.addEventListener("pywebviewready", showWindowOnly);
+  // Ctrl/Cmd + Z, hors d'un champ de saisie (où il annule la frappe) : les dernières modifications, pour défaire
+  document.addEventListener("keydown", (e) => {
+    if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== "z") return;
+    const el = document.activeElement;
+    if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+    if (!document.querySelector(".undo-btn") || location.pathname === "/historique") return;
+    e.preventDefault();
+    location.href = "/historique";
+  });
   document.addEventListener("keydown", (e) => {
     if (!inWindow() || !(e.metaKey || e.ctrlKey) || e.altKey) return;
     const k = e.key.toLowerCase();

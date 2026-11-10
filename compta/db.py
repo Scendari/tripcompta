@@ -574,6 +574,36 @@ class Database:
         """Ce que « Rétablir » referait (la dernière action défaite), s'il y en a une."""
         return self._label(self.redo_dir)
 
+    def history(self) -> list[dict]:
+        """Les modifications que l'on peut encore défaire, de la plus récente à la plus ancienne :
+        [{token, label, when}] (`token` : celui que donnait undo_token() juste après cette modification)."""
+        out = []
+        for snap in sorted(self.undo_dir.glob("*.db"), reverse=True):
+            try:
+                label = json.loads(snap.with_suffix(".json").read_text(encoding="utf-8"))["label"]
+            except Exception:
+                label = "modification"
+            try:
+                when = dt.datetime.strptime(snap.stem, "%Y%m%d-%H%M%S-%f")
+            except ValueError:
+                when = dt.datetime.fromtimestamp(snap.stat().st_mtime)
+            out.append(dict(token=snap.stem, label=label, when=when))
+        return out
+
+    def undo_to(self, token: str) -> list[str]:
+        """Défait la modification `token` et toutes celles faites après elle (de la plus récente à la plus
+        ancienne). Renvoie leurs libellés ; [] si `token` n'est plus dans l'historique (rien n'est touché).
+        Chaque étape se rétablit ensuite une à une avec « Rétablir »."""
+        if token not in {h["token"] for h in self.history()}:
+            return []
+        done = []
+        while True:
+            top = self.undo_token()
+            if top is None or top < token:
+                break
+            done.append(self.undo())
+        return done
+
     def undo(self) -> str | None:
         label = self.last_action()
         if label is None:

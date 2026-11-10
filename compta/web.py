@@ -29,6 +29,7 @@ from .db import (Database, DamagedDatabaseError, DataUnavailableError, NewerData
 
 HERE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(HERE / "templates"))
+GUIDE_URL = "https://tripcompta.plongee.bio/guide"       # le guide en ligne (site de présentation)
 
 
 def _date(d):
@@ -486,7 +487,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         return None
 
     LOCKED_OK = ("/static", "/ping", "/deverrouiller", "/quitter", "/maj/", "/reglages/a-propos", "/favicon",
-                 "/fenetre/", "/reglages/diagnostic.txt")
+                 "/fenetre/", "/reglages/diagnostic.txt", "/aide")
 
     @app.middleware("http")
     async def daily_backup(request, call_next):
@@ -560,6 +561,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         ctx.setdefault("caisse_title", _capfirst(ctx["asso_name"]) if ctx["asso_name"].startswith("la caisse")
                        else Markup("Caisse de ") + ctx["asso_name"])
         ctx["request"] = request
+        ctx["full_app"] = True               # voyages ouverts : « Défaire » et « Aide » dans la barre du haut
         ctx.setdefault("dossier", folder_status())
         ctx.setdefault("backup_failed", bool(app.state.backup_failed))
         ctx.setdefault("misplaced", app.state.misplaced)
@@ -730,6 +732,34 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         if not label:
             return back(_return_path(request), "Rien à défaire")
         return back(_return_path(request), f"Défait : {label}.", redo=db.redo_token())
+
+    # ------------------------------------------------------------------ dernières modifications, aide
+    @app.get("/historique", response_class=HTMLResponse)
+    def history_page(request: Request):
+        """« Défaire » toujours accessible : la liste des dernières modifications, avec ce que chaque bouton défait
+        (jamais un bouton aveugle : on voit ce qui va être annulé)."""
+        items = db.history()
+        for i, h in enumerate(items):
+            h["ago"] = human_when(h["when"])
+            h["also"] = i                    # modifications plus récentes, défaites elles aussi
+        return render(request, "history.html", items=items, keep=D.UNDO_KEEP, redo=db.redo_token(),
+                      redo_label=db.last_undone(), redo_token=None)
+
+    @app.post("/historique/revenir")
+    async def history_back(request: Request):
+        f = await request.form()
+        done = db.undo_to(str(f.get("jusqua") or ""))
+        if not done:
+            return refuse("/historique", "Cette modification n'est plus dans la liste : rien n'a été défait.")
+        if len(done) == 1:
+            return back("/historique", f"Défait : {done[0]}.", redo=db.redo_token())
+        return back("/historique", f"{len(done)} modifications défaites, jusqu'à « {done[-1]} ». « Rétablir » les "
+                                   f"refait une par une.", redo=db.redo_token())
+
+    @app.get("/aide", response_class=HTMLResponse)
+    def help_page(request: Request):
+        return render(request, "help.html", in_window=bool(getattr(app.state, "fenetres", None)),
+                      mac=sys.platform == "darwin", data_dir=db.home, guide_url=GUIDE_URL, keep_undo=D.UNDO_KEEP, keep_backups=D.BACKUP_KEEP)
 
     @app.post("/retablir")
     async def redo(request: Request):

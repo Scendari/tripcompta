@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Dernières modifications · Trip Compta{% endblock %}
+{% block page %}
+<div class="page-head"><div class="grow">
+  <h1>↶ Dernières modifications</h1>
+  <p class="lead">Une erreur ? Reviens en arrière. Chaque bouton dit exactement ce qu'il défait, et « Rétablir » permet de changer d'avis.</p>
+</div><a class="btn ghost small" href="/">← Mes voyages</a></div>
+
+<div style="max-width:860px">
+{% if redo %}
+<div class="card" id="retablir" style="margin-bottom:1rem">
+  <form method="post" action="/retablir" class="row" style="gap:.7rem;align-items:center;margin:0">
+    <input type="hidden" name="r" value="{{ redo }}">
+    <span class="grow">Tu viens de défaire : <b>{{ redo_label }}</b>.</span>
+    <button class="btn small ghost">↷ Rétablir</button>
+  </form>
+</div>
+{% endif %}
+{% if items %}
+<div class="card">
+<ul class="history-list" id="historique">
+  {% for h in items %}
+  <li>
+    <span class="when">{{ h.ago }}</span>
+    <span class="what grow">{{ h.label }}</span>
+    <form method="post" action="/historique/revenir"{% if h.also %} data-confirm="Défaire cette modification et {{ 'la modification faite' if h.also == 1 else 'les ' ~ h.also ~ ' modifications faites' }} après elle ? « Rétablir » permettra de les refaire une par une."{% endif %}>
+      <input type="hidden" name="jusqua" value="{{ h.token }}">
+      <button class="btn small{{ '' if loop.first else ' ghost' }}">{% if loop.first %}↶ Défaire{% else %}Revenir avant (défait {{ h.also + 1 }} modifications){% endif %}</button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+</div>
+{% else %}
+<p class="card" id="rien-a-defaire">Rien à défaire pour l'instant : les modifications apparaîtront ici au fur et à mesure.</p>
+{% endif %}
+<p class="hint" style="margin-top:.8rem">Trip Compta garde les {{ keep }} dernières modifications, tous voyages confondus. Pour remonter plus loin (hier, la semaine dernière) : <a href="/reglages/sauvegardes">les sauvegardes</a>.</p>
+</div>
+{% endblock %}

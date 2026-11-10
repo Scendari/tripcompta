@@ -201,8 +201,9 @@ def test_404(client):
 
 
 def test_undo_is_offered_right_after_the_action(tmp_path):
-    """« ↶ Défaire » n'est plus dans la barre du haut : il apparaît dans le message qui suit une action, ne vaut que
-    pour cette action, et « ↷ Rétablir » répare un clic malheureux."""
+    """Pas de bouton « Défaire » aveugle dans la barre du haut (seulement un lien vers la liste des dernières
+    modifications) : le bouton apparaît dans le message qui suit une action, ne vaut que pour cette action, et
+    « ↷ Rétablir » répare un clic malheureux."""
     from compta.ops import Ops
     app = create_app(tmp_path / "d")
     c = TestClient(app)
@@ -210,7 +211,7 @@ def test_undo_is_offered_right_after_the_action(tmp_path):
     tid = ops.create_trip("Voyage")["voyage_id"]
     ops.add_participants(tid, ["Anne", "Bob"])
     page = c.get(f"/v/{tid}").text
-    assert "Défaire" not in page.split("</header>")[0] and 'action="/annuler"' not in page
+    assert 'href="/historique"' in page.split("</header>")[0] and 'action="/annuler"' not in page
     # une action à l'écran -> le message propose de la défaire
     r = c.post(f"/v/{tid}/argent", data={"kind": "versement", "participant": "1", "amount": "50"},
                follow_redirects=True)

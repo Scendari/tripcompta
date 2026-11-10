@@ -166,6 +166,20 @@ form.inline { display: inline; }
 .alerts li.info { background: var(--blue-bg); border-color: var(--ocean); }
 .alerts li.error { background: var(--err-bg); border-color: var(--coral); }
 .ai-notes li { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.history-list { list-style: none; padding: 0; margin: 0; }
+.history-list li { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; padding: .55rem .2rem; border-bottom: 1px solid var(--border); }
+.history-list li:last-child { border-bottom: 0; }
+.history-list li form { margin: 0 0 0 auto; }
+.history-list .when { color: var(--muted); font-size: .88rem; min-width: 9.5rem; }
+.history-list .what::first-letter { text-transform: uppercase; }
+.help-page { max-width: 860px; }
+.help-page h2 { margin-top: 1.6rem; scroll-margin-top: calc(var(--topbar-h, 56px) + .6rem); }
+.help-page dl { margin: 0; }
+.help-page dt { font-weight: 700; margin-top: .7rem; }
+.help-page dd { margin: .1rem 0 0; }
+.help-page .help-nav { display: flex; gap: .5rem; flex-wrap: wrap; margin: .6rem 0 0; }
+.help-page ol, .help-page ul { padding-left: 1.3rem; display: grid; gap: .35rem; }
+.help-page kbd { font: inherit; font-size: .88em; border: 1px solid var(--field); border-bottom-width: 2px; border-radius: 6px; padding: .05rem .4rem; background: var(--card); white-space: nowrap; }
 .backup-list { list-style: none; padding: 0; margin: 0; display: grid; gap: .6rem; }
 .backup-list .backup { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; padding: .75rem 1rem; }
 .backup-list .backup .grow { flex: 1 1 22rem; }
@@ -1002,11 +1016,12 @@ label.check { display: inline-flex; align-items: center; gap: .4rem; font-weight
 .settings-quit { margin-top: 1rem; }
 .settings-btn { text-decoration: none; }
 .settings-btn.on { border-color: var(--teal); color: var(--teal-strong); }
+/* barre du haut : sous 980 px, les boutons gardent leur dessin, sans leur mot (la barre reste sur une ligne) */
+@media (max-width: 980px) { .settings-btn .lbl, .text-size-btn .lbl, .undo-btn .lbl, .help-btn .lbl { display: none; } }
 @media (max-width: 640px) {
   .card.setting { flex-wrap: wrap; align-items: flex-start; gap: .4rem .8rem; }
   .setting-body { flex: 1 1 calc(100% - 3.6rem); }
   .setting-go { margin-left: 3.4rem; }
-  .settings-btn .lbl, .text-size-btn .lbl { display: none; }
 }
 
 /* barre de recherche (Trip Compta dans sa propre fenêtre : Cmd/Ctrl+F) */
