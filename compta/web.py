@@ -573,16 +573,22 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
                     locked=vault_box is not None and vault_box.locked, saved=_hm(saved),
                     conflicts=len(C.conflicts(F, vault_box is not None, readable=lambda p: True)))
 
-    def refuse(url: str, msg: str):
-        """Retour avec un message de refus (saisie à corriger, action impossible) : affiché en rouge."""
-        return back(url, msg, err=True)
+    def refuse(url: str, msg: str, field: str | None = None):
+        """Retour avec un message de refus (saisie à corriger, action impossible) : affiché en rouge. `field` : le
+        nom du champ en cause ; la page y remet le message, à côté, et le formulaire revient avec la saisie."""
+        return back(url, msg, err=True, field=field)
 
-    def back(url: str, msg: str | None = None, redo: str | None = None, err: bool = False):
+    def back(url: str, msg: str | None = None, redo: str | None = None, err: bool = False,
+             field: str | None = None):
         if msg:
             url, _, frag = url.partition("#")
+            if "?" in url:                         # l'adresse d'où l'on vient portait déjà un message : on le retire
+                base, _, q = url.partition("?")
+                q = "&".join(p_ for p_ in q.split("&") if p_ and p_.split("=")[0] not in ("msg", "e", "f", "d", "r"))
+                url = base + ("?" + q if q else "")
             url += ("&" if "?" in url else "?") + "msg=" + quote(msg)
             if err:
-                url += "&e=1"
+                url += "&e=1" + (f"&f={quote(field)}" if field else "")
             now = db.undo_token()
             before, started = snap_before.get() or (None, "")
             # « Défaire » seulement si CETTE requête a modifié les données (sauvegarde d'annulation créée pendant
@@ -621,7 +627,11 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         return t
 
     class FormError(Exception):
-        pass
+        """Saisie refusée : retour au formulaire. `field` : le nom du champ en cause."""
+
+        def __init__(self, msg: str, field: str | None = None):
+            super().__init__(msg)
+            self.field = field
 
     def whole(v, default: int = 0) -> int:
         """Nombre entier venu d'un formulaire (une personne ou une ligne choisie) ; autre chose : la valeur par défaut."""
@@ -631,13 +641,13 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     def wholes(values) -> list:
         return [int(x) for x in values if str(x).strip().isdigit()]
 
-    def amount(form, key):
+    def amount(form, key, field: str | None = None):
         try:
             v = E.parse_amount(form.get(key))
         except ValueError:
-            raise FormError(f"Montant invalide : « {form.get(key)} ». Exemple : 12,50")
+            raise FormError(f"Montant invalide : « {form.get(key)} ». Exemple : 12,50", field or key)
         if v is not None and v < 0:
-            raise FormError("Le montant doit être positif.")
+            raise FormError("Le montant doit être positif.", field or key)
         return v
 
     @app.exception_handler(FormError)
@@ -645,7 +655,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         ref = request.headers.get("referer") or "/"
         u = urlparse(ref)
         path = u.path + (("?" + re.sub(r"&?(msg|e)=[^&]*", "", u.query).lstrip("&")) if u.query else "")
-        return refuse(path.rstrip("?"), str(exc))
+        return refuse(path.rstrip("?"), str(exc), getattr(exc, "field", None))
 
     def names(trip):
         return {p.id: p.name for p in trip.participants}
@@ -1602,7 +1612,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         f = await request.form()
         name = (f.get("name") or "").strip()
         if not name:
-            return refuse("/", "Donne un nom au voyage")
+            return refuse("/?nouveau=1", "Donne un nom au voyage", "name")
         db.snapshot(f"création du voyage « {name} »")
         t = M.Trip(name=name, place=f.get("place", "").strip(), organizer=f.get("organizer", "").strip(),
                    start=S.parse_date(f.get("start")), end=S.parse_date(f.get("end")))
@@ -1901,7 +1911,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             return refuse(f"/v/{tid}/participants?ajout=1&liste=1",
                           "Tous ces noms sont déjà dans la liste" if known_already else "Écris au moins un nom, un par ligne")
         if not new:
-            return refuse(f"/v/{tid}/participants?ajout=1#ajout", "Ce nom est vide ou déjà dans la liste")
+            return refuse(f"/v/{tid}/participants?ajout=1#ajout", "Ce nom est vide ou déjà dans la liste", "name")
         roles_in = _roles_from_form(f)
         companion = S.COMPANION in roles_in
         family = (_family_from_form(f) or "").strip()
@@ -2128,7 +2138,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         p = s.get(M.Participant, pid)
         if not p or p.trip_id != tid:
             raise HTTPException(404, "Participant introuvable")
-        extra = "".join(f"&{k}={quote(v)}" for k, v in request.query_params.items() if k in ("msg", "e", "d", "r"))
+        extra = "".join(f"&{k}={quote(v)}" for k, v in request.query_params.items() if k in ("msg", "e", "f", "d", "r"))
         return RedirectResponse(f"/v/{tid}/participants/comptes?p={pid}{extra}#p{pid}", status_code=303)
 
     @app.get("/v/{tid}/participants/comptes", response_class=HTMLResponse)
@@ -2253,7 +2263,8 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
                 try:
                     c_ = E.parse_amount(f.get(f"m_{p.id}"))
                 except ValueError:
-                    raise FormError(f"Montant invalide pour {p.name} : « {f.get(f'm_{p.id}')} ». Exemple : 12,50")
+                    raise FormError(f"Montant invalide pour {p.name} : « {f.get(f'm_{p.id}')} ». Exemple : 12,50",
+                                    f"m_{p.id}")
                 if c_ is not None and c_ >= 0:
                     fixed[p.id] = c_
                     w = w if w > 0 else 1.0
@@ -2335,7 +2346,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         t = trip_or_404(s, tid)
         name = clean_cat_name((await request.form()).get("name"))
         if not name:
-            return refuse(f"/v/{tid}/categories", "Donne un nom à la catégorie")
+            return refuse(f"/v/{tid}/categories", "Donne un nom à la catégorie", "name")
         if any(E.sort_key(c.name) == E.sort_key(name) for c in t.categories):
             return refuse(f"/v/{tid}/categories", f"« {name} » est déjà dans ce voyage")
         if E.sort_key(name) in {E.sort_key(n) for n in S.category_library(s)}:
@@ -2431,7 +2442,8 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         f = await request.form()
         label = (f.get("label") or "").strip()
         if not label:
-            return refuse(f"/v/{tid}/depenses/nouvelle", "Donne un nom à la dépense")
+            return refuse(request.headers.get("referer") or f"/v/{tid}/depenses/nouvelle",
+                          "Donne un nom à la dépense", "label")
         # Plusieurs tickets : lignes « ticket_amount / ticket_date », ou « 80,12 + 69,10 » tapé dans le montant
         tickets = []
         for a_, d_ in zip(f.getlist("ticket_amount"), f.getlist("ticket_date")):
@@ -2440,16 +2452,17 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
                 tickets.append((c_, S.parse_date(d_)))
         raw_actual = str(f.get("actual") or "")
         if not tickets and "+" in raw_actual.lstrip("+"):
-            tickets = [(c_, None) for c_ in (amount({"x": p_}, "x") for p_ in raw_actual.split("+")) if c_]
+            tickets = [(c_, None) for c_ in (amount({"x": p_}, "x", "actual") for p_ in raw_actual.split("+")) if c_]
         raw_planned = str(f.get("planned") or "")
-        planned = (sum(amount({"x": p_}, "x") or 0 for p_ in raw_planned.split("+")) or None) \
+        planned = (sum(amount({"x": p_}, "x", "planned") or 0 for p_ in raw_planned.split("+")) or None) \
             if "+" in raw_planned.lstrip("+") else amount(f, "planned")
         actual = sum(c_ for c_, _ in tickets) if tickets else amount(f, "actual")
         ref = request.headers.get("referer", f"/v/{tid}/depenses/nouvelle")
         if not weights_ok(t, f):
             return refuse(ref, "Coche au moins une personne pour « Pour qui ? »")
         if planned is None and actual is None and not f.get("pending"):
-            return refuse(ref, "Indique au moins un montant (prévu ou réel), ou coche « Montant pas encore connu »")
+            return refuse(ref, "Indique au moins un montant (prévu ou réel), ou coche « Montant pas encore connu »",
+                          "actual")
         weights, fixed = _parse_shares(t, f)
         if fixed:
             total_ = (actual if actual is not None else planned) or 0
@@ -2510,7 +2523,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         refund = amount(f, "refund") if f.get("has_refund") else None
         if refund:
             if refund > ((actual if actual is not None else planned) or 0):
-                raise FormError("Le montant remboursé dépasse le montant de la dépense")
+                raise FormError("Le montant remboursé dépasse le montant de la dépense", "refund")
             who_ = f.get("refund_to") or "asso"
             e.refund = refund
             e.refund_to_id = None if who_ == "asso" else int(who_)
@@ -2660,19 +2673,20 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         here = f"/v/{tid}/participants/remises"
         pid = int(f.get("participant") or 0) if (f.get("participant") or "").isdigit() else 0
         if pid not in names(t):
-            return refuse(here + "?remise=0", "Choisis la personne")
+            return refuse(here + "?remise=0", "Choisis la personne", "participant")
         try:
             val = E.parse_amount(f.get("value"))
         except ValueError:
-            return refuse(here + f"?remise={pid}", f"Montant invalide : « {f.get('value')} ». Exemple : 50")
+            return refuse(here + f"?remise={pid}", f"Montant invalide : « {f.get('value')} ». Exemple : 50", "value")
         if not val or val <= 0:
-            return refuse(here + f"?remise={pid}", "Indique un montant (ex. 50)")
+            return refuse(here + f"?remise={pid}", "Indique un montant (ex. 50)", "value")
         by = f.get("by") if f.get("by") in ("asso", "person") else "others"
         comp = whole(f.get("compensator")) if by == "person" else 0
         if by == "person" and comp not in names(t):
-            return refuse(here + f"?remise={pid}", "Choisis la personne qui compense")
+            return refuse(here + f"?remise={pid}", "Choisis la personne qui compense", "compensator")
         if by == "person" and comp == pid:
-            return refuse(here + f"?remise={pid}", "La personne qui compense ne peut pas être celle qui a la remise")
+            return refuse(here + f"?remise={pid}", "La personne qui compense ne peut pas être celle qui a la remise",
+                          "compensator")
         aid = f.get("aid") or ""
         a = next((x for x in t.adjustments if str(x.id) == aid and x.expense_id is None), None) if aid else None
         who = names(t)[pid]
@@ -2976,7 +2990,10 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         amt = amount(f, "amount")
         kind = f.get("kind", "versement")
         if pid not in names(t) or not amt or amt <= 0 or kind not in ("versement", "remboursement"):
-            return refuse(f"/v/{tid}/argent/mouvements?k={kind}", "Choisis une personne et un montant positif")
+            ref = urlparse(request.headers.get("referer") or "")      # retour là où le formulaire a été rempli
+            here = (ref.path + ("?" + ref.query if ref.query else "")) if ref.path.startswith(f"/v/{tid}/argent") \
+                else f"/v/{tid}/argent/mouvements?k={kind}"
+            return refuse(here, "Choisis une personne et un montant positif", "amount")
         who = names(t)[pid]
         db.snapshot(f"{kind} de {E.fmt(amt)} ({who})")
         s.add(M.Movement(trip_id=tid, participant_id=pid, kind=kind, amount=amt,
@@ -3000,7 +3017,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         amt = amount(f, "amount")
         kind = f.get("kind", m.kind)
         if pid not in names(t) or not amt or amt <= 0 or kind not in ("versement", "remboursement"):
-            return refuse(f"/v/{tid}/argent#m{mid}", "Choisis une personne et un montant positif")
+            return refuse(f"/v/{tid}/argent#m{mid}", "Choisis une personne et un montant positif", "amount")
         db.snapshot(f"modification d'un {m.kind} de {m.participant.name}")
         m.participant_id, m.amount, m.kind = pid, amt, kind
         m.date = S.parse_date(f.get("date")) or m.date
@@ -3169,7 +3186,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         name = (f.get("name") or "").strip()
         members = wholes(f.getlist("members"))
         if not name or len(members) < 2:
-            return refuse(f"/v/{tid}/entre-nous", "Donne un nom et choisis au moins 2 personnes")
+            return refuse(f"/v/{tid}/entre-nous", "Donne un nom et choisis au moins 2 personnes", "name")
         db.snapshot(f"création du compte « {name} »")
         sub = M.SubAccount(trip_id=tid, name=name, member_ids=",".join(map(str, members)))
         s.add(sub)
@@ -3214,7 +3231,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         a, b = whole(f.get("sender")), whole(f.get("receiver"))
         amt = amount(f, "amount")
         if not amt or amt <= 0:
-            return refuse(f"/v/{tid}/entre-nous/{sid}", "Montant invalide")
+            return refuse(f"/v/{tid}/entre-nous/{sid}", "Montant invalide", "amount")
         if a not in sub.members or b not in sub.members or a == b:
             return refuse(f"/v/{tid}/entre-nous/{sid}", "Choisis qui rembourse et qui reçoit, parmi les personnes de ce compte")
         n = names(t)
@@ -3360,7 +3377,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         t = trip_or_404(s, tid)
         text = str((await request.form()).get("pay_info") or "")
         if len(text.strip()) > S.PAY_INFO_MAX:
-            return refuse(f"/v/{tid}/envoyer", f"Ce texte est trop long : {S.PAY_INFO_MAX} caractères au plus")
+            return refuse(f"/v/{tid}/envoyer", f"Ce texte est trop long : {S.PAY_INFO_MAX} caractères au plus", "pay_info")
         if text.replace("\r", "").strip() == (t.pay_info or ""):
             return back(f"/v/{tid}/envoyer", "Rien à changer")
         db.snapshot("« Comment payer »")

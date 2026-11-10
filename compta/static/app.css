@@ -247,6 +247,9 @@ fieldset { min-width: 0; }
 
 .thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-2); display: grid; place-items: center; font-size: .75rem; color: var(--muted); }
 details.edit summary { cursor: pointer; color: var(--teal-strong); font-size: .85rem; }
+.field-err { color: var(--err); font-size: .9rem; font-weight: 600; margin: .3rem 0 0; }
+form > .field-err { margin: 0 0 .7rem; background: var(--err-bg); border-left: 4px solid var(--err); border-radius: 8px; padding: .45rem .7rem; }
+[aria-invalid="true"] { border-color: var(--err) !important; outline: 2px solid var(--err); outline-offset: 0; }
 .empty { text-align: center; padding: 2.5rem 1rem; color: var(--muted); }
 .empty-actions { justify-content: center; gap: .5rem; margin-top: .8rem; }
 .today-btn { display: inline-block; margin-top: .25rem; background: none; border: 0; padding: .1rem 0; font: inherit; font-size: .82rem;

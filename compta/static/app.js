@@ -369,6 +369,72 @@
     el.focus();
   });
 
+  // Formulaire refusé : il revient avec ce qui avait été saisi, et le message à côté du champ en cause.
+  // À l'envoi, la saisie est gardée (le temps de l'aller-retour) ; si la page revient avec un refus (?e=1), elle est
+  // remise dans le même formulaire. Les fichiers choisis ne peuvent pas être remis : il faut les rechoisir.
+  const RETRY = "formulaire-refuse";
+  const pathOf = (f) => { try { return new URL(f.getAttribute("action") || "", location.href).pathname; } catch (e) { return ""; } };
+  const formsAt = (path) => [...document.querySelectorAll("form")].filter((f) => pathOf(f) === path);
+  const checkable = (el) => el.type === "checkbox" || el.type === "radio";
+  document.addEventListener("submit", (ev) => {
+    const f = ev.target;
+    if (ev.defaultPrevented || (f.getAttribute("method") || "").toLowerCase() !== "post" || f.hasAttribute("data-no-retry")) return;
+    const fields = [...f.elements].filter((el) => el.name && !["file", "hidden", "password", "submit", "button"].includes(el.type))
+      .map((el) => (checkable(el) ? [el.name, el.value, el.checked, 1] : [el.name, el.value, false, 0]));
+    try {
+      sessionStorage.setItem(RETRY, JSON.stringify({ action: pathOf(f), idx: formsAt(pathOf(f)).indexOf(f), fields, t: Date.now() }));
+    } catch (e) {}
+  });
+  (function refusedForm() {
+    let saved = null;
+    try { saved = JSON.parse(sessionStorage.getItem(RETRY) || "null"); sessionStorage.removeItem(RETRY); } catch (e) {}
+    const q = new URLSearchParams(location.search);
+    if (q.get("e") !== "1") return;
+    let form = null;
+    if (saved && Date.now() - saved.t < 600000) {
+      const same = formsAt(saved.action);
+      form = same[saved.idx] || (same.length === 1 ? same[0] : null);
+    }
+    if (form) {
+      const fire = (el) => { el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); };
+      const els = [...form.elements].filter((el) => el.name && !["file", "hidden", "password"].includes(el.type));
+      saved.fields.filter((x) => x[3]).forEach(([name, value, checked]) => {          // d'abord les cases et les choix
+        const el = els.find((x) => checkable(x) && x.name === name && x.value === value);
+        if (el && el.checked !== checked) { el.checked = checked; fire(el); }
+      });
+      const nth = {};
+      saved.fields.filter((x) => !x[3]).forEach(([name, value]) => {                  // puis les textes, dans l'ordre
+        nth[name] = nth[name] || 0;
+        const el = els.filter((x) => !checkable(x) && x.name === name)[nth[name]++];
+        if (el && el.value !== value) { el.value = value; fire(el); }
+      });
+      form.dataset.dirty = "1";
+      for (let n = form; n; n = n.parentElement) {                                   // formulaire replié : on l'ouvre
+        if (n.hidden) n.hidden = false;
+        if (n.tagName === "DETAILS") n.open = true;
+      }
+    }
+    const msg = q.get("msg") || "", name = q.get("f");
+    const scope = form || document;
+    const target = name && [...scope.querySelectorAll('[name="' + name.replace(/["\\]/g, "") + '"]')]
+      .find((x) => x.type !== "hidden" && x.checkVisibility());
+    if (!msg || (!target && !form)) return;
+    const note = document.createElement("p");
+    note.className = "field-err"; note.id = "champ-refuse"; note.setAttribute("role", "alert");
+    note.textContent = "⚠️ " + msg;
+    if (target) {
+      target.setAttribute("aria-invalid", "true");
+      target.setAttribute("aria-describedby", note.id);
+      (target.closest(".field") || target.parentElement).appendChild(note);
+      target.focus({ preventScroll: true });
+      target.scrollIntoView({ block: "center" });
+      target.addEventListener("input", () => { target.removeAttribute("aria-invalid"); note.remove(); }, { once: true });
+    } else {
+      form.prepend(note);
+      form.scrollIntoView({ block: "nearest" });
+    }
+  })();
+
   // Après un redémarrage de l'application (mise à jour), l'onglet se recharge tout seul
   (function watchRestart() {
     if (document.querySelector(".update-steps")) return;   // la page d'attente de la mise à jour s'en charge
