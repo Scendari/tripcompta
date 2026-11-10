@@ -4,7 +4,10 @@
 #   git push origin v1.2.0
 #
 # 1. Les tests (rien n'est publié s'ils échouent) ; 2. les applications (Windows : l'installeur) ; 3. la Release GitHub, avec
-# SHA256SUMS.txt. Les applications déjà installées proposent ensuite la mise à jour toutes seules.
+# SHA256SUMS.txt et sa signature SHA256SUMS.txt.sig (secret TRIPCOMPTA_CLE_SIGNATURE, voir docs/PUBLIER.md) : les
+# applications installées n'acceptent qu'une mise à jour dont les empreintes sont signées. Elles proposent ensuite la
+# mise à jour toutes seules. La Release est créée en brouillon, complétée, puis publiée d'un coup : compatible avec
+# les « publications immuables » de GitHub (réglage du dépôt, voir docs/PUBLIER.md).
 name: Publier une version
 
 on:
@@ -55,6 +58,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
           python -m playwright install --with-deps chromium
+      - name: "La clé de signature des mises à jour est là, et c'est la bonne (sinon rien n'est fabriqué)"
+        env:
+          TRIPCOMPTA_CLE_SIGNATURE: ${{ secrets.TRIPCOMPTA_CLE_SIGNATURE }}
+        run: python build_tools/signer_empreintes.py cle
       - name: Tests
         run: python -m pytest -q
 
@@ -182,12 +189,19 @@ jobs:
         with:
           path: assets
           merge-multiple: true
-      - name: Empreintes
-        working-directory: assets
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Empreintes signées
+        env:
+          TRIPCOMPTA_CLE_SIGNATURE: ${{ secrets.TRIPCOMPTA_CLE_SIGNATURE }}
         run: |
-          sha256sum TripCompta-* > SHA256SUMS.txt
-          cat SHA256SUMS.txt
-          test "$(ls TripCompta-* | wc -l)" -eq 3      # Mac ×2, Windows (installeur)
+          test "$(ls assets/TripCompta-* | wc -l)" -eq 3      # Mac ×2, Windows (installeur)
+          grep '^cryptography' requirements.txt > "$RUNNER_TEMP/signature.txt"      # la même version que l'application
+          python -m pip install -r "$RUNNER_TEMP/signature.txt"
+          python build_tools/signer_empreintes.py signer assets "${GITHUB_REF_NAME#v}"
+          cat assets/SHA256SUMS.txt
+          test "$(ls assets | wc -l)" -eq 5                   # + SHA256SUMS.txt et SHA256SUMS.txt.sig
       - name: Créer la Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -201,4 +215,8 @@ jobs:
           printf '\nPremière installation : https://github.com/%s/blob/main/INSTALLER.md\n' "$GITHUB_REPOSITORY" >> notes.md
           PRE=""
           case "$TAG" in *-*) PRE="--prerelease";; esac
-          gh release create "$TAG" assets/* --verify-tag --title "Trip Compta ${TAG#v}" --notes-file notes.md $PRE
+          # en brouillon d'abord : tous les fichiers sont là avant que la version soit visible (et figée, si les
+          # publications immuables sont activées) ; puis publiée d'un coup
+          gh release create "$TAG" assets/* --verify-tag --draft --title "Trip Compta ${TAG#v}" --notes-file notes.md $PRE
+          test "$(gh release view "$TAG" --json assets --jq '.assets | length')" -eq 5
+          gh release edit "$TAG" --draft=false

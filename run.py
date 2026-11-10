@@ -184,7 +184,8 @@ def free_port(preferred: int) -> int:
 
 
 def main():
-    if "--apres-maj" in sys.argv[1:]:
+    after_update = "--apres-maj" in sys.argv[1:]
+    if after_update:
         # relancé par l'installeur Windows après une mise à jour : les options d'avant, à la même adresse
         from compta import updater as U
         sys.argv = [sys.argv[0]] + [a for a in sys.argv[1:] if a != "--apres-maj"] + U.relaunch_args()
@@ -282,6 +283,12 @@ def main():
     port = free_port(a.port)
     if lock is not None:
         lock.publish(port)
+    if after_update:
+        # l'installeur Windows attend ce signe de vie ; sans lui, il remet l'ancienne version
+        from compta import updater as U
+        from compta import version as V
+        threading.Thread(target=U.confirm_started, args=(port, V.build_info()["version"]), daemon=True,
+                         name="maj-demarre").start()
     url = f"http://127.0.0.1:{port}/"
 
     def prepare():

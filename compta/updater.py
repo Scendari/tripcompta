@@ -1,16 +1,19 @@
 """Mises à jour : savoir s'il y a une nouvelle version, puis l'installer en un clic.
 
 Les versions publiées sont les « Releases » GitHub du dépôt public. Chacune contient un fichier par système
-(TripCompta-mac-arm64.zip, TripCompta-mac-intel.zip, TripCompta-windows-setup.exe) et
-SHA256SUMS.txt (l'empreinte de chaque fichier, pour vérifier que le téléchargement est intact).
+(TripCompta-mac-arm64.zip, TripCompta-mac-intel.zip, TripCompta-windows-setup.exe), SHA256SUMS.txt (l'empreinte
+de chaque fichier) et SHA256SUMS.txt.sig (la signature de ces empreintes, voir compta/signature.py) : avant
+d'installer, on vérifie que les empreintes sont bien signées par Trip Compta, pour CETTE version, puis que le
+fichier téléchargé a la bonne empreinte.
 
 - La vérification se fait au plus une fois par jour, en arrière-plan ; hors ligne ou en cas d'erreur : rien.
 - Une version de développement ne se met jamais à jour toute seule.
-- L'installation : sauvegarde de la base, téléchargement, contrôle de l'empreinte, puis
+- L'installation : sauvegarde de la base, téléchargement, contrôle de la signature et de l'empreinte, puis
   - Mac : un petit script (remplacer.sh) attend que l'application soit fermée, la remplace, la relance et
     vérifie qu'elle répond ; sinon il remet l'ancienne ;
   - Windows : l'installeur, en silencieux (build_tools/windows/TripCompta.iss), attend que l'application soit
-    fermée, installe, relance ; s'il échoue, il remet tout en place et relance l'ancienne.
+    fermée, met l'ancienne de côté, installe, relance et attend que la nouvelle dise « j'ai démarré »
+    (confirm_started) ; s'il échoue ou si elle ne démarre pas, il remet l'ancienne et la relance.
   Les données (dossier TripCompta) ne sont jamais touchées.
 """
 from __future__ import annotations
@@ -30,6 +33,7 @@ import zipfile
 from pathlib import Path
 
 from . import paths as PATHS
+from . import signature as SIG
 from . import version as V
 
 REPO = "Scendari/tripcompta"
@@ -38,7 +42,12 @@ RELEASES_PAGE = f"https://github.com/{REPO}/releases/latest"
 INSTALL_HELP = f"https://github.com/{REPO}/blob/main/INSTALLER.md"
 CHECK_EVERY = 24 * 3600
 SUMS = "SHA256SUMS.txt"
+SUMS_SIG = SUMS + ".sig"                 # signature du fichier d'empreintes (compta/signature.py)
 PENDING = "en-cours.txt"
+STARTED = "demarre.txt"                  # Windows : écrit par la nouvelle version quand elle répond (confirm_started)
+UNSIGNED = ("Cette mise à jour n'a pas pu être vérifiée : elle ne porte pas la signature de Trip Compta. Par "
+            "prudence, rien n'a été installé. Réessaie plus tard ; si ce message revient, préviens la personne "
+            "qui t'a fait connaître Trip Compta.")
 APP_NAME = "TripCompta"                  # nom des fichiers : TripCompta.app, TripCompta.exe
 SCRIPTS = Path(__file__).parent / "scripts"
 
@@ -244,7 +253,9 @@ class Updater:
             backup_database(db, info["version"])
             self.job["step"] = "telechargement"
             archive = work / name
-            sums = parse_sums(self._read_text(info["assets"][SUMS]))
+            sums = signed_sums(self._read_text(info["assets"][SUMS]),
+                               self._read_text(info["assets"][SUMS_SIG]) if SUMS_SIG in info["assets"] else "",
+                               info["version"])
             got = self._download(info["assets"][name], archive,
                                  progress=lambda p: self.job.__setitem__("percent", p))
             self.job.update(step="verification", percent=100)
@@ -342,6 +353,39 @@ def download_file(url: str, dest: Path, progress=None) -> str:
             if progress and total:
                 progress(min(99, done * 100 // total))
     return h.hexdigest()
+
+
+def signed_sums(text: str, signature: str, version: str) -> dict:
+    """Les empreintes, seulement si le fichier est signé par Trip Compta et pour cette version précise (une
+    ancienne publication, même bien signée, ne peut pas être resservie sous un autre numéro)."""
+    if not signature or not SIG.verify(text.encode("utf-8"), signature) or SIG.signed_version(text) != version:
+        raise UpdateError(UNSIGNED)
+    return parse_sums(text)
+
+
+def confirm_started(port: int, version: str, work: Path | None = None, tries: int = 600, pause: float = 0.5,
+                    ping=None) -> bool:
+    """Après une mise à jour sous Windows (« --apres-maj ») : dès que CETTE version répond pour de bon à son adresse,
+    on l'écrit dans le dossier de travail. L'installeur attend ce fichier ; s'il ne vient pas, il remet l'ancienne
+    version (build_tools/windows/TripCompta.iss)."""
+    def answers() -> str | None:
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/ping", timeout=2) as r:
+                return json.load(r).get("version")
+        except Exception:
+            return None
+    ping = ping or answers
+    for _ in range(tries):
+        if ping() == version:
+            try:
+                work = work or work_dir()
+                work.mkdir(parents=True, exist_ok=True)
+                (work / STARTED).write_text(version, encoding="utf-8")
+                return True
+            except OSError:
+                return False
+        time.sleep(pause)
+    return False
 
 
 def parse_sums(text: str) -> dict:

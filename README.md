@@ -298,9 +298,11 @@ SCREENSHOTS=captures python -m pytest tests/test_e2e.py   # + captures d'écran 
 ### Publier une version
 
 Les versions publiées sont fabriquées par **GitHub Actions** (`.github/workflows/release.yml`) quand on pousse
-une étiquette `v…` : tests (rien n'est publié s'ils échouent), puis les quatre applications (Mac Apple Silicon,
-Mac Intel, Windows, Linux), chacune lancée pour vérifier qu'elle démarre, puis la Release GitHub avec
-`SHA256SUMS.txt`. Les applications installées la proposent ensuite toutes seules (bandeau, une vérification par jour).
+une étiquette `v…` : tests (rien n'est publié s'ils échouent), puis les trois applications (Mac Apple Silicon,
+Mac Intel, installeur Windows), chacune lancée pour vérifier qu'elle démarre, puis la Release GitHub avec
+`SHA256SUMS.txt` et sa signature `SHA256SUMS.txt.sig`. Les applications installées la proposent ensuite toutes
+seules (bandeau, une vérification par jour) et n'installent qu'une version dont les empreintes sont signées.
+Le détail (clé de signature, publications immuables, que faire si la clé est perdue) : [docs/PUBLIER.md](docs/PUBLIER.md).
 
 ```bash
 # 1. le numéro dans compta/__init__.py (__version__ = "1.2.0"), commit, push
@@ -313,8 +315,9 @@ gh run watch                     # suivre la fabrication (≈ 15 min)
 
 Une étiquette `v1.2.0-beta1` publie une **pré-version** : fabriquée pareil, téléchargeable par lien, mais jamais
 proposée aux utilisateurs. Mise à jour côté application : `compta/updater.py` (vérification, téléchargement,
-empreinte, sauvegarde `avant-maj-<version>.db`) et `compta/scripts/remplacer.sh|.ps1` (remplace l'application,
-la relance, remet l'ancienne si la nouvelle ne répond pas). Une base ouverte par une version plus récente
+signature et empreinte, sauvegarde `avant-maj-<version>.db`), `compta/scripts/remplacer.sh` sur Mac et
+l'installeur sous Windows (`build_tools/windows/TripCompta.iss`) : ils remplacent l'application, la relancent,
+et remettent l'ancienne si la nouvelle ne démarre pas. Une base ouverte par une version plus récente
 (X.Y.Z supérieur) est refusée par une version plus ancienne, sans être modifiée.
 
 Pile : Python 3.10+, FastAPI, Jinja2, SQLAlchemy/SQLite, fpdf2 (police DejaVu embarquée), SDK MCP, PyInstaller.

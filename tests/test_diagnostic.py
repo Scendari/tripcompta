@@ -50,6 +50,7 @@ def test_diagnostic_gives_numbers_and_state(tmp_path):
     assert text.startswith("DIAGNOSTIC TRIP COMPTA\nfait le ")
     assert "ni nom, ni montant" in text
     for expected in ("== Application ==", f"Trip Compta {app.state.updater.label}", "SQLite ",
+                     "vérification de la signature des mises à jour : prête",
                      "== Dossier des voyages ==", "protégé par un mot de passe : non", "place libre sur ce disque : ",
                      "vérification du fichier : intact", f"numéro de structure : {D.SCHEMA}",
                      "voyages : 1", "participants : 3", "dépenses : 2", "versements et remboursements : 1",

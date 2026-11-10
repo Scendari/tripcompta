@@ -5,7 +5,10 @@
 1. installation silencieuse (dossier d'essai), raccourci du menu Démarrer, désinstalleur ;
 2. l'application installée démarre et répond ;
 3. mise à jour comme Trip Compta la lance (compta/updater.py) : l'installeur attend la fermeture de « l'ancienne »,
-   installe, relance « TripCompta.exe --apres-maj » avec les options d'avant (même adresse) ;
+   la met de côté, installe, relance « TripCompta.exe --apres-maj » avec les options d'avant (même adresse), attend
+   que la nouvelle dise « j'ai démarré », puis efface l'ancienne ;
+3 bis. une nouvelle version qui ne dit jamais « j'ai démarré » : l'installeur l'arrête, remet l'ancienne à sa place,
+   écrit le message d'échec et relance l'ancienne ;
 4. désinstallation : le programme est retiré, les voyages restent.
 Rien n'est envoyé au vrai dossier de l'utilisateur : réglages et voyages dans un dossier temporaire.
 """
@@ -61,6 +64,14 @@ def quit_app(port):
         time.sleep(0.25)
 
 
+def wait_for(cond, seconds):
+    for _ in range(seconds * 2):
+        if cond():
+            return True
+        time.sleep(0.5)
+    return False
+
+
 def check(ok, what):
     print(("OK   " if ok else "ÉCHEC ") + what)
     if not ok:
@@ -110,7 +121,39 @@ def main():
     check(not (work / "echec.txt").exists(), "pas d'échec signalé")
     check(exe.stat().st_mtime != before or (inst / "unins000.dat").stat().st_mtime > t0 - 1,
           "mise à jour installée au même endroit que la première installation")
+    aside, spoiled = Path(str(inst) + ".ancien"), Path(str(inst) + ".rate")
+    check(wait_for(lambda: (work / U.STARTED).exists(), 60), "la nouvelle version a dit « j'ai démarré »")
+    check((work / U.STARTED).read_text(encoding="utf-8").strip() == version, "… avec son numéro de version")
+    check(wait_for(lambda: not aside.exists(), 120), "l'ancienne version, mise de côté, est effacée après coup")
     quit_app(port2)
+    time.sleep(2)
+
+    # 3 bis. la nouvelle version ne dit jamais « j'ai démarré » (l'installeur regarde un autre dossier que le sien)
+    (inst / "temoin-ancienne.txt").write_text("ancienne version", encoding="utf-8")
+    elsewhere = tmp / "maj sans réponse"
+    elsewhere.mkdir()
+    port3, port4 = free_port(), free_port()
+    U.write_relaunch(work, port3, ["--navigateur"])
+    old = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(2)"])
+    cmd = [str(setup), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", f"/LOG={tmp / 'installation-3.log'}",
+           f"/ATTENDRE={old.pid}", f"/ECHEC={elsewhere / 'echec.txt'}", f"/ANCIEN={exe}", "/ATTENTE=25"]
+    setup_run = subprocess.Popen(cmd, env=env)
+    check(wait_ping(port3, version, 180), "essai du retour arrière : la nouvelle version est lancée")
+    check(not (inst / "temoin-ancienne.txt").exists() and (aside / "temoin-ancienne.txt").exists(),
+          "… pendant ce temps, l'ancienne est de côté")
+    U.write_relaunch(work, port4, ["--navigateur"])            # pour la relance de l'ancienne
+    try:
+        setup_run.wait(300)
+    except subprocess.TimeoutExpired:
+        check(False, "l'installeur a fini")
+    check(wait_for(lambda: (elsewhere / "echec.txt").exists(), 30), "sans « j'ai démarré » : échec signalé")
+    said = (elsewhere / "echec.txt").read_text(encoding="utf-8-sig")
+    check("n'a pas démarré correctement" in said and "remise en place" in said, f"message d'échec lisible : {said.strip()}")
+    check((inst / "temoin-ancienne.txt").exists(), "l'ancienne version est remise à sa place")
+    check(not aside.exists() and not spoiled.exists(), "aucun dossier de secours ne traîne")
+    check(ping(port3) is None, "la version qui ne répondait pas est arrêtée")
+    check(wait_ping(port4, version, 180), "l'ancienne version est relancée")
+    quit_app(port4)
     time.sleep(2)
 
     # 4. désinstallation : les voyages restent

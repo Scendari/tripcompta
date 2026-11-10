@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from compta import signature as SIG
 from compta import updater as U
 from compta import version as V
 from compta.db import SCHEMA, Database, NewerDatabaseError, stored_schema, stored_version
@@ -22,14 +23,25 @@ RELEASE = dict(tag_name="v1.1.0", body="- Nouveau : le mail au trésorier\n- Cor
                published_at="2026-11-02T10:00:00Z",
                assets=[{"name": n, "browser_download_url": f"https://exemple.invalid/{n}"} for n in
                        ("TripCompta-mac-arm64.zip", "TripCompta-mac-intel.zip",
-                        "TripCompta-windows-setup.exe", "TripCompta-essai.tar.gz", "SHA256SUMS.txt")])
+                        "TripCompta-windows-setup.exe", "TripCompta-essai.tar.gz", "SHA256SUMS.txt",
+                        "SHA256SUMS.txt.sig")])
+TEST_PRIVATE, TEST_PUBLIC = SIG.new_key()        # clé d'essai : la vraie clé privée n'est jamais sur cet ordinateur
 
 
 @pytest.fixture(autouse=True)
 def own_config(tmp_path, monkeypatch):
-    """Chaque test a ses propres réglages d'ordinateur (et donc son dossier de mise à jour)."""
+    """Chaque test a ses propres réglages d'ordinateur (et donc son dossier de mise à jour), et une clé d'essai."""
     monkeypatch.setenv("TRIPCOMPTA_CONFIG", str(tmp_path / "conf" / "reglages.json"))
     monkeypatch.delenv("TRIPCOMPTA_NO_UPDATE_CHECK", raising=False)
+    monkeypatch.setattr(SIG, "PUBLIC_KEYS", (TEST_PUBLIC,))
+
+
+def serve(u, sums_text, version="1.1.0", key=None):
+    """La publication simulée sert ce fichier d'empreintes (précédé de sa version) et sa signature."""
+    text = f"{SIG.VERSION_LINE}{version}\n{sums_text}"
+    sig = SIG.sign(text.encode("utf-8"), key or TEST_PRIVATE)
+    u._read_text = lambda url: sig if url.endswith(".sig") else text
+    return text, sig
 
 
 class FakeGitHub:
@@ -93,7 +105,7 @@ def test_asset_for_each_computer():
 def test_release_info_and_sums():
     info = U.release_info(RELEASE)
     assert info["version"] == "1.1.0" and info["date"] == "2026-11-02" and "trésorier" in info["notes"]
-    assert info["assets"]["SHA256SUMS.txt"].endswith("SHA256SUMS.txt") and len(info["assets"]) == 5
+    assert info["assets"]["SHA256SUMS.txt"].endswith("SHA256SUMS.txt") and len(info["assets"]) == 6
     a, b = "a" * 64, "B" * 64
     sums = U.parse_sums(f"{a}  TripCompta-windows-setup.exe\n{b} *TripCompta-mac-arm64.zip\n\nn'importe quoi\n")
     assert sums == {"TripCompta-windows-setup.exe": a, "TripCompta-mac-arm64.zip": "b" * 64}
@@ -316,7 +328,7 @@ def install_env(tmp_path, monkeypatch):
 
 
 def run(u, db, target, sums_text, launched, quitted):
-    u._read_text = lambda url: sums_text
+    serve(u, sums_text)
     u.run_install(db, port=8765, app_args=["--data-dir", "x"], quit_app=lambda: quitted.append(1),
                   location=(target, "prog"), launch=lambda **kw: launched.append(kw))
 
@@ -571,7 +583,7 @@ def test_install_windows_runs_the_installer(tmp_path, monkeypatch):
     u = make(download=fake_download(content))
     u.check()
     launched, quitted = [], []
-    u._read_text = lambda url: f"{hashlib.sha256(content).hexdigest()}  {name}\n"
+    serve(u, f"{hashlib.sha256(content).hexdigest()}  {name}\n")
     u.run_install(db, port=8790, app_args=["--navigateur"], quit_app=lambda: quitted.append(1),
                   location=(target, "TripCompta.exe"), launch=lambda **kw: launched.append(kw))
     assert u.job["step"] == "redemarrage" and u.job["error"] is None, u.job

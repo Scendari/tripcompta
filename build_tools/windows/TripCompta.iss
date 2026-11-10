@@ -10,8 +10,11 @@
 ; - Mise à jour (lancée par Trip Compta lui-même, compta/updater.py) :
 ;     TripCompta-windows-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ATTENDRE=<pid> /ECHEC=<fichier>
 ;                                  /ANCIEN=<programme actuel>
-;   attend la fin de l'application, installe, relance « TripCompta.exe --apres-maj ». En cas d'échec (Inno remet
-;   tout en place) : message dans <fichier> et relance de l'ancienne version.
+;   attend la fin de l'application, met l'ancienne version de côté (dossier « TripCompta.ancien »), installe,
+;   relance « TripCompta.exe --apres-maj » et attend que la nouvelle version dise qu'elle a démarré (fichier
+;   « demarre.txt » à côté de <fichier>, écrit par compta/updater.py : confirm_started ; /ATTENTE=<secondes>, 120
+;   par défaut). Si l'installation échoue ou si la nouvelle version ne démarre pas : l'ancienne est remise à sa
+;   place, un message est écrit dans <fichier> et l'ancienne version est relancée.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0-dev"
@@ -73,7 +76,7 @@ Name: "{userdesktop}\Trip Compta"; Filename: "{app}\TripCompta.exe"; Tasks: bure
 [Run]
 Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "Installation de WebView2 (la fenêtre de Trip Compta)…"; Flags: waituntilterminated skipifdoesntexist; Check: NeedsWebView2
 Filename: "{app}\TripCompta.exe"; Description: "Ouvrir Trip Compta"; Flags: nowait postinstall skipifsilent
-Filename: "{app}\TripCompta.exe"; Parameters: "--apres-maj"; Flags: nowait; Check: IsUpdate
+; (mise à jour : la relance est faite par le code, StartAfterUpdate, qui vérifie que la nouvelle version démarre)
 
 [Code]
 const
@@ -89,10 +92,126 @@ function CloseHandle(hObject: THandle): Boolean;
 
 var
   Installed: Boolean;
+  AppDir: String;      { le dossier de l'application (connu à partir de PrepareToInstall) }
+  Backup: String;      { mise à jour : l'ancienne version, mise de côté le temps d'installer ('' : aucune) }
 
 function IsUpdate: Boolean;
 begin
   Result := ExpandConstant('{param:ATTENDRE|}') <> '';
+end;
+
+{ Dossier de travail de la mise à jour : celui du fichier /ECHEC ('' si l'option n'est pas donnée) }
+function WorkDir: String;
+begin
+  Result := ExtractFileDir(ExpandConstant('{param:ECHEC|}'));
+end;
+
+procedure SayFailure(Text: String);
+var
+  Msg: TArrayOfString;
+begin
+  if ExpandConstant('{param:ECHEC|}') <> '' then
+  begin
+    SetArrayLength(Msg, 1);
+    Msg[0] := Text;
+    SaveStringsToUTF8File(ExpandConstant('{param:ECHEC|}'), Msg, False);
+  end;
+end;
+
+{ Remet l'ancienne version à sa place (la nouvelle, incomplète ou qui ne démarre pas, est retirée) }
+function RestoreOld: Boolean;
+var
+  I: Integer;
+  Moved: Boolean;
+begin
+  Result := False;
+  if (Backup = '') or (AppDir = '') then
+    Exit;
+  if DirExists(AppDir) then
+  begin
+    if DirExists(AppDir + '.rate') then
+      DelTree(AppDir + '.rate', True, True, True);
+    Moved := False;
+    for I := 1 to 10 do        { un programme tout juste arrêté garde ses fichiers encore un instant }
+    begin
+      Moved := RenameFile(AppDir, AppDir + '.rate');
+      if Moved then
+        Break;
+      Sleep(1000);
+    end;
+    if not Moved then
+    begin
+      Log('Impossible d''écarter la nouvelle version : l''ancienne reste dans ' + Backup);
+      Exit;
+    end;
+  end;
+  if RenameFile(Backup, AppDir) then
+  begin
+    Log('Ancienne version remise en place');
+    Result := True;
+    Backup := '';
+    DelTree(AppDir + '.rate', True, True, True);
+  end
+  else
+  begin
+    Log('Impossible de remettre l''ancienne version : la nouvelle est laissée en place');
+    RenameFile(AppDir + '.rate', AppDir);
+  end;
+end;
+
+{ Arrête le Trip Compta de CE dossier (une nouvelle version qui ne répond pas), et lui seul }
+procedure StopApp(Exe: String);
+var
+  Rc: Integer;
+  P: String;
+begin
+  P := Exe;
+  StringChangeEx(P, '''', '''''', True);
+  Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+       '-NoProfile -NonInteractive -Command "Get-Process TripCompta -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq ''' + P + ''' } | Stop-Process -Force"',
+       '', SW_HIDE, ewWaitUntilTerminated, Rc);
+  Sleep(2000);   { Windows libère les fichiers un peu après la fin du programme }
+end;
+
+{ Mise à jour installée : on lance la nouvelle version et on attend qu'elle dise « j'ai démarré » }
+procedure StartAfterUpdate;
+var
+  Exe, Marker: String;
+  Rc, I, Secs: Integer;
+  Ok: Boolean;
+begin
+  Exe := AppDir + '\TripCompta.exe';
+  Exec(Exe, '--apres-maj', AppDir, SW_SHOWNORMAL, ewNoWait, Rc);
+  if (Backup = '') or (WorkDir = '') then
+    Exit;                      { rien à remettre en place : on ne peut que lancer }
+  Marker := WorkDir + '\demarre.txt';
+  Secs := StrToIntDef(ExpandConstant('{param:ATTENTE|120}'), 120);
+  Ok := False;
+  for I := 1 to Secs * 2 do
+  begin
+    if FileExists(Marker) then
+    begin
+      Ok := True;
+      Break;
+    end;
+    Sleep(500);
+  end;
+  if Ok then
+  begin
+    Log('La nouvelle version a démarré : l''ancienne est effacée');
+    DelTree(Backup, True, True, True);
+    Backup := '';
+    Exit;
+  end;
+  Log('La nouvelle version n''a pas démarré : retour à l''ancienne');
+  StopApp(Exe);
+  if RestoreOld then
+  begin
+    SayFailure('La nouvelle version n''a pas démarré correctement. L''ancienne version a été remise en place.');
+    Exec(Exe, '--apres-maj', AppDir, SW_SHOWNORMAL, ewNoWait, Rc);
+  end
+  else
+    SayFailure('La nouvelle version n''a pas démarré correctement. Réinstalle Trip Compta depuis le site : tes voyages ne sont pas touchés.');
 end;
 
 function HasWebView2(Root: Integer; Key: String): Boolean;
@@ -128,29 +247,45 @@ begin
     end;
     Sleep(1000);   { Windows libère les fichiers un peu après la fin du programme }
   end;
+  AppDir := WizardDirValue;
+  if IsUpdate then
+  begin
+    { l'ancienne version est mise de côté : si la nouvelle ne s'installe pas ou ne démarre pas, on la remet }
+    if WorkDir <> '' then
+      DeleteFile(WorkDir + '\demarre.txt');
+    if DirExists(AppDir + '.ancien') then
+      DelTree(AppDir + '.ancien', True, True, True);
+    if DirExists(AppDir) and RenameFile(AppDir, AppDir + '.ancien') then
+    begin
+      Backup := AppDir + '.ancien';
+      Log('Ancienne version mise de côté : ' + Backup);
+    end
+    else
+      Log('Ancienne version pas mise de côté (dossier absent ou occupé) : installation par-dessus');
+  end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
+  begin
     Installed := True;
+    if IsUpdate then
+      StartAfterUpdate;
+  end;
 end;
 
 procedure DeinitializeSetup;
 var
-  Msg: TArrayOfString;
   Old: String;
   Rc: Integer;
 begin
   if IsUpdate and not Installed then
   begin
     Log('Mise à jour pas installée : relance de l''ancienne version');
-    if ExpandConstant('{param:ECHEC|}') <> '' then
-    begin
-      SetArrayLength(Msg, 1);
-      Msg[0] := 'La mise à jour n''a pas pu s''installer. Rien n''a été changé : c''est toujours l''ancienne version.';
-      SaveStringsToUTF8File(ExpandConstant('{param:ECHEC|}'), Msg, False);
-    end;
+    if Backup <> '' then
+      RestoreOld;
+    SayFailure('La mise à jour n''a pas pu s''installer. Rien n''a été changé : c''est toujours l''ancienne version.');
     Old := ExpandConstant('{param:ANCIEN|}');
     if (Old <> '') and FileExists(Old) then
       Exec(Old, '--apres-maj', ExtractFileDir(Old), SW_SHOWNORMAL, ewNoWait, Rc);

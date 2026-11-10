@@ -16,7 +16,7 @@ RELEASE = dict(tag_name="v1.1.0", published_at="2026-11-02T10:00:00Z", html_url=
                     "- Correction : arrondis des remises",
                assets=[{"name": n, "browser_download_url": f"https://exemple.invalid/{n}"} for n in
                        ("TripCompta-mac-arm64.zip", "TripCompta-mac-intel.zip", "TripCompta-windows-setup.exe",
-                        "TripCompta-essai.tar.gz", "SHA256SUMS.txt")])
+                        "TripCompta-essai.tar.gz", "SHA256SUMS.txt", "SHA256SUMS.txt.sig")])
 
 
 class GitHub:

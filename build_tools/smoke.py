@@ -93,6 +93,11 @@ def main(exe: str, expected: str) -> int:
                 ok = info.get("app") == "tripcompta" and info.get("version") == expected and "Trip Compta" in home
                 print(f"Réponse : {info} ; page d'accueil : {'ok' if 'Trip Compta' in home else 'INCORRECTE'}")
                 if ok:
+                    # la vérification de signature des mises à jour marche dans l'application fabriquée
+                    diag, _ = get(f"http://127.0.0.1:{port}/reglages/diagnostic.txt")
+                    ok = "vérification de la signature des mises à jour : prête" in diag
+                    print("Signature des mises à jour : " + ("prête" if ok else "INDISPONIBLE dans cette application"))
+                if ok:
                     ok = protection(f"http://127.0.0.1:{port}/", docs)
                 return 0 if ok else 1
             except OSError:

@@ -174,6 +174,8 @@ def build(*, version: str, folder: Path | str, db=None, source: str | None = Non
         L.append(f"macOS {platform.mac_ver()[0]}")
     L.append(f"Python {'.'.join(map(str, sys.version_info[:3]))}, SQLite {sqlite3.sqlite_version}")
     L.append(f"emplacement de l'application : {Path(sys.executable).parent if getattr(sys, 'frozen', False) else 'code source'}")
+    from . import signature
+    L.append("vérification de la signature des mises à jour : " + ("prête" if signature.self_test() else "INDISPONIBLE"))
     if problem:
         L += ["", "== Problème à l'ouverture ==", problem]
 
