@@ -304,6 +304,12 @@ form > .field-err { margin: 0 0 .7rem; background: var(--err-bg); border-left: 4
 .today-btn { display: inline-block; margin-top: .25rem; background: none; border: 0; padding: .1rem 0; font: inherit; font-size: .82rem;
   color: var(--teal-strong); text-decoration: underline; cursor: pointer; }
 .today-btn:hover { color: var(--text); }
+/* au clavier : pendant qu'on est dans le champ date, le bouton rappelle les touches (Tab accepte, Échap refuse) */
+.today-btn { position: relative; text-align: left; }
+input[type="date"]:focus + .today-btn[data-hint]::after { content: attr(data-hint); position: absolute; left: 0; top: 100%;
+  z-index: 5; width: max-content; max-width: min(24rem, 80vw); margin-top: .15rem; padding: .1rem .45rem;
+  background: var(--card); border: 1px solid var(--border); border-radius: 4px; color: var(--muted);
+  text-decoration: none; font-size: .78rem; box-shadow: 0 2px 8px rgba(0, 0, 0, .08); }
 .check-col { columns: 2 220px; }
 .check-col label { font-weight: 500; display: flex; gap: .4rem; align-items: center; break-inside: avoid; }
 

@@ -352,16 +352,49 @@
         unsaved(f) && !confirm(LEAVE)) ev.preventDefault();
   }, true);
 
-  // Bouton « Aujourd'hui » à côté de chaque date (sauf les dates du voyage : data-no-today)
+  // Bouton « Aujourd'hui » à côté de chaque date (sauf les dates du voyage : data-no-today). Un champ date vide
+  // n'est jamais rempli tout seul : sur Mac, la date du jour qu'on y voit en gris n'est qu'un décor. Au clavier,
+  // Tab accepte cette proposition (comme on accepte une suggestion grisée), Échap la refuse (« sans date ») ; à la
+  // souris, le bouton. Cliquer ailleurs, revenir en arrière (Maj+Tab) ou taper une date à la main ne remplit rien.
   document.querySelectorAll('input[type="date"]:not([data-no-today])').forEach((d) => {
     const b = document.createElement("button");
-    b.type = "button"; b.className = "today-btn"; b.textContent = "Aujourd'hui";
-    b.setAttribute("aria-label", "Mettre la date d'aujourd'hui");
-    b.addEventListener("click", () => {
+    let typing = false;       // des chiffres ont été tapés : on laisse la personne finir sa date
+    let refused = false;      // Échap : « sans date », Tab ne propose plus rien
+    let accepted = "";        // la date que Tab vient de mettre (Échap la retire)
+    const iso = () => {
       const n = new Date(), p = (x) => String(x).padStart(2, "0");
-      d.value = n.getFullYear() + "-" + p(n.getMonth() + 1) + "-" + p(n.getDate());
+      return n.getFullYear() + "-" + p(n.getMonth() + 1) + "-" + p(n.getDate());
+    };
+    const set = (v) => {
+      d.value = v;
       d.dispatchEvent(new Event("input", { bubbles: true }));
       d.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    const offered = () => !d.value && !typing && !refused && !(d.validity && d.validity.badInput);
+    const hint = () => {
+      const text = offered() ? "Tab : aujourd'hui · Échap : sans date"
+        : (accepted && d.value === accepted) ? "Échap : retirer la date" : "";
+      if (text) b.dataset.hint = text; else delete b.dataset.hint;
+    };
+    b.type = "button"; b.className = "today-btn"; b.textContent = "Aujourd'hui";
+    b.setAttribute("aria-label", "Mettre la date d'aujourd'hui");
+    b.title = "Au clavier : Tab, dans le champ date vide";
+    b.addEventListener("click", () => { accepted = ""; set(iso()); hint(); });
+    d.addEventListener("focus", () => { if (!d.value && !(d.validity && d.validity.badInput)) typing = false; hint(); });
+    d.addEventListener("input", () => { if (d.value !== accepted) accepted = ""; hint(); });
+    d.addEventListener("keydown", (ev) => {
+      if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      if (ev.key === "Tab" && !ev.shiftKey && offered()) {
+        accepted = iso();
+        set(accepted);                       // pas de preventDefault : Tab continue son chemin
+      } else if (ev.key === "Escape" && (offered() || (accepted && d.value === accepted))) {
+        ev.preventDefault();
+        refused = true; accepted = "";
+        if (d.value) set("");
+      } else if (/^[0-9]$/.test(ev.key) || ev.key === "ArrowUp" || ev.key === "ArrowDown") {
+        typing = true;
+      }
+      hint();
     });
     d.insertAdjacentElement("afterend", b);
   });

@@ -152,6 +152,85 @@ def test_today_button_fills_the_date(live):
     assert pg.errors == []
 
 
+def hint_of(pg, sel="#date"):
+    return pg.evaluate(f"getComputedStyle(document.querySelector('{sel} + .today-btn'), '::after').content")
+
+
+def test_tab_accepts_today_in_an_empty_date_field(live):
+    """Un champ date vide n'est jamais rempli tout seul (la date grisée que montre le Mac n'est qu'un décor). Au
+    clavier, Tab accepte la date d'aujourd'hui, comme on accepte une suggestion grisée ; Échap la refuse. Cliquer
+    ailleurs, revenir en arrière ou taper une date à la main ne remplit rien."""
+    pg, base, tid, ops = live
+    today = dt.date.today().isoformat()
+    new = f"{base}/v/{tid}/depenses/nouvelle"
+
+    pg.goto(new)                                         # 1. Tab accepte
+    assert "Tab" not in hint_of(pg)                      # le rappel n'apparaît que dans le champ
+    pg.focus("#date")
+    assert "Tab : aujourd'hui" in hint_of(pg) and "Échap : sans date" in hint_of(pg)
+    pg.keyboard.press("Tab")
+    assert pg.locator("#date").input_value() == today
+    assert pg.evaluate("document.activeElement.id") == "date" and "Échap : retirer la date" in hint_of(pg)
+    pg.keyboard.press("Escape")                          # … et Échap retire ce que Tab vient de mettre
+    assert pg.locator("#date").input_value() == ""
+    for _ in range(4):                                   # refusée : Tab ne la propose plus
+        pg.keyboard.press("Tab")
+    assert pg.locator("#date").input_value() == ""
+
+    pg.goto(new)                                         # 2. Échap d'abord : « sans date », Tab passe sans remplir
+    pg.focus("#date")
+    pg.keyboard.press("Escape")
+    assert "Tab" not in hint_of(pg)
+    for _ in range(4):
+        pg.keyboard.press("Tab")
+    assert pg.locator("#date").input_value() == ""
+
+    pg.goto(new)                                         # 3. cliquer ailleurs ou revenir en arrière : rien
+    pg.focus("#date")
+    pg.click("#label")
+    assert pg.locator("#date").input_value() == ""
+    pg.focus("#date")
+    pg.keyboard.press("Shift+Tab")
+    assert pg.locator("#date").input_value() == ""
+
+    pg.goto(new)                                         # 4. une date tapée à la main n'est pas remplacée
+    pg.focus("#date")
+    pg.keyboard.type("15")                               # le jour, puis Tab vers le mois : toujours pas de date
+    pg.keyboard.press("Tab")
+    assert pg.locator("#date").input_value() == ""
+    pg.fill("#date", "2026-01-15")
+    pg.focus("#date")
+    assert "Tab" not in hint_of(pg) and "Échap" not in hint_of(pg)
+    pg.keyboard.press("Tab")
+    pg.keyboard.press("Escape")                          # Échap ne retire pas une date que la personne a choisie
+    assert pg.locator("#date").input_value() == "2026-01-15"
+
+    pg.goto(new)                                         # 5. enregistré comme affiché : acceptée, ou sans date
+    pg.fill("#label", "Avec la date du jour")
+    pg.fill("#actual", "10")
+    pg.focus("#date")
+    pg.keyboard.press("Tab")
+    pg.locator("form#expense-form button.btn:not(.ghost)").last.click() if pg.locator("form#expense-form").count() \
+        else pg.locator("button:has-text('Enregistrer')").first.click()
+    pg.wait_for_url(re.compile(r"/depenses"))
+    pg.goto(new)
+    pg.fill("#label", "Sans date")
+    pg.fill("#actual", "10")
+    pg.locator("form#expense-form button.btn:not(.ghost)").last.click() if pg.locator("form#expense-form").count() \
+        else pg.locator("button:has-text('Enregistrer')").first.click()
+    pg.wait_for_url(re.compile(r"/depenses"))
+    by_name = {e["libelle"]: e for e in ops.trip(tid)["depenses"]}
+    assert by_name["Avec la date du jour"]["date"] == today and not by_name["Sans date"]["date"]
+
+    # 6. les dates du voyage et les dates de paiement ne proposent rien : Tab n'y met pas de date
+    pg.goto(f"{base}/v/{tid}/argent/dates")
+    pg.focus("#date_0")
+    before = pg.locator("#date_0").input_value()
+    pg.keyboard.press("Tab")
+    assert pg.locator("#date_0").input_value() == before
+    assert pg.errors == []
+
+
 def test_leaving_a_started_form_asks_first(live):
     pg, base, tid, ops = live
     seen = []
