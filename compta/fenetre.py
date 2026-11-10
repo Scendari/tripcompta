@@ -41,6 +41,24 @@ def wanted(frozen: bool, navigateur: bool, forcer: bool) -> bool:
     return (forcer or frozen) and available()
 
 
+TOKEN_ENV = "TRIPCOMPTA_JETON"               # jeton de session (voir compta/web.py)
+
+
+def with_token(url: str, token: str | None) -> str:
+    """L'adresse à ouvrir dans une nouvelle fenêtre (ou un onglet) : avec le jeton de session, que le serveur range
+    aussitôt dans un témoin avant de le retirer de l'adresse."""
+    if not token:
+        return url
+    from urllib.parse import quote
+    head, sep, frag = url.partition("#")
+    return head + ("&" if "?" in head else "?") + "jeton=" + quote(token, safe="") + sep + frag
+
+
+def token_headers(token: str | None) -> dict:
+    """En-tête à joindre quand Trip Compta s'adresse à lui-même (ou à celui qui tourne déjà)."""
+    return {"X-TripCompta-Jeton": token} if token else {}
+
+
 def _ready(url: str, timeout: float = 30) -> bool:
     end = time.time() + timeout
     while time.time() < end:
@@ -56,9 +74,10 @@ def _ready(url: str, timeout: float = 30) -> bool:
 class Fenetres:
     """Les fenêtres ouvertes de Trip Compta (une ou plusieurs, comme des onglets)."""
 
-    def __init__(self, base: str, app=None):
+    def __init__(self, base: str, app=None, token: str | None = None):
         self.base = base                       # http://127.0.0.1:8765/
         self.app = app
+        self.token = token                     # jeton de session : joint à la première adresse de chaque fenêtre
         self._watched = False
 
     def is_ours(self, url: str) -> bool:
@@ -73,7 +92,7 @@ class Fenetres:
             # Windows : une fenêtre masquée ne dessine pas (WebView2 en pause) -> visible mais HORS de l'écran,
             # sans activation ni bouton dans la barre des tâches (voir _win_discreet)
             x, y, hidden = OFFSCREEN_X - 40 * n, 100, False
-        w = webview.create_window(TITLE, None if html else (url or self.base), html=html, width=1280, height=860,
+        w = webview.create_window(TITLE, None if html else with_token(url or self.base, self.token), html=html, width=1280, height=860,
                                   min_size=(820, 560), x=x, y=y, text_select=True, zoomable=True, hidden=hidden,
                                   focus=not DISCRETE)
         if sys.platform == "win32" and not DISCRETE:
@@ -147,13 +166,13 @@ def downloads_dir():
     return Path(d) if d else Path.home() / "Downloads"
 
 
-def save_to_downloads(url: str):
+def save_to_downloads(url: str, token: str | None = None):
     """Enregistre un fichier de l'application dans Téléchargements (nom donné par le serveur, sans écraser)."""
     import re
     from pathlib import Path
     from urllib.parse import unquote
     try:
-        with urllib.request.urlopen(url, timeout=60) as r:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=token_headers(token)), timeout=60) as r:
             data = r.read()
             disp = r.headers.get("Content-Disposition") or ""
         m = re.search(r"filename\*=UTF-8''([^;]+)", disp) or re.search(r'filename="?([^";]+)"?', disp)
@@ -237,7 +256,7 @@ def _mac_hooks(f: Fenetres, arreter):
             handler(getattr(WebKit, "WKNavigationActionPolicyCancel", 0))
             return
         if action.shouldPerformDownload() and f.is_ours(url):
-            threading.Thread(target=save_to_downloads, args=(url,), daemon=True).start()
+            threading.Thread(target=save_to_downloads, args=(url, f.token), daemon=True).start()
             handler(getattr(WebKit, "WKNavigationActionPolicyCancel", 0))
             return
         return orig_action(self, webview_, action, handler)
@@ -492,7 +511,7 @@ def _cannot_open(app, server, th: threading.Thread, why: str, webview2: bool = T
     th.join(timeout=5)
 
 
-def run(app, host: str, port: int, log_level: str = "warning", on_start=None) -> None:
+def run(app, host: str, port: int, log_level: str = "warning", on_start=None, token: str | None = None) -> None:
     """Démarre le serveur puis la fenêtre ; rend la main quand la dernière fenêtre est fermée (après l'arrêt
     propre). Sur Mac, Cmd+Q passe par applicationWillTerminate (arrêt propre aussi)."""
     import uvicorn
@@ -505,7 +524,7 @@ def run(app, host: str, port: int, log_level: str = "warning", on_start=None) ->
     _ready(base)
     webview.settings["ALLOW_DOWNLOADS"] = True
     webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True
-    f = Fenetres(base, app)
+    f = Fenetres(base, app, token)
     app.state.fenetres = f
     arreter = getattr(app.state, "arreter", None) or (lambda: None)
     if sys.platform == "darwin":
@@ -579,7 +598,7 @@ FAILED_HTML = """<!doctype html><html lang="fr"><head><meta charset="utf-8"><tit
 <pre style="white-space: pre-wrap; font-size: 13px">{}</pre></body></html>"""
 
 
-def run_early(prepare, host: str, port: int, log_level: str = "warning") -> None:
+def run_early(prepare, host: str, port: int, log_level: str = "warning", token: str | None = None) -> None:
     """Windows : la fenêtre s'ouvre tout de suite sur « Chargement… » ; prepare() (bibliothèques, base, création de
     l'app) et le serveur démarrent pendant ce temps, puis la fenêtre va sur l'app. WebView2 (un autre processus) se
     lance ainsi en même temps que Python, au lieu d'après (~1 s de moins). Même suite que run() ensuite."""
@@ -589,7 +608,7 @@ def run_early(prepare, host: str, port: int, log_level: str = "warning") -> None
 
     base = f"http://{host}:{port}/"
     box, ready = {}, threading.Event()
-    f = Fenetres(base, None)
+    f = Fenetres(base, None, token)
 
     def boot():
         try:
@@ -641,7 +660,7 @@ def run_early(prepare, host: str, port: int, log_level: str = "warning") -> None
         if "error" in box:
             w.load_html(FAILED_HTML.format(_html.escape(box["error"])))
             return
-        w.load_url(base)
+        w.load_url(with_token(base, token))
     storage = None
     if DISCRETE:                               # essais : un dossier WebView2 à part (voir run())
         import tempfile

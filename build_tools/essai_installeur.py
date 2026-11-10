@@ -14,6 +14,7 @@ Rien n'est envoyé au vrai dossier de l'utilisateur : réglages et voyages dans 
 """
 import json
 import os
+import secrets
 import socket
 import subprocess
 import sys
@@ -28,6 +29,14 @@ try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
     pass
+
+
+# Jeton de session : l'essai le choisit (variable TRIPCOMPTA_JETON, comme après un redémarrage) et le joint à toutes
+# ses requêtes ; sans lui, l'application ne répond qu'à /ping.
+TOKEN = secrets.token_hex(16)
+_opener = urllib.request.build_opener()
+_opener.addheaders = [("X-TripCompta-Jeton", TOKEN)]
+urllib.request.install_opener(_opener)
 
 
 def free_port():
@@ -85,6 +94,7 @@ def main():
     data = tmp / "Mes voyages"
     conf = tmp / "réglages" / "reglages.json"
     env = dict(os.environ, TRIPCOMPTA_CONFIG=str(conf), TRIPCOMPTA_DATA_DIR=str(data), TRIPCOMPTA_NO_UPDATE_CHECK="1",
+               TRIPCOMPTA_JETON=TOKEN,
                TRIPCOMPTA_FENETRE_DISCRETE="1")
     base = [str(setup), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", f"/DIR={inst}"]
 

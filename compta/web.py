@@ -5,10 +5,11 @@ from markupsafe import Markup
 import datetime as dt
 import os
 import re
+import secrets
 import sys
 import uuid
 from pathlib import Path
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urlencode, urlparse
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -162,8 +163,65 @@ def request_refusal(method: str, headers) -> tuple[int, str] | None:
     return None
 
 
-def install_guard(app: FastAPI) -> None:
-    """À ajouter en dernier : le plus extérieur, il passe avant tout le reste."""
+# ---------------------------------------------------------------------- jeton de session
+# Trip Compta n'écoute que sur cet ordinateur, mais un autre programme, ou une autre personne qui a une session
+# ouverte sur le même ordinateur, pourrait lui parler à la même adresse. À chaque lancement, run.py tire donc un
+# jeton au hasard et le donne à create_app(token=…) ; il est exigé partout, sauf pour /ping (qui ne dit que « je
+# suis Trip Compta, version tant ») et les fichiers d'apparence. La fenêtre (ou l'onglet) le reçoit dans la première
+# adresse qu'elle ouvre (?jeton=…) : il est aussitôt rangé dans un témoin (cookie) et retiré de l'adresse. Un
+# programme (l'IA par l'API, un script) le donne dans l'en-tête « Authorization: Bearer … » ou « X-TripCompta-Jeton ».
+# Sans jeton (application créée directement, par les essais) : pas de contrôle.
+TOKEN_PARAM = "jeton"
+TOKEN_HEADER = "x-tripcompta-jeton"
+TOKEN_FREE = ("/static/", "/favicon")
+NO_TOKEN = ("Cette page de Trip Compta ne s'ouvre que depuis l'application. Ferme cet onglet et ouvre Trip Compta "
+            "par son icône : s'il est déjà ouvert, il revient devant.")
+NO_TOKEN_PAGE = ("<!doctype html><html lang=fr><meta charset=utf-8><title>Trip Compta</title>"
+                 "<link rel=stylesheet href=/static/app.css>"
+                 "<main class=bare-refusal style='max-width:34rem;margin:15vh auto;padding:0 1.2rem;"
+                 "font-family:system-ui,sans-serif;line-height:1.5'><h1 style='font-size:1.4rem'>Trip Compta</h1>"
+                 f"<p>{NO_TOKEN}</p></main></html>")
+
+
+def token_cookie(port) -> str:
+    """Un témoin par adresse : deux Trip Compta ouverts (deux dossiers de voyages) ne se marchent pas dessus."""
+    return f"tc_jeton_{port or 0}"
+
+
+def token_response(request, token: str):
+    """None si la requête porte le jeton (ou n'en a pas besoin) ; sinon la réponse à renvoyer à sa place."""
+    path = request.url.path
+    if path == "/ping" or path.startswith(TOKEN_FREE):
+        return None
+
+    def right(value) -> bool:
+        return bool(value) and secrets.compare_digest(str(value).encode("utf-8"), token.encode("utf-8"))
+    name = token_cookie(request.url.port)
+    auth = request.headers.get("authorization") or ""
+    known = (right(request.cookies.get(name)) or right(request.headers.get(TOKEN_HEADER))
+             or (auth[:7].lower() == "bearer " and right(auth[7:].strip())))
+    given = request.query_params.get(TOKEN_PARAM)
+    if request.method == "GET" and given is not None and (known or right(given)):
+        # première adresse ouverte par la fenêtre ou l'onglet : le jeton passe dans un témoin et quitte l'adresse
+        rest = [(k, v) for k, v in request.query_params.multi_items() if k != TOKEN_PARAM]
+        resp = RedirectResponse(path + ("?" + urlencode(rest) if rest else ""), status_code=303)
+        if right(given):
+            resp.set_cookie(name, token, httponly=True, samesite="strict", path="/")
+        return resp
+    if known:
+        return None
+    if path.startswith("/api/"):
+        return JSONResponse({"detail": "Jeton de session absent ou incorrect : en-tête « Authorization: Bearer "
+                                       "<jeton> » (le jeton est affiché sur la page IA de Trip Compta ; il change "
+                                       "à chaque lancement)."}, status_code=403)
+    return HTMLResponse(NO_TOKEN_PAGE, status_code=403)
+
+
+def install_guard(app: FastAPI, token: str | None = None) -> None:
+    """À ajouter en dernier : le plus extérieur, il passe avant tout le reste. `token` : le jeton de session exigé
+    (None : aucun)."""
+    app.state.session_token = token or None
+
     @app.middleware("http")
     async def only_trip_compta(request, call_next):
         refused = request_refusal(request.method, request.headers)
@@ -173,10 +231,14 @@ def install_guard(app: FastAPI) -> None:
                 return JSONResponse({"detail": why}, status_code=code)
             return HTMLResponse(f"<!doctype html><meta charset=utf-8><title>Trip Compta</title><p>{why}</p>",
                                 status_code=code)
+        if token:
+            stop = token_response(request, token)
+            if stop is not None:
+                return stop
         return await call_next(request)
 
 
-def _bare_app(updater) -> tuple[FastAPI, str]:
+def _bare_app(updater, token: str | None = None) -> tuple[FastAPI, str]:
     """Application réduite (données pas ouvertes) : fenêtre, ping, quitter, fichiers statiques."""
     app = FastAPI(title="Trip Compta", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.db = None
@@ -197,7 +259,8 @@ def _bare_app(updater) -> tuple[FastAPI, str]:
 
     @app.get("/ping")
     def ping():
-        return {"app": "tripcompta", "boot": boot, "version": updater.version}
+        return {"app": "tripcompta", "boot": boot, "version": updater.version,
+                "jeton": bool(getattr(app.state, "session_token", None))}
 
     app.state.problem = None              # (dossier, explication) : donné par l'écran qui explique le problème
 
@@ -227,10 +290,10 @@ def _bare_page(request, updater, name, code=200, **ctx):
         STATIC_V=templates.env.globals["STATIC_V"], **ctx), status_code=code)
 
 
-def data_problem_app(err: Exception, updater, restart=None) -> FastAPI:
+def data_problem_app(err: Exception, updater, restart=None, token: str | None = None) -> FastAPI:
     """Le fichier des voyages est indisponible (pas encore téléchargé, dossier déconnecté) ou abîmé sans sauvegarde
     lisible : on n'y touche pas, on explique quoi faire, et on propose de réessayer."""
-    app, _ = _bare_app(updater)
+    app, _ = _bare_app(updater, token)
     app.state.restart = restart
     damaged = isinstance(err, DamagedDatabaseError)
     app.state.problem = (Path(err.path).parent, "le fichier des voyages est abîmé, sans sauvegarde lisible" if damaged
@@ -250,15 +313,15 @@ def data_problem_app(err: Exception, updater, restart=None) -> FastAPI:
     def explain(request: Request, rest: str = ""):
         return _bare_page(request, updater, "data_problem.html", 503, err=err, damaged=damaged,
                           folder=str(Path(err.path).parent), retry=app.state.restart is not None)
-    install_guard(app)
+    install_guard(app, token)
     return app
 
 
-def newer_data_app(err: NewerDatabaseError, updater) -> FastAPI:
+def newer_data_app(err: NewerDatabaseError, updater, token: str | None = None) -> FastAPI:
     """La base a été ouverte par une version plus récente : on n'y touche pas, on explique quoi faire."""
     from . import updater as U
     from . import version as V
-    app, _ = _bare_app(updater)
+    app, _ = _bare_app(updater, token)
     app.state.problem = (err.path, f"voyages enregistrés par Trip Compta {err.stored}, plus récente que celle-ci")
 
     checked = []
@@ -309,7 +372,7 @@ def newer_data_app(err: NewerDatabaseError, updater) -> FastAPI:
         a = fitting()
         ok, why = updater.installable() if a else (False, "")
         return page(request, "newer_data.html", 409, available=a, installable=ok, why=why)
-    install_guard(app)
+    install_guard(app, token)
     return app
 
 
@@ -353,7 +416,7 @@ def _hm(value) -> str:
     return hm if d.date() == dt.date.today() else f"{d:%d/%m} à {hm}"
 
 
-def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAPI:
+def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: str | None = None) -> FastAPI:
     """restart : fonction qui relance l'application (fournie par run.py) ; sans elle, on demande de relancer.
     updater : gestion des mises à jour (les tests en donnent une simulée).
     coffre (tests) : {"local": copie de travail des voyages protégés, "host": nom de l'ordinateur}.
@@ -390,9 +453,9 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         else:
             db = Database(folder, app_version=upd.version)
     except NewerDatabaseError as err:
-        return newer_data_app(err, upd)
+        return newer_data_app(err, upd, token)
     except (DataUnavailableError, DamagedDatabaseError) as err:
-        return data_problem_app(err, upd, restart)
+        return data_problem_app(err, upd, restart, token)
     backup_failed = None
     if vault_box is None or not vault_box.locked:
         try:
@@ -790,7 +853,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     @app.get("/ping")
     def ping():
         """Sert à reconnaître Trip Compta (script de redémarrage) et à recharger l'onglet après un redémarrage."""
-        out = {"app": "tripcompta", "boot": boot_id, "version": upd.version}
+        out = {"app": "tripcompta", "boot": boot_id, "version": upd.version, "jeton": bool(app.state.session_token)}
         if getattr(app.state, "fenetre_vue", None):          # la vraie fenêtre a affiché sa 1re page
             out["fenetre"] = app.state.fenetre_vue
         return out
@@ -1578,7 +1641,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         cli = "claude mcp add tripcompta -- " + " ".join(
             [f'"{cmd}"'] + [f'"{a}"' if " " in a else a for a in args])
         return dict(conf=json.dumps(conf, indent=2, ensure_ascii=False), cli=cli,
-                    api=str(request.base_url) + "api/docs")
+                    api=str(request.base_url) + "api/docs", api_token=app.state.session_token)
 
     def drafts() -> Path:
         """Dossier des brouillons IA : recalculé à chaque fois (la base peut être rouverte ailleurs, par exemple
@@ -3759,7 +3822,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
                         headers={"Content-Disposition":
                                  f"attachment; filename*=UTF-8''{quote('Justificatifs_' + _slug(t.name))}.zip"})
 
-    install_guard(app)
+    install_guard(app, token)
     return app
 
 

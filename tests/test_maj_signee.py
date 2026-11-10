@@ -308,7 +308,8 @@ def test_app_relaunched_after_update_says_it_started(tmp_path):
     work = conf.parent / "maj"
     work.mkdir(parents=True)
     U.write_relaunch(work, port, ["--navigateur", "--data-dir", str(tmp_path / "voyages")])
-    env = dict(os.environ, TRIPCOMPTA_CONFIG=str(conf), TRIPCOMPTA_NO_UPDATE_CHECK="1", TRIPCOMPTA_FENETRE_DISCRETE="1")
+    env = dict(os.environ, TRIPCOMPTA_CONFIG=str(conf), TRIPCOMPTA_NO_UPDATE_CHECK="1", TRIPCOMPTA_FENETRE_DISCRETE="1",
+               TRIPCOMPTA_JETON="jeton-de-l-essai")
     for k in ("TRIPCOMPTA_DATA_DIR", "TRIPCOMPTA_RESTARTED", "TRIPCOMPTA_PORT_WAIT"):
         env.pop(k, None)
     p = subprocess.Popen([sys.executable, "-u", str(ROOT / "run.py"), "--apres-maj"], env=env,
@@ -326,14 +327,15 @@ def test_app_relaunched_after_update_says_it_started(tmp_path):
         assert not (work / U.RELAUNCH).exists()                             # options de relance lues
     finally:
         try:
-            urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/quitter", data=b"",
-                                                          method="POST"), timeout=5)
+            urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/quitter", data=b"", method="POST",
+                                                          headers={"X-TripCompta-Jeton": "jeton-de-l-essai"}), timeout=5)
         except Exception:
             pass
         try:
-            p.wait(15)
+            p.wait(15)                                                      # arrêt propre, demandé avec le jeton
         except subprocess.TimeoutExpired:
             p.kill()
+            raise AssertionError("l'application ne s'est pas arrêtée à la demande")
 
 
 def test_a_normal_launch_does_not_write_the_marker():

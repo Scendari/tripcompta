@@ -156,7 +156,7 @@
   <p class="small" style="margin-top:1rem">Claude Code (terminal, ou extension Claude Code dans VS Code) :</p>
   <pre id="cli" style="background:var(--bg-2);padding:.8rem;border-radius:8px;overflow-x:auto;font-size:.78rem;white-space:pre-wrap">{{ cli }}</pre>
   <button type="button" class="btn small ghost" data-copy="#cli">Copier</button>
-  <p class="small" style="margin-top:1rem">Pour les développeurs : API JSON documentée sur <a href="/api/docs" target="_blank">{{ api }}</a> (import : <code>POST /api/import</code> avec <code>"voyage": "{{ trip.id }}"</code> ; toutes les écritures acceptent <code>"simulation": true</code>).</p>
+  <p class="small" style="margin-top:1rem">Pour les développeurs : API JSON documentée sur <a href="/api/docs" target="_blank">{{ api }}</a> (import : <code>POST /api/import</code> avec <code>"voyage": "{{ trip.id }}"</code> ; toutes les écritures acceptent <code>"simulation": true</code>).{% if api_token %} Un programme doit se présenter avec l'en-tête <code>Authorization: Bearer {{ api_token }}</code> : ce jeton change à chaque lancement de Trip Compta, et n'est valable que sur cet ordinateur.{% endif %}</p>
 </details>
 </div>
 

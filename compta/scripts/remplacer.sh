@@ -22,7 +22,7 @@ open_app() {   # $1 = transmettre l'environnement (1/0), $2 = l'app .app, le res
   set -- "$app" --args --no-browser --port "$PORT" "$@"
   if [ "$withenv" = 1 ]; then
     # « open » ne transmet pas l'environnement : on redonne ce qui choisit le dossier des données et les réglages
-    for v in TRIPCOMPTA_CONFIG TRIPCOMPTA_DATA_DIR TRIPCOMPTA_MAJ_API TRIPCOMPTA_NO_UPDATE_CHECK; do
+    for v in TRIPCOMPTA_CONFIG TRIPCOMPTA_DATA_DIR TRIPCOMPTA_MAJ_API TRIPCOMPTA_NO_UPDATE_CHECK TRIPCOMPTA_JETON; do
       eval "isset=\${$v+x}"
       if [ -n "$isset" ]; then eval "val=\$$v"; set -- --env "$v=$val" "$@"; fi
     done
@@ -60,7 +60,7 @@ ping_version() {   # la version qui répond sur le port (vide si rien)
 
 stop_on_port() {
   if command -v curl >/dev/null 2>&1; then
-    curl -s -m 2 -X POST "http://127.0.0.1:$PORT/quitter" >/dev/null 2>&1
+    curl -s -m 2 -X POST -H "X-TripCompta-Jeton: ${TRIPCOMPTA_JETON:-}" "http://127.0.0.1:$PORT/quitter" >/dev/null 2>&1
   fi
   sleep 1
   if command -v lsof >/dev/null 2>&1; then

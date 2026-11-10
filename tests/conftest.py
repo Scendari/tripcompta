@@ -24,6 +24,14 @@ def _isolated_data(tmp_path_factory):
             os.environ[k] = v
 
 
+@pytest.fixture(autouse=True)
+def _no_leftover_session_token():
+    """run.main() appelé dans un essai laisse son jeton de session dans l'environnement : on le retire après."""
+    import os
+    yield
+    os.environ.pop("TRIPCOMPTA_JETON", None)
+
+
 def _free_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))

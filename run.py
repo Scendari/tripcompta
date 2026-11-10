@@ -87,11 +87,24 @@ class InstanceLock:
                     return False
                 time.sleep(0.2)
 
-    def publish(self, port: int):
+    def publish(self, port: int, token: str | None = None):
+        """Où joindre cette Trip Compta, et son jeton de session (pour un 2e lancement, qui lui demande de revenir
+        devant) : fichier lisible par cette session seulement."""
         import json
         tmp = self.info.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"pid": os.getpid(), "port": port}), encoding="utf-8")
+        tmp.unlink(missing_ok=True)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump({"pid": os.getpid(), "port": port, "jeton": token or ""}, f)
         os.replace(tmp, self.info)
+
+    def running_token(self) -> str | None:
+        """Le jeton de la Trip Compta qui tient le verrou (None : version sans jeton, ou fichier illisible)."""
+        import json
+        try:
+            return json.loads(self.info.read_text(encoding="utf-8")).get("jeton") or None
+        except Exception:
+            return None
 
     def running_url(self, timeout: float = 15) -> str | None:
         """Adresse de la Trip Compta qui tient le verrou (elle peut être encore en train de démarrer)."""
@@ -110,7 +123,7 @@ class InstanceLock:
         return None
 
 
-def take_over_older(url: str, mine: str | None = None, wait: float = 15) -> bool:
+def take_over_older(url: str, mine: str | None = None, wait: float = 15, token: str | None = None) -> bool:
     """Une Trip Compta PLUS ANCIENNE tourne déjà (l'utilisateur vient de la remplacer par une nouvelle version sans
     la quitter) : on lui demande de s'arrêter proprement (elle enregistre), puis c'est la nouvelle qui démarre.
     Sinon (même version, ou plus récente) : False, on remet simplement sa fenêtre devant."""
@@ -127,7 +140,9 @@ def take_over_older(url: str, mine: str | None = None, wait: float = 15) -> bool
         return False
     print(f"Trip Compta {theirs} est encore ouvert : arrêt propre, puis ouverture de la {mine}")
     try:
-        urllib.request.urlopen(urllib.request.Request(url + "quitter", data=b"", method="POST"), timeout=5).close()
+        from compta import fenetre
+        urllib.request.urlopen(urllib.request.Request(url + "quitter", data=b"", method="POST",
+                                                      headers=fenetre.token_headers(token or "")), timeout=5).close()
     except Exception:
         pass
     end = time.time() + wait
@@ -140,12 +155,25 @@ def take_over_older(url: str, mine: str | None = None, wait: float = 15) -> bool
     return False
 
 
-def show_running_window(url: str) -> bool:
+def needs_token(url: str) -> bool:
+    """Cette Trip Compta exige-t-elle un jeton de session (versions d'aujourd'hui) ?"""
+    import json
+    import urllib.request
+    try:
+        with urllib.request.urlopen(url + "ping", timeout=2) as r:
+            return bool(json.load(r).get("jeton"))
+    except Exception:
+        return False
+
+
+def show_running_window(url: str, token: str | None = None) -> bool:
     """Windows : un 2e lancement demande à Trip Compta déjà ouvert de remettre sa fenêtre devant (False si celui-ci
     tourne dans le navigateur)."""
     import urllib.request
     try:
-        req = urllib.request.Request(url + "fenetre/montrer", data=b"", method="POST")
+        from compta import fenetre
+        req = urllib.request.Request(url + "fenetre/montrer", data=b"", method="POST",
+                                     headers=fenetre.token_headers(token or ""))
         with urllib.request.urlopen(req, timeout=3) as r:
             return r.status == 200
     except Exception:
@@ -207,6 +235,11 @@ def main():
 
     _quiet_streams()
     from compta import fenetre
+    # jeton de session : tiré au hasard à chaque lancement. Un redémarrage (changement de dossier, mise à jour…) le
+    # garde, par la variable TRIPCOMPTA_JETON donnée au programme relancé : la page restée ouverte reste valable.
+    import secrets
+    token = os.environ.get(fenetre.TOKEN_ENV) or secrets.token_urlsafe(32)
+    os.environ[fenetre.TOKEN_ENV] = token
     restarted = bool(os.environ.get("TRIPCOMPTA_RESTARTED"))
     # fenêtre : application fabriquée (Mac, Windows), sauf --navigateur. --no-browser (essais, serveur seul) n'ouvre
     # rien, sauf après un redémarrage ou une mise à jour : l'ancienne fenêtre a disparu avec l'ancien programme.
@@ -222,12 +255,13 @@ def main():
     # après un redémarrage (mise à jour, changement de dossier…), l'ancienne n'a peut-être pas encore rendu la main
     if lock is not None and not lock.acquire(wait=30 if (restarted or os.environ.get("TRIPCOMPTA_PORT_WAIT")) else 0):
         url = lock.running_url()
+        theirs = lock.running_token()          # son jeton de session : pour lui parler, ou ouvrir un onglet chez elle
         # une version plus ancienne encore ouverte (remplacée sans être quittée) : elle s'arrête, on prend sa place
-        if not (url and take_over_older(url) and lock.acquire(wait=20)):
+        if not (url and take_over_older(url, token=theirs) and lock.acquire(wait=20)):
             if url:
                 print(f"Trip Compta est déjà ouvert : {url}")
-                if not (window and show_running_window(url)) and not a.no_browser and not fenetre.DISCRETE:
-                    webbrowser.open(url)       # (essais discrets : rien sur l'écran de l'utilisateur)
+                if not (window and show_running_window(url, theirs)) and not a.no_browser and not fenetre.DISCRETE:
+                    webbrowser.open(fenetre.with_token(url, theirs or ""))   # (essais discrets : rien à l'écran)
             else:
                 print("Trip Compta est déjà en train de s'ouvrir sur ces voyages.")
             return
@@ -238,6 +272,8 @@ def main():
         url = running_instance()
         if url and take_over_older(url):
             url = None                             # ancienne version arrêtée : on continue, à sa place
+        if url and needs_token(url):
+            url = None                             # une Trip Compta d'aujourd'hui, sur d'autres voyages : chacun chez soi
         if url:
             print(f"Trip Compta est déjà ouvert : {url}")
             if window and show_running_window(url):
@@ -282,7 +318,7 @@ def main():
             time.sleep(0.25)
     port = free_port(a.port)
     if lock is not None:
-        lock.publish(port)
+        lock.publish(port, token)
     if after_update:
         # l'installeur Windows attend ce signe de vie ; sans lui, il remet l'ancienne version
         from compta import updater as U
@@ -290,11 +326,12 @@ def main():
         threading.Thread(target=U.confirm_started, args=(port, V.build_info()["version"]), daemon=True,
                          name="maj-demarre").start()
     url = f"http://127.0.0.1:{port}/"
+    entry = fenetre.with_token(url, token)     # l'adresse à ouvrir : avec le jeton, retiré dès la première page
 
     def prepare():
         """Bibliothèques, base de données, application : l'essentiel du temps d'ouverture."""
         from compta.web import create_app
-        app = create_app(a.data_dir, restart=restart)
+        app = create_app(a.data_dir, restart=restart, token=token)
         holder["app"] = app
         if a.demo and app.state.db is not None:
             from compta.demo import seed_demo, seed_family_demo
@@ -304,7 +341,7 @@ def main():
         app.state.argv = sys.argv[1:]
         print("=" * 60)
         print(" Trip Compta")
-        print(f" Ouvre ton navigateur sur : {url}")
+        print(f" Ouvre ton navigateur sur : {entry}")
         if app.state.db is not None:
             print(f" Données : {app.state.db.dir}")
         else:
@@ -315,14 +352,14 @@ def main():
 
     if window and sys.platform == "win32":
         # la fenêtre s'ouvre tout de suite sur « Chargement… », pendant que prepare() tourne à côté
-        fenetre.run_early(prepare, "127.0.0.1", port)
+        fenetre.run_early(prepare, "127.0.0.1", port, token=token)
         return
     app = prepare()
     if window:
-        fenetre.run(app, "127.0.0.1", port)
+        fenetre.run(app, "127.0.0.1", port, token=token)
         return
     if not a.no_browser and not restarted:
-        threading.Thread(target=lambda: (time.sleep(1.2), webbrowser.open(url)), daemon=True).start()
+        threading.Thread(target=lambda: (time.sleep(1.2), webbrowser.open(entry)), daemon=True).start()
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 

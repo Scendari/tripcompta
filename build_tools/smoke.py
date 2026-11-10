@@ -9,11 +9,13 @@ page passe le contrôle d'origine du serveur.
 """
 import json
 import os
+import secrets
 import socket
 import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 
 
@@ -21,6 +23,28 @@ def free_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
+
+# Jeton de session : l'essai le choisit (variable TRIPCOMPTA_JETON, comme après un redémarrage) et le joint à toutes
+# ses requêtes ; sans lui, l'application ne répond qu'à /ping.
+TOKEN = secrets.token_hex(16)
+_opener = urllib.request.build_opener()
+_opener.addheaders = [("X-TripCompta-Jeton", TOKEN)]
+urllib.request.install_opener(_opener)
+
+
+def refused_without_token(base: str) -> bool:
+    """Sans le jeton, l'application refuse (403) : ni page, ni API."""
+    for path in ("", "api/voyages"):
+        try:
+            urllib.request.build_opener().open(base + path, timeout=10).close()
+            return False
+        except urllib.error.HTTPError as e:
+            if e.code != 403:
+                return False
+        except OSError:
+            return False
+    return True
 
 
 try:                                                      # Windows : console en cp1252, le journal a des accents
@@ -77,7 +101,7 @@ def main(exe: str, expected: str) -> int:
     port = free_port()
     docs = os.path.join(tmp, "Documents")
     env = dict(os.environ, TRIPCOMPTA_CONFIG=os.path.join(tmp, "reglages.json"), TRIPCOMPTA_NO_UPDATE_CHECK="1",
-               TRIPCOMPTA_DOCUMENTS=docs)
+               TRIPCOMPTA_DOCUMENTS=docs, TRIPCOMPTA_JETON=TOKEN)
     env.pop("TRIPCOMPTA_DATA_DIR", None)
     log = open(os.path.join(tmp, "sortie.log"), "w")
     p = subprocess.Popen([os.path.abspath(exe), "--no-browser", "--port", str(port)], env=env, stdout=log, stderr=subprocess.STDOUT)
@@ -92,6 +116,9 @@ def main(exe: str, expected: str) -> int:
                     home = r.read().decode("utf-8")
                 ok = info.get("app") == "tripcompta" and info.get("version") == expected and "Trip Compta" in home
                 print(f"Réponse : {info} ; page d'accueil : {'ok' if 'Trip Compta' in home else 'INCORRECTE'}")
+                if ok:
+                    ok = bool(info.get("jeton")) and refused_without_token(f"http://127.0.0.1:{port}/")
+                    print("Jeton de session : " + ("exigé" if ok else "PAS EXIGÉ"))
                 if ok:
                     # la vérification de signature des mises à jour marche dans l'application fabriquée
                     diag, _ = get(f"http://127.0.0.1:{port}/reglages/diagnostic.txt")
@@ -122,7 +149,7 @@ def window(exe: str, expected: str) -> int:
     port = free_port()
     env = dict(os.environ, TRIPCOMPTA_CONFIG=os.path.join(tmp, "reglages.json"), TRIPCOMPTA_NO_UPDATE_CHECK="1",
                TRIPCOMPTA_DOCUMENTS=os.path.join(tmp, "Documents"), TRIPCOMPTA_FENETRE_DISCRETE="1",
-               TRIPCOMPTA_ESSAI_FENETRE="1")
+               TRIPCOMPTA_ESSAI_FENETRE="1", TRIPCOMPTA_JETON=TOKEN)
     env.pop("TRIPCOMPTA_DATA_DIR", None)
     log = open(os.path.join(tmp, "sortie.log"), "w")
     p = subprocess.Popen([os.path.abspath(exe), "--port", str(port)], env=env, stdout=log, stderr=subprocess.STDOUT)
@@ -155,7 +182,8 @@ def window(exe: str, expected: str) -> int:
                         ok = True
                         break
                 time.sleep(1)
-            print("Action dans la fenêtre (contrôle d'origine) :", "ok" if ok else "ÉCHEC")
+            print("Action dans la fenêtre (contrôle d'origine, jeton de session reçu par la fenêtre) :",
+                  "ok" if ok else "ÉCHEC")
         return 0 if ok else 1
     finally:
         try:
