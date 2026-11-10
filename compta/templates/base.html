@@ -6,7 +6,7 @@
 <title>{% block title %}{% if trip %}{{ trip.name }} · {% endif %}Trip Compta{% endblock %}</title>
 <link rel="icon" href="/static/favicon.svg?v={{ STATIC_V }}" type="image/svg+xml">
 <link rel="stylesheet" href="/static/app.css?v={{ STATIC_V }}">
-<script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;var z=localStorage.getItem("texte");if(z==="1"||z==="2")document.documentElement.dataset.text=z}catch(e){}</script>
 </head>
 <body class="{% block bodyclass %}{% endblock %}">
 <header class="topbar">
@@ -23,6 +23,7 @@
   {% endif %}
   {% if dossier and dossier.protected and not dossier.locked %}<form method="post" action="/verrouiller" class="inline"><button class="iconbtn" title="Verrouiller : le mot de passe sera redemandé">🔒 Verrouiller</button></form>{% endif %}
   <a class="iconbtn settings-btn{{ ' on' if request.url.path.startswith('/reglages') or request.url.path.startswith('/protection') }}" href="/reglages" title="Réglages : où sont tes voyages, mot de passe, mises à jour" aria-label="Réglages">⚙️<span class="lbl"> Réglages</span></a>
+  <button class="iconbtn text-size-btn" data-text-size title="Agrandir le texte (trois tailles)" aria-label="Agrandir le texte"><span aria-hidden="true">A<b>A</b></span><span class="lbl"> Agrandir le texte</span></button>
   <button class="iconbtn" data-theme-toggle title="Thème clair / sombre">◐</button>
   <form method="post" action="/quitter" class="inline quit" data-confirm="Arrêter Trip Compta ? Tes données sont enregistrées : tu pourras relancer l'application plus tard.">
     <button class="iconbtn quit-btn" title="Arrêter l'application">{{ POWER }} Arrêter</button>

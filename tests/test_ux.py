@@ -300,3 +300,117 @@ def test_first_time_user_only_clicks(server, browser):
     page.click("nav >> text=Tous les voyages")
     pw.expect(page.locator(".trip-card:has-text('Ma première sortie')")).to_contain_text("Tout est réglé")
     assert not page.errors, page.errors
+
+
+# ---------------------------------------------------------------- lisibilité (contrastes étendus, taille du texte)
+CONTRAST_PAGES = {
+    "/participants": [".name-btn", ".btn.link.danger", ".pill.withdrawn-pill", ".pill.role", ".side nav .nav-group"],
+    "/depenses/nouvelle": [".only-btn", ".hint", "label"],
+    "/categories": [".cat-pill", ".muted"],
+    "/depenses/1/modifier": [".btn.danger", ".only-btn.on"],
+    "/participants/remises": [".btn.link.danger", ".muted"],
+    "/envoyer": [".hint", ".pill.doit", ".linklike"],
+    "/ia": [".ai-privacy", ".hint"],
+}
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_text_contrast_everywhere_it_was_weak(server, browser, scheme):
+    """Les textes turquoise, rouges et les boutons « allumés » : 4,5:1 au moins, dans les deux thèmes."""
+    base, tid, _ = server
+    page = new_page(browser, scheme=scheme)
+    rgb = lambda s: tuple(int(x) for x in re.findall(r"\d+", s)[:3])
+    seen = set()
+    for path, sels in CONTRAST_PAGES.items():
+        page.goto(f"{base}/v/{tid}{path}")
+        if path == "/depenses/1/modifier":                       # allumer un bouton « Seulement pour »
+            page.locator(".only-btn").first.click()
+        checks = page.evaluate("""(sels) => {
+          const bg = el => { while (el) { const c = getComputedStyle(el).backgroundColor;
+                              if (c && !c.endsWith(', 0)') && c !== 'transparent') return c; el = el.parentElement; }
+                              return 'rgb(255,255,255)'; };
+          return sels.flatMap(sel => [...document.querySelectorAll(sel)].filter(e => e.checkVisibility()).slice(0, 4)
+                                     .map(e => [sel, getComputedStyle(e).color, bg(e)]));
+        }""", sels)
+        for sel, fg, bg in checks:
+            seen.add(sel)
+            ratio = _contrast(rgb(fg), rgb(bg))
+            assert ratio >= 4.5, (scheme, path, sel, fg, bg, round(ratio, 2))
+    assert {".name-btn", ".only-btn", ".only-btn.on", ".btn.danger", ".btn.link.danger", ".cat-pill"} <= seen, seen
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_field_borders_are_visible(server, browser, scheme):
+    """Le bord d'un champ se distingue du fond : 3:1 au moins (repère visuel d'un composant)."""
+    base, tid, _ = server
+    page = new_page(browser, scheme=scheme)
+    rgb = lambda s: tuple(int(x) for x in re.findall(r"\d+", s)[:3])
+    for path in ("/depenses/nouvelle", "/participants?ajout=1", "/envoyer"):
+        page.goto(f"{base}/v/{tid}{path}")
+        rows = page.evaluate("""() => {
+          const bg = el => { while (el) { const c = getComputedStyle(el).backgroundColor;
+                              if (c && !c.endsWith(', 0)') && c !== 'transparent') return c; el = el.parentElement; }
+                              return 'rgb(255,255,255)'; };
+          return [...document.querySelectorAll('input[type=text], input[type=date], select, textarea')]
+            .filter(e => e.checkVisibility()).slice(0, 8)
+            .map(e => [e.name || e.id, getComputedStyle(e).borderTopColor, bg(e.parentElement)]);
+        }""")
+        assert rows
+        for name, border, bg in rows:
+            assert _contrast(rgb(border), rgb(bg)) >= 3.0, (scheme, path, name, border, bg)
+
+
+def test_base_text_is_16px_and_nothing_under_12px(server, browser):
+    base, tid, _ = server
+    page = new_page(browser)
+    for path in ("", "/participants", "/depenses", "/depenses/nouvelle", "/argent", "/repartition", "/asso",
+                 "/justificatifs", "/envoyer"):
+        page.goto(f"{base}/v/{tid}{path}")
+        assert page.evaluate("getComputedStyle(document.documentElement).fontSize") == "16px"
+        small = page.evaluate("""() => {
+          const out = [];
+          const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          while (walk.nextNode()) {
+            const n = walk.currentNode, el = n.parentElement;
+            if (!n.textContent.trim() || !el.checkVisibility() || el.closest('svg, script, style, template')) continue;
+            const px = parseFloat(getComputedStyle(el).fontSize);
+            if (px < 12) out.push([px, n.textContent.trim().slice(0, 40)]);
+          }
+          return out;
+        }""")
+        assert small == [], (path, small[:5])
+
+
+def test_bigger_text_button_cycles_and_is_remembered(server, browser):
+    """« Agrandir le texte » : 16 → 18 → 20 px → retour à 16 ; le choix est gardé d'une page à l'autre ; pas de
+    défilement horizontal à la plus grande taille, même sur un petit écran."""
+    base, tid, _ = server
+    page = new_page(browser)
+    page.goto(f"{base}/v/{tid}")
+    size = lambda: page.evaluate("getComputedStyle(document.documentElement).fontSize")
+    btn = page.locator("[data-text-size]")
+    assert size() == "16px" and "Agrandir le texte" in btn.get_attribute("aria-label")
+    assert "normale" in btn.get_attribute("aria-label")
+    btn.click()
+    assert size() == "18px" and "grande" in btn.get_attribute("aria-label")
+    btn.click()
+    assert size() == "20px" and "Remettre le texte à la taille normale" in btn.get_attribute("aria-label")
+    page.goto(f"{base}/v/{tid}/depenses")                        # gardé en changeant de page
+    assert size() == "20px"
+    for path in ("", "/participants", "/depenses", "/depenses/nouvelle", "/argent", "/envoyer", "/asso"):
+        page.goto(f"{base}/v/{tid}{path}")
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), path
+    page.locator("[data-text-size]").click()
+    assert size() == "16px"
+    page.reload()
+    assert size() == "16px"
+    assert page.errors == []
+    # petit écran, très grand texte : toujours pas de défilement horizontal
+    small = new_page(browser, width=390, height=800)
+    small.goto(f"{base}/v/{tid}")
+    small.evaluate("localStorage.setItem('texte', '2')")
+    for path in ("", "/participants", "/depenses", "/depenses/nouvelle", "/argent", "/envoyer"):
+        small.goto(f"{base}/v/{tid}{path}")
+        assert small.evaluate("getComputedStyle(document.documentElement).fontSize") == "20px"
+        assert small.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), path
+    small.evaluate("localStorage.removeItem('texte')")

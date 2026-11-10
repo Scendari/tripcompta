@@ -12,6 +12,25 @@
     try { localStorage.setItem("theme", root.dataset.theme); } catch (e) {}
   });
 
+  // « Agrandir le texte » : trois tailles (normale, grande, très grande), mémorisées comme le thème
+  const TEXT_NAMES = ["normale", "grande", "très grande"];
+  const showTextSize = () => document.querySelectorAll("[data-text-size]").forEach((b) => {
+    const n = Number(root.dataset.text || 0), next = (n + 1) % 3;
+    b.setAttribute("aria-label", (next ? "Agrandir le texte" : "Remettre le texte à la taille normale") +
+      " (taille actuelle : " + TEXT_NAMES[n] + ")");
+    b.title = b.getAttribute("aria-label");
+    const lbl = b.querySelector(".lbl");
+    if (lbl) lbl.textContent = next ? " Agrandir le texte" : " Texte normal";
+  });
+  showTextSize();
+  document.addEventListener("click", (ev) => {
+    if (!ev.target.closest("[data-text-size]")) return;
+    const next = (Number(root.dataset.text || 0) + 1) % 3;
+    if (next) root.dataset.text = String(next); else delete root.dataset.text;
+    try { if (next) localStorage.setItem("texte", String(next)); else localStorage.removeItem("texte"); } catch (e) {}
+    showTextSize();
+  });
+
   // Confirmation avant les actions destructrices
   document.addEventListener("submit", (ev) => {
     const msg = ev.target.dataset.confirm;
