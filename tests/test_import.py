@@ -2,6 +2,7 @@
 import asyncio
 import json
 import re
+import os
 import sys
 from pathlib import Path
 
@@ -448,7 +449,9 @@ def test_mcp_import_tool(tmp_path):
     async def run():
         params = StdioServerParameters(command=sys.executable,
                                        args=["-m", "compta.mcp_server", "--data-dir", str(tmp_path / "d")],
-                                       cwd=str(ROOT))
+                                       cwd=str(ROOT),
+                                       # les réglages de l'ordinateur isolés, comme pour les autres tests
+                                       env={"TRIPCOMPTA_CONFIG": os.environ["TRIPCOMPTA_CONFIG"]})
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()

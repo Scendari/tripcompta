@@ -1,6 +1,7 @@
 """Tests de l'accès IA : couche d'opérations, API JSON et serveur MCP (vrai sous-processus stdio)."""
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -113,7 +114,9 @@ def test_mcp_stdio_end_to_end(tmp_path):
     async def run():
         params = StdioServerParameters(command=sys.executable,
                                        args=["-m", "compta.mcp_server", "--data-dir", str(tmp_path / "d")],
-                                       cwd=str(ROOT))
+                                       cwd=str(ROOT),
+                                       # les réglages de l'ordinateur isolés, comme pour les autres tests
+                                       env={"TRIPCOMPTA_CONFIG": os.environ["TRIPCOMPTA_CONFIG"]})
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 init = await session.initialize()
