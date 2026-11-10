@@ -112,7 +112,7 @@ def test_bulk_add_all_known_is_a_red_refusal_and_keeps_the_panel_open(env):
     app, ops, tid, c = env
     r = c.post(f"/v/{tid}/participants", data={"names": "Anne\nBob", "roles_form": "1"}, follow_redirects=False)
     loc = r.headers["location"]
-    assert "liste=1" in loc and "e=1" in loc and loc.endswith("#ajout-liste")
+    assert "liste=1" in loc and "e=1" in loc and "#" not in loc      # pas d'ancre : le message rouge reste visible en haut
     page = c.get(loc).text
     assert 'class="flash err"' in page and "Tous ces noms sont déjà dans la liste" in clean(page)
     assert re.search(r'<details class="add-many" id="ajout-liste"\s+open', page)

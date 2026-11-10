@@ -1866,7 +1866,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             elif n:
                 known_already += 1
         if not new and many:
-            return refuse(f"/v/{tid}/participants?ajout=1&liste=1#ajout-liste",
+            return refuse(f"/v/{tid}/participants?ajout=1&liste=1",
                           "Tous ces noms sont déjà dans la liste" if known_already else "Écris au moins un nom, un par ligne")
         if not new:
             return refuse(f"/v/{tid}/participants?ajout=1#ajout", "Ce nom est vide ou déjà dans la liste")
