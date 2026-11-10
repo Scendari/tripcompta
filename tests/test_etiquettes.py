@@ -175,10 +175,14 @@ def test_new_trip_takes_labels_of_the_last_trip(env):
     app, ops, tid, c, P, E = env
     c.post(f"/v/{tid}/roles-du-voyage", data={"name": "DP"})
     c.post(f"/v/{tid}/roles-du-voyage/supprimer", data={"role": "accompagnant"})
-    c.post("/voyages", data={"name": "Suivant"})
+    c.post("/voyages", data={"name": "Suivant", "plongee": "1"})
+    c.post("/voyages", data={"name": "Sans plongée"})
     with app.state.db.Session() as s:
         t = s.query(M.Trip).filter_by(name="Suivant").one()
         assert list(S.trip_roles(t).values()) == ["Plongeur", "Organisateur", "Co-organisateur", "DP"]
+        # un voyage ordinaire garde les étiquettes ajoutées (« DP »), sans Plongeur ni Accompagnant
+        t = s.query(M.Trip).filter_by(name="Sans plongée").one()
+        assert list(S.trip_roles(t).values()) == ["Organisateur", "Co-organisateur", "DP"]
 
 
 # ---------------------------------------------------------------- l'ancien rôle DP

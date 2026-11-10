@@ -1604,7 +1604,10 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             r = S.compute_trip(t)
             cards.append((t, r))
         q = request.query_params
+        stored = S.asso_name(s)
         return render(request, "index.html", cards=cards, data_dir=db.home,
+                      asso_default="" if stored == "l'asso" else stored,
+                      diving_default=bool(trips) and any(S.is_diving(t_) for t_ in trips[:1] if not t_.is_demo),
                       open_new=q.get("nouveau") == "1", open_import=q.get("importer") == "1")
 
     @app.post("/voyages")
@@ -1613,13 +1616,41 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         name = (f.get("name") or "").strip()
         if not name:
             return refuse("/?nouveau=1", "Donne un nom au voyage", "name")
+        holder = " ".join(str(f.get("cashier_name") or "").split())[:200]
+        if f.get("caisse") == "personne" and not holder:
+            return refuse("/?nouveau=1", "Écris le nom de la personne qui tient la caisse", "cashier_name")
         db.snapshot(f"création du voyage « {name} »")
         t = M.Trip(name=name, place=f.get("place", "").strip(), organizer=f.get("organizer", "").strip(),
                    start=S.parse_date(f.get("start")), end=S.parse_date(f.get("end")))
-        t.categories = S.new_trip_categories(s)
+        S.start_trip(s, t, diving=bool(f.get("plongee")))
         s.add(t)
+        s.flush()
+        who = ""
+        if f.get("caisse") == "personne":           # pas d'association : une personne du voyage tient la caisse
+            p = M.Participant(trip_id=t.id, name=holder, roles="")
+            s.add(p)
+            s.flush()
+            S.set_roles(t, p, [S.DIVER] if S.is_diving(t) else [])
+            t.cashier_id = p.id
+            who = f" {holder} tient la caisse."
+        elif "asso_name" in f and str(f.get("asso_name") or "").strip():
+            S.set_trip_asso_name(t, str(f.get("asso_name")), s)
         s.commit()
-        return back(f"/v/{t.id}/participants", "Voyage créé. Ajoute maintenant les participants.")
+        return back(f"/v/{t.id}/participants?ajout=1#ajout", f"Voyage créé.{who} Ajoute maintenant les participants.")
+
+    @app.post("/v/{tid}/jeu-plongee")
+    def add_diving_set(tid: int, s: Session = Depends(get_s)):
+        """Ajoute au voyage les rôles Plongeur / Accompagnant et les catégories de plongée."""
+        t = trip_or_404(s, tid)
+        if S.is_diving(t) and all(E.sort_key(n) in {E.sort_key(c.name) for c in t.categories}
+                                  for n, _ in S.DIVING_CATEGORIES):
+            return back(f"/v/{tid}/participants/organisation#roles", "Ce voyage a déjà les réglages de plongée")
+        db.snapshot("réglages de plongée ajoutés")
+        added = S.add_diving_set(t)
+        s.commit()
+        return back(f"/v/{tid}/participants/organisation#roles",
+                    "Réglages de plongée ajoutés : rôles Plongeur et Accompagnant"
+                    + (f", catégories {', '.join(added)}" if added else ""))
 
     @app.post("/v/{tid}/modifier")
     async def edit_trip(tid: int, request: Request, s: Session = Depends(get_s)):
@@ -1715,7 +1746,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             cn = e.category.name if e.category else "Divers"
             cat_totals[cn] = cat_totals.get(cn, 0) + r.expense_totals.get(e.id, 0)
         return render(request, "dashboard.html", trip=t, r=r, alerts=S.alerts(t, r), msum=S.money_summary(t, r),
-                      ai_notes=S.ai_notes(t),
+                      ai_notes=S.ai_notes(t), start_steps=S.getting_started(t),
                       asso_paid=asso_paid, cat_totals=cat_totals,
                       adv_total=sum(a["amount"] for a in S.advances(t) if not a["income"]),
                       withdrawn={w.participant_id for w in t.withdrawals})
@@ -1751,7 +1782,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     @app.get("/v/{tid}/participants/organisation", response_class=HTMLResponse)
     def organisation(tid: int, request: Request, s: Session = Depends(get_s)):
         t = trip_or_404(s, tid)
-        return render(request, "organisation.html", trip=t, groups=S.trip_groups(t),
+        return render(request, "organisation.html", trip=t, groups=S.trip_groups(t), diving=S.is_diving(t),
                       role_members={rk: S.with_role(t, rk) for rk in S.trip_roles(t)})
 
     @app.post("/v/{tid}/roles-du-voyage")
@@ -2306,7 +2337,9 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     def categories(tid: int, request: Request, s: Session = Depends(get_s)):
         t = trip_or_404(s, tid)
         have = {E.sort_key(c.name) for c in t.categories}
-        available = [n for n in S.category_library(s) if E.sort_key(n) not in have]
+        diving = S.is_diving(t)                      # les catégories de plongée : seulement pour un voyage de plongée
+        available = [n for n in S.category_library(s) if E.sort_key(n) not in have
+                     and (diving or not S.is_diving_category(n))]
         custom = {E.sort_key(n) for n in S.category_library(s) if S.is_custom_category(s, n)}
         return render(request, "categories.html", trip=t, available=available, custom=custom, sort_key=E.sort_key,
                       subcats=S.subcategories_for(s, t))

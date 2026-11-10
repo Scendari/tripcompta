@@ -19,27 +19,27 @@ Exemple : pas d'asso, c'est Paul qui tient la caisse
 ━━━━━━━━━━ 2. LES PERSONNES ━━━━━━━━━━
 
 PARTICIPANTS
-Un par ligne, avec le PRÉNOM et le NOM. Précise plongeur ou ACCOMPAGNANT (vient au voyage mais ne plonge pas).
+Un par ligne, avec le PRÉNOM et le NOM. Précise ACCOMPAGNANT si la personne vient au voyage sans faire l'activité.
 Téléphone, e-mail ou remarque si tu veux.
-Exemple : Luc Martin (plongeur) — 06 12 34 56 78
-Exemple : Marie Durand (plongeuse) — marie@example.org — niveau 2
+Exemple : Luc Martin — 06 12 34 56 78
+Exemple : Marie Durand — marie@example.org — végétarienne
 -
 -
 
 FAMILLES
 Les membres d'une famille règlent leurs comptes ENSEMBLE avec la caisse. Dis qui paie pour la famille.
-Exemple : Famille Lebrun, c'est Paul qui paie : Paul et Julie plongeurs, Léa (12 ans) et Tom (9 ans) accompagnants
+Exemple : Famille Lebrun, c'est Paul qui paie : Paul et Julie, Léa (12 ans) et Tom (9 ans) accompagnants
 -
 
 RÔLES DANS LE GROUPE
 Organisateur :
 Co-organisateur(s) :
-Autres rôles utiles pour ce voyage (DP, moniteur, conducteur, photographe…) :
+Autres rôles utiles pour ce voyage (moniteur, conducteur, photographe…) :
 Exemple : DP : Luc ; Conducteurs : Luc et Marie
 -
 
 GROUPES
-Des personnes qui partagent souvent les mêmes frais : une voiture, une chambre, une palanquée…
+Des personnes qui partagent souvent les mêmes frais : une voiture, une chambre, une équipe…
 Ils serviront ensuite à dire « pour qui » en un mot.
 Exemple : Voiture de Luc : Luc, Marie, Sophie, Julien
 Exemple : Chambre 2 : Hugo, Antoine
@@ -50,13 +50,13 @@ Exemple : Chambre 2 : Hugo, Antoine
 
 DÉPENSES
 Une par ligne : quoi — montant prévu et/ou réel — qui a payé (la caisse, celui qui a avancé l'argent, ou plusieurs
-avec leur montant) — pour qui (tout le monde, tout le monde sauf…, les plongeurs, un groupe, une famille, certains).
+avec leur montant) — pour qui (tout le monde, tout le monde sauf…, un rôle, un groupe, une famille, certains).
 Montant pas encore connu ? Écris « ?? » : l'IA notera la dépense pour plus tard.
 Quelqu'un paie un montant précis ? Dis-le : son montant est fixé et le reste est partagé entre les autres.
 Exemple : Gîte 3 nuits — prévu 1 800 € / réel 1 740 € — payé par l'asso — pour tous
 Exemple : Gîte — 1 740 € — pour tous, Tom paie 60 € (enfant), le reste partagé entre les autres
-Exemple : Plongées — 1 200 € — payé 900 € par Luc et 300 € d'arrhes par l'asso — Luc et Marie 6 plongées, les autres plongeurs 3
-Exemple : Bateau — 300 € — payé par l'asso — pour les plongeurs seulement
+Exemple : Sorties en mer — 1 200 € — payé 900 € par Luc et 300 € d'arrhes par l'asso — Luc et Marie 6 sorties, les autres 3
+Exemple : Location de matériel — 300 € — payé par l'asso — pour tout le monde sauf les accompagnants
 Exemple : Essence voiture de Luc — deux pleins : 80,12 € le 25/10/2026 et 69,10 € le 31/10/2026 — avancé par Luc — pour la voiture de Luc
 Exemple : Péage voiture de Luc — ?? — payé par Luc
 Exemple : Appartement annulé — 120 € payé par Luc — l'hébergeur lui a rendu 90 € (il les a reversés à la caisse ? oui / non) — pour tous

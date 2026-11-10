@@ -281,7 +281,7 @@ def test_ai_template_and_guide_mention_families():
     from compta import importer
     t, g = importer.template(), importer.guide()
     assert "accompagnant" in t and "FAMILLES" in t and "Famille Lebrun" in t
-    assert '"accompagnant": true' in g and '"familles"' in g and '"pour": "plongeurs"' in g
+    assert '"accompagnant": true' in g and '"familles"' in g and '"sauf": ["Léa Lebrun", "Tom Lebrun"]' in g
 
 
 # ---------------------------------------------------------------- base existante (avant familles)

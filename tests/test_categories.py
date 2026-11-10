@@ -21,8 +21,9 @@ def app(tmp_path):
     return create_app(tmp_path / "d")
 
 
-def new_trip(c, name="Test"):
-    r = c.post("/voyages", data={"name": name}, follow_redirects=False)
+def new_trip(c, name="Test", plongee="1"):
+    """Un voyage de plongée (la liste conseillée de ce fichier) ; plongee="" : un voyage ordinaire."""
+    r = c.post("/voyages", data={"name": name, "plongee": plongee}, follow_redirects=False)
     return int(re.search(r"/v/(\d+)/", r.headers["location"]).group(1))
 
 
@@ -52,8 +53,8 @@ def test_new_trip_gets_default_categories_and_two_columns(app):
     assert cats(app, tid) == RECOMMENDED
     left, right = columns(c.get(f"/v/{tid}/categories").text.replace("&#39;", "'"))
     assert right == RECOMMENDED
-    assert left == ["Gonflage / Nitrox", "Formation / Passage de niveau", "Courses", "Transport collectif",
-                    "Bateau / Navette", "Assurance", "Taxes", "Frais divers"]
+    assert left == ["Activités", "Gonflage / Nitrox", "Formation / Passage de niveau", "Courses",
+                    "Transport collectif", "Bateau / Navette", "Assurance", "Taxes", "Frais divers"]
     page = c.get(f"/v/{tid}/categories").text
     assert "Qui est concerné" not in page
 

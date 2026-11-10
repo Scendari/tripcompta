@@ -7,7 +7,7 @@
 <form class="card home-form{{ ' panel' if panel }}" method="post" action="/voyages">
   <h2 class="home-h">{{ '✨ Créer ton premier voyage' if first else 'Nouveau voyage' }}</h2>
   <div class="field"><label for="name">Nom du voyage</label>
-    <input type="text" id="name" name="name" placeholder="ex. Plongée Port-Cros mai 2027" required {{ 'autofocus' if first }}></div>
+    <input type="text" id="name" name="name" placeholder="ex. Week-end à la mer, mai 2027" required {{ 'autofocus' if first }}></div>
   <div class="home-pair">
     <div class="field"><label for="start">Du</label><input type="date" id="start" name="start" data-no-today></div>
     <div class="field"><label for="end">Au</label><input type="date" id="end" name="end" data-no-today></div>
@@ -16,6 +16,21 @@
     <div class="field"><label for="place">Lieu <span class="hint">(facultatif)</span></label><input type="text" id="place" name="place"></div>
     <div class="field"><label for="organizer">Organisateur <span class="hint">(facultatif)</span></label><input type="text" id="organizer" name="organizer"></div>
   </div>
+  {% set u = 'p' if panel else 'f' %}
+  <fieldset class="home-ask">
+    <legend>Qui tient la caisse ?</legend>
+    <p class="hint">Celui ou celle qui reçoit l'argent des participants et paie les dépenses. Tu pourras le changer ensuite.</p>
+    <div class="choice">
+      <label><input type="radio" name="caisse" value="asso" checked> Une association ou un club</label>
+      <label><input type="radio" name="caisse" value="personne"> Une personne du voyage <span class="hint">(pas d'association)</span></label>
+    </div>
+    <div class="field" data-show-when="caisse=asso"><label for="asso_name_{{ u }}">Son nom <span class="hint">(facultatif)</span></label>
+      <input type="text" id="asso_name_{{ u }}" name="asso_name" value="{{ asso_default }}" placeholder="ex. Club de rando des Aravis" maxlength="100"></div>
+    <div class="field" data-show-when="caisse=personne"><label for="cashier_name_{{ u }}">Son prénom et son nom</label>
+      <input type="text" id="cashier_name_{{ u }}" name="cashier_name" placeholder="ex. Camille Durand" maxlength="200">
+      <div class="hint">Elle sera ajoutée aux participants.</div></div>
+  </fieldset>
+  <label class="home-check"><input type="checkbox" name="plongee" value="1" {{ 'checked' if diving_default }}> C'est un voyage de plongée <span class="hint">(ajoute les rôles Plongeur et Accompagnant, et les catégories de plongée)</span></label>
   <div class="row home-btns">{% if panel %}<button type="button" class="btn ghost" data-toggle-row="#nouveau">Fermer</button>{% endif %}<button class="btn">Créer le voyage</button></div>
 </form>
 {%- endmacro %}

@@ -68,7 +68,7 @@ def test_guide_example_imports_and_balances(ops):
     # gîte + plongées + bateau + essence − recette (remboursement acompte) + taxe de séjour ; péage « à venir » = 0
     assert a["cout_total"] == round(1740 + 1050 + 300 + 92.40 - 60 + 75, 2)
     deps = {e["libelle"]: e for e in a["depenses"]}
-    assert deps["Plongées club"]["paye_par"] == {"asso": 300.0, "Stéphane": 750.0}
+    assert deps["Sorties en mer"]["paye_par"] == {"asso": 300.0, "Stéphane": 750.0}
     assert deps["Remboursement acompte gîte"]["type"] == "recette" and deps["Péage voiture de Luc"]["a_venir"]
     assert set(deps["Taxe de séjour"]["pour"]) == {n for n in [p_["nom"] for p_ in a["participants"]]} - {"Tom Lebrun", "Antoine"}
     assert set(deps["Essence voiture de Luc"]["pour"]) == {"Luc", "Marie", "Sophie"}         # groupe nommé

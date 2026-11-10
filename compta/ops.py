@@ -388,6 +388,8 @@ def do_add_participants(s, t, noms, inclure_dans_depenses_communes=True, famille
             rs = S.parse_roles(info.get("roles") or [], t)
         except ValueError as e:
             raise OpsError(f"{name} : {e}")
+        if comp and S.COMPANION not in S.trip_roles(t):   # voyage sans ce rôle : l'information n'est pas perdue,
+            S.add_trip_role(t, S.ROLES[S.COMPANION])      # le rôle « Accompagnant » est remis dans ce voyage
         if S.DIVER not in rs and S.COMPANION not in rs:   # par défaut : plongeur, sauf accompagnant (s'ils existent ici)
             dflt = S.COMPANION if comp else S.DIVER
             if dflt in S.trip_roles(t):

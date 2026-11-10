@@ -142,7 +142,7 @@ def test_api_and_ai_texts(tmp_path):
     tid = c.post("/api/import", json={"donnees": {"voyage": {"nom": "x"}, "participants": ["A", "B"]}}).json()["voyage_id"]
     r = c.put(f"/api/voyages/{tid}/participants/B/roles", json={"roles": ["dp", "organisateur"]})
     assert r.status_code == 200 and "Organisateur, DP" in r.json()["message"]
-    assert "Autres rôles utiles pour ce voyage (DP" in importer.template() and "Co-organisateur(s) :" in importer.template()
+    assert "Autres rôles utiles pour ce voyage (moniteur" in importer.template() and "Co-organisateur(s) :" in importer.template()
     assert "DP (directeur de plongée) :" not in importer.template()          # plus de case DP à part
     assert '"co_organisateurs"' in importer.guide() and '"dp"' not in importer.guide()
 

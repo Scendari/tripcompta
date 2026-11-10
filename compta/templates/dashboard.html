@@ -2,6 +2,22 @@
 {% from "_macros.html" import ai_notes_list %}
 {% from "_macros.html" import status, mode_note, role_pills with context %}
 {% block content %}
+{% if start_steps %}
+<section class="card start-card" id="pour-demarrer" aria-labelledby="h-start">
+  <h2 id="h-start">Pour démarrer</h2>
+  <ol class="start-steps">
+    {% set ns = namespace(next=true) %}
+    {% for st in start_steps %}
+    <li class="{{ 'done' if st.done else ('next' if ns.next else '') }}">
+      <span class="start-mark" aria-hidden="true">{{ '✓' if st.done else loop.index }}</span>
+      <div class="grow"><b>{{ st.title }}</b>{% if st.done %} <span class="sr-only">(fait)</span>{% endif %}<div class="muted small">{{ st.text }}</div></div>
+      {% if not st.done and ns.next %}<a class="btn small" href="{{ st.link }}">{{ st.action }}</a>{% set ns.next = false %}
+      {% elif not st.done %}<a class="btn small ghost" href="{{ st.link }}">{{ st.action }}</a>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+</section>
+{% endif %}
 <div class="page-head"><div class="grow"><h1>Où j'en suis ?</h1>{{ mode_note(mode) }}</div></div>
 
 <section class="trip-info" aria-labelledby="h-trip">

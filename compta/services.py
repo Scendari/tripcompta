@@ -17,6 +17,11 @@ RECOMMENDED_CATEGORIES = [
     ("Logement", ALL), ("Transport / Covoit", ALL), ("Plongée", DIVERS), ("Location matériel", DIVERS),
     ("Repas", ALL), ("Activités accompagnants", COMPANIONS), ("Divers", ALL),
 ]
+# Un voyage ordinaire (randonnée, ski, week-end entre amis…) : rien de propre à une activité. Le « jeu Plongée »
+# (rôles Plongeur / Accompagnant, catégories de plongée) s'ajoute à la création, ou plus tard d'un clic.
+NEUTRAL_CATEGORIES = [("Logement", ALL), ("Transport / Covoit", ALL), ("Repas", ALL), ("Activités", ALL),
+                      ("Divers", ALL)]
+DIVING_CATEGORIES = [("Plongée", DIVERS), ("Location matériel", DIVERS), ("Activités accompagnants", COMPANIONS)]
 # Proposées d'un clic sur l'écran Catégories
 SUGGESTED_CATEGORIES = [
     ("Gonflage / Nitrox", DIVERS), ("Formation / Passage de niveau", DIVERS), ("Courses", ALL),
@@ -37,7 +42,13 @@ def _custom_categories(s) -> list:
 
 
 def builtin_category_names() -> list:
-    return [n for n, _ in RECOMMENDED_CATEGORIES + SUGGESTED_CATEGORIES]
+    names = [n for n, _ in RECOMMENDED_CATEGORIES + NEUTRAL_CATEGORIES + SUGGESTED_CATEGORIES]
+    return list(dict.fromkeys(names))
+
+
+def is_diving_category(name: str) -> bool:
+    """Catégorie du « jeu Plongée » (ou qui en a tout l'air) : proposée seulement dans un voyage de plongée."""
+    return guess_audience(name) != ALL
 
 
 def category_library(s) -> list:
@@ -304,8 +315,9 @@ def audience_of(cat) -> str:
     return cat.audience if cat.audience in AUDIENCES else guess_audience(cat.name)
 
 
-def default_category_list(s) -> list:
-    """[(nom, public)] pour un nouveau voyage : la liste enregistrée par l'utilisateur, sinon la liste conseillée."""
+def default_category_list(s, diving: bool = True) -> list:
+    """[(nom, public)] pour un nouveau voyage : la liste enregistrée par l'utilisateur, sinon la liste conseillée
+    (avec les catégories de plongée seulement pour un voyage de plongée)."""
     row = s.get(M.Setting, DEFAULTS_KEY) if s is not None else None
     if row and row.value:
         try:
@@ -314,11 +326,82 @@ def default_category_list(s) -> list:
                 return items
         except (ValueError, TypeError):
             pass
-    return list(RECOMMENDED_CATEGORIES)
+    return list(RECOMMENDED_CATEGORIES if diving else NEUTRAL_CATEGORIES)
 
 
-def new_trip_categories(s) -> list:
-    return [M.Category(name=n, audience=a, position=i) for i, (n, a) in enumerate(default_category_list(s))]
+def new_trip_categories(s, diving: bool = True) -> list:
+    return [M.Category(name=n, audience=a, position=i)
+            for i, (n, a) in enumerate(default_category_list(s, diving))]
+
+
+def is_diving(trip) -> bool:
+    """Le voyage utilise le « jeu Plongée » : le rôle Plongeur y existe."""
+    return DIVER in trip_roles(trip)
+
+
+def start_trip(s, trip: M.Trip, diving: bool) -> None:
+    """Réglages de départ d'un voyage tout neuf. Sans plongée : pas de rôle Plongeur / Accompagnant, pas de
+    catégorie de plongée (tout peut s'ajouter ensuite)."""
+    trip.categories = new_trip_categories(s, diving)
+    last = last_trip(s)                            # les étiquettes du dernier voyage (« Moniteur »…) sont reprises
+    conf = _roles_conf(last) if last is not None else {"perso": [], "masques": []}
+    masks = [m for m in conf["masques"] if m not in (DIVER, COMPANION)]
+    if diving:                                     # un accompagnant retiré du dernier voyage de plongée le reste
+        masks += [COMPANION] if last is not None and is_diving(last) and COMPANION in conf["masques"] else []
+    else:
+        masks = [DIVER, COMPANION] + masks
+    trip.roles_conf = json.dumps({"perso": conf["perso"], "masques": masks}, ensure_ascii=False)
+
+
+def last_trip(s):
+    """Le dernier voyage créé (hors voyage d'exemple), ou None."""
+    return s.query(M.Trip).filter(M.Trip.is_demo.is_(False)).order_by(M.Trip.created.desc(), M.Trip.id.desc()).first()
+
+
+def add_diving_set(trip: M.Trip) -> list:
+    """Ajoute le « jeu Plongée » à un voyage : les rôles Plongeur et Accompagnant, et les catégories de plongée
+    qui manquent. Les personnes déjà inscrites deviennent « Plongeur » (à changer ensuite pour les accompagnants).
+    Renvoie les noms des catégories ajoutées."""
+    conf = _roles_conf(trip)
+    back = [r for r in (DIVER, COMPANION) if r in conf["masques"]]
+    conf["masques"] = [m for m in conf["masques"] if m not in (DIVER, COMPANION)]
+    trip.roles_conf = json.dumps(conf, ensure_ascii=False)
+    if DIVER in back:
+        for p in trip.participants:
+            if DIVER not in p.role_list and COMPANION not in p.role_list:
+                set_roles(trip, p, p.role_list + [DIVER])
+    have = {E.sort_key(c.name) for c in trip.categories}
+    added = []
+    for n, a in DIVING_CATEGORIES:
+        if E.sort_key(n) not in have:
+            trip.categories.append(M.Category(name=n, audience=a, position=len(trip.categories)))
+            added.append(n)
+    return added
+
+
+def getting_started(trip: M.Trip) -> list:
+    """Carte « Pour démarrer » : les quatre étapes d'un voyage, cochées toutes seules.
+    [{"done", "title", "text", "link", "action"}] ; vide quand il n'y a plus rien à montrer (ou voyage d'exemple)."""
+    if trip.is_demo:
+        return []
+    tid = trip.id
+    steps = [
+        dict(done=bool(trip.participants), title="Ajoute les participants",
+             text="Les personnes qui viennent au voyage (tu pourras en ajouter plus tard).",
+             link=f"/v/{tid}/participants?ajout=1#ajout", action="Ajouter des participants"),
+        dict(done=bool(trip.expenses), title="Note les dépenses",
+             text="Le logement, le transport, les repas… avec le montant prévu, puis le montant payé.",
+             link=f"/v/{tid}/depenses/nouvelle", action="Ajouter une dépense"),
+        dict(done=bool(trip.movements), title="Note l'argent reçu",
+             text="Chaque acompte ou versement d'un participant, au fur et à mesure.",
+             link=f"/v/{tid}/argent", action="Noter un versement"),
+        dict(done=bool(pay_info(trip)), title="Envoie à chacun son compte",
+             text="Un message et un PDF par personne, avec ce qu'il reste à payer et comment payer.",
+             link=f"/v/{tid}/envoyer", action="Envoyer les comptes"),
+    ]
+    if all(st["done"] for st in steps[:3]):
+        return []                                  # le voyage est lancé : la carte s'efface
+    return steps
 
 
 def engine_inputs(trip: M.Trip) -> dict:

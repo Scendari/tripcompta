@@ -15,15 +15,16 @@ Deux situations :
 ## Comment l'application fonctionne
 
 - Un **voyage** a des **participants** et des **dépenses**.
-- Un participant peut être **accompagnant** : il vient au voyage mais ne plonge pas (il partage le
-  logement, les repas, le transport, mais pas les plongées). Les autres sont les **plongeurs**.
+- Un participant peut être **accompagnant** : il vient au voyage mais ne fait pas l'activité principale (il
+  partage le logement, les repas, le transport, mais pas les sorties). Dans un voyage de plongée, les autres sont
+  les **plongeurs**. Ces deux rôles n'existent que dans les voyages qui s'en servent.
 - Rôles dans le groupe : un **organisateur** (un seul), des **co-organisateurs**, et les rôles propres au
-  voyage (DP, moniteur, conducteur…). Ce sont des **étiquettes** : elles servent à s'y retrouver et à désigner
+  voyage (moniteur, conducteur, photographe…). Ce sont des **étiquettes** : elles servent à s'y retrouver et à désigner
   vite des personnes dans « pour » ; elles ne changent aucun montant. Une même personne peut en cumuler.
   Le voyage peut avoir ses **propres rôles** (conducteur, photographe…) : déclare-les dans
   `"voyage": {"roles_du_voyage": ["Conducteur"]}`, puis `"roles": ["Conducteur"]` sur les participants.
   Un rôle sert aussi dans `pour` (`"pour": "Conducteur"` ou `"conducteurs"` = tous les conducteurs).
-- Des **groupes** (une voiture, une chambre, une palanquée…) : des personnes qui partagent souvent les mêmes
+- Des **groupes** (une voiture, une chambre, une équipe…) : des personnes qui partagent souvent les mêmes
   frais. Ils sont enregistrés dans le voyage et servent ensuite dans `pour`.
 - Des participants peuvent former une **famille** : chacun a sa part, mais la famille **règle ses comptes
   ensemble** avec l'asso (un seul « reste à payer »). Une personne **paie pour la famille** (elle verse
@@ -44,9 +45,9 @@ Deux situations :
   qu'il doit).
 - **Montant pas encore connu** : `"a_venir": true` sans montant. La dépense est notée (qui a payé, pour qui) et
   signalée dans les alertes ; elle compte pour 0 € jusqu'à ce qu'on donne le montant.
-- **Pour qui** : `"tous"`, un **rôle** (`"plongeurs"`, `"accompagnants"`, `"DP"` s'il existe dans le voyage…), une liste de
+- **Pour qui** : `"tous"`, un **rôle** qui existe dans le voyage (`"accompagnants"`, `"conducteur"`, `"plongeurs"`…), une liste de
   prénoms (on peut y mettre `"famille Lebrun"` = tous ses membres, un rôle ou un groupe), ou des **parts inégales** (`"parts": {"Luc": 6, "Hugo": 4}`
-  = nombre de plongées, de nuits, demi-part `0.5`…). Le montant est réparti au prorata des parts.
+  = nombre de sorties, de nuits, demi-part `0.5`…). Le montant est réparti au prorata des parts.
 - **Versements** : argent donné par un participant à l'asso (acompte, solde). **Remboursements** :
   argent rendu par l'asso à un participant.
 - **Montant fixé dans une dépense** : une personne paie un montant précis sur une dépense (enfant à 60 € sur
@@ -71,8 +72,8 @@ Deux situations :
    - pour qui (tout le monde ? certains ? parts différentes) ?
    - montant prévu ou réel ?
    - un prénom inconnu, un doublon possible (même dépense deux fois ?), un montant qui semble faux ?
-   - qui est accompagnant (ne plonge pas) ? qui fait partie de quelle famille, et qui paie pour elle ?
-   - une dépense « pour tous » : les accompagnants sont-ils concernés (bateau, plongées : non en général) ?
+   - qui est accompagnant (ne fait pas l'activité) ? qui fait partie de quelle famille, et qui paie pour elle ?
+   - une dépense « pour tous » : les accompagnants sont-ils concernés (sorties, location de matériel : non en général) ?
    - un montant précis pour quelqu'un : sur une seule dépense (→ `fixe`) ou sur tout son voyage (→ `remises`) ?
      Pour une remise : l'asso ou les autres compensent ? Pour un désistement : groupe ou asso, ce qu'on rend ?
    - en mise à jour : cette dépense est-elle **nouvelle**, ou est-ce le **montant réel** d'une dépense
@@ -114,12 +115,12 @@ Deux situations :
   (chambre seule) : `"type": "supplement"` ; par défaut il est « compensé par les autres » (ils paient d'autant
   moins). `"compense_par": "asso"` sur un supplément = c'est l'asso qui garde ce supplément.
 - **Parts en euros** : `parts` accepte des montants (`{"Luc": 240, "Hugo": 180}`) aussi bien que des nombres de
-  plongées : seule la proportion compte.
+  sorties : seule la proportion compte.
 - **Mêmes listes de personnes répétées** : définis-les une fois dans `"groupes"` (`{"covoit": [...]}`) et écris
   `"pour": "covoit"`. Pour « tout le monde sauf… » : `"pour": "tous", "sauf": ["Tom Lebrun"]`.
 - **Désistement** (personne inscrite qui n'est finalement pas venue) : ajoute-la dans `desistements` avec
   `parts_conservees` = les dépenses qu'elle paie quand même. **L'application la retire toute seule de toutes les
-  autres dépenses**, même celles « pour tous » ou « plongeurs » : inutile de l'exclure à la main. Sur ses parts
+  autres dépenses**, même celles « pour tous » ou pour un rôle : inutile de l'exclure à la main. Sur ses parts
   conservées, elle paie comme les autres (part fixe d'un enfant comprise)  ; si une de ces dépenses a été en partie
   remboursée, elle profite du remboursement comme les autres. Ce qu'elle a versé en trop lui sera dû :
   l'application le calcule. `remboursement` = seulement l'argent **déjà rendu** par l'asso (sinon ne le mets pas).
@@ -147,16 +148,16 @@ Deux situations :
 {
   "voyage_id": 2,
   "voyage": {
-    "nom": "Plongée Port-Cros — mai 2027",
+    "nom": "Week-end à Port-Cros — mai 2027",
     "lieu": "Port-Cros",
     "debut": "2027-05-13",
     "fin": "2027-05-16",
     "organisateur": "Stéphane",
     "co_organisateurs": ["Marie"],
-    "roles_du_voyage": ["Conducteur", "DP"],
+    "roles_du_voyage": ["Conducteur", "Moniteur"],
     "asso": "Club Subaqua",
     "caisse": "asso",
-    "note": "Club : Port-Cros Plongée. Départ de Lyon."
+    "note": "Club : Port-Cros Évasion. Départ de Lyon."
   },
   "groupes": {
     "voiture de Luc": ["Luc", "Marie", "Sophie"]
@@ -179,11 +180,12 @@ Deux situations :
      "date": "2027-05-13", "paye_par": "asso", "pour": "tous", "fixe": {"Tom Lebrun": "60"}},
     {"libelle": "Remboursement acompte gîte", "type": "recette", "categorie": "Logement", "reel": "60",
      "paye_par": "Stéphane", "pour": "tous", "note": "reçu par Stéphane, à reverser à l'asso"},
-    {"libelle": "Plongées club", "categorie": "Plongée", "reel": "1050",
+    {"libelle": "Sorties en mer", "categorie": "Activités", "reel": "1050",
      "paye_par": {"asso": "300", "Stéphane": "750"},
      "parts": {"Luc": 6, "Marie": 6, "Hugo": 4, "Stéphane": 3, "Sophie": 3, "Antoine": 3,
                "Paul Lebrun": 3, "Julie Lebrun": 3}},
-    {"libelle": "Bateau", "categorie": "Plongée", "reel": "300", "paye_par": "asso", "pour": "plongeurs"},
+    {"libelle": "Bateau", "categorie": "Activités", "reel": "300", "paye_par": "asso",
+     "pour": "tous", "sauf": ["Léa Lebrun", "Tom Lebrun"]},
     {"libelle": "Essence voiture de Luc", "categorie": "Transport / Covoit", "sous_categorie": "Essence",
      "reel": [{"montant": "52,40", "date": "2027-05-13"}, {"montant": "40", "date": "2027-05-16"}],
      "paye_par": "Luc", "pour": "voiture de Luc"},
@@ -214,7 +216,7 @@ Deux situations :
   ],
   "a_verifier": [
     "Le ticket de péage n'a pas de date.",
-    "Hugo : 4 ou 6 plongées ? (mis 4 en attendant)"
+    "Hugo : 4 ou 6 sorties ? (mis 4 en attendant)"
   ]
 }
 ```
@@ -271,7 +273,7 @@ On n'y met que ce qui change. Les noms de dépenses et de personnes sont ceux de
 - **Montants** en euros, en texte ou en nombre : `"1740"`, `"92,40"`, `92.4`. Jamais négatifs.
 - **Dates** : `"AAAA-MM-JJ"` (ou `"JJ/MM/AAAA"`). Facultatives.
 - `participants` : un prénom, ou un objet `{"nom", "famille", "accompagnant", "telephone", "email", "note"}`.
-  `famille` = le nom de famille commun (sans « Famille ») ; `accompagnant: true` si la personne ne plonge pas.
+  `famille` = le nom de famille commun (sans « Famille ») ; `accompagnant: true` si la personne ne fait pas l'activité.
 - `voyage.asso` : le nom de l'asso pour ce voyage (ex. `"Club Subaqua"`) ; chaque voyage a le sien. Le nom de
   l'asso du voyage vaut `"asso"` partout (payeur, remboursement…).
 - `voyage.roles_du_voyage` : rôles propres au voyage (`["Conducteur", "Photographe"]`), à déclarer avant de les
@@ -286,7 +288,7 @@ On n'y met que ce qui change. Les noms de dépenses et de personnes sont ceux de
   nom, le nom complet partout.
   Pour un versement ou un remboursement, `participant` peut être `"Famille Lebrun"`.
 - `paye_par` : `"asso"`, un nom, ou plusieurs payeurs `{"Paul Lebrun": "900", "asso": "300"}`.
-  `pour` : `"tous"`, un rôle (`"plongeurs"`, `"accompagnants"`, `"organisateurs"`, ou un rôle du voyage), un groupe de
+  `pour` : `"tous"`, un rôle qui existe dans le voyage (`"accompagnants"`, `"organisateurs"`, `"plongeurs"`…), un groupe de
   `"groupes"`, ou une liste (prénoms, `"famille Lebrun"`, rôles, groupes). C'est la liste des personnes qui est
   enregistrée : quelqu'un ajouté plus tard n'entre pas tout seul dans une dépense déjà saisie. `sauf` : personnes ou groupes à retirer. Pour des parts inégales, utilise
   `parts` à la place de `pour` (une personne absente de `parts` ne paie rien).
@@ -302,7 +304,7 @@ On n'y met que ce qui change. Les noms de dépenses et de personnes sont ceux de
 - `categorie` : de préférence une de celles-ci (une autre catégorie est créée si besoin) :
   - pour tout le monde : `Logement`, `Transport / Covoit`, `Repas`, `Courses`, `Transport collectif`,
     `Bateau / Navette`, `Assurance`, `Taxes`, `Frais divers`, `Divers` ;
-  - en général pour les plongeurs : `Plongée`, `Location matériel`, `Gonflage / Nitrox`,
+  - pour un voyage de plongée, en général pour les plongeurs : `Plongée`, `Location matériel`, `Gonflage / Nitrox`,
     `Formation / Passage de niveau` ;
   - en général pour les accompagnants : `Activités accompagnants`.
   La catégorie ne décide pas à elle seule qui paie : indique toujours `pour` (ou `parts`).

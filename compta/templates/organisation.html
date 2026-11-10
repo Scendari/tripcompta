@@ -8,6 +8,7 @@
 <div class="orga-grid">
 <section class="card" id="roles" aria-labelledby="h-roles">
   <h3 id="h-roles">Rôles</h3>
+  {% if not diving %}<form method="post" action="/v/{{ trip.id }}/jeu-plongee" class="diving-set"><span class="small"><b>Voyage de plongée ?</b> Ajoute d'un coup les rôles Plongeur et Accompagnant, et les catégories de plongée.</span> <button class="btn small ghost">Ajouter les réglages de plongée</button></form>{% endif %}
   <p class="hint" style="margin-top:0">Ils apparaissent à côté des noms et servent de raccourcis dans « Pour qui ? » d'une dépense. Clique sur un rôle pour voir et changer ses membres. Un rôle ne change aucun montant : seules les personnes cochées dans chaque dépense comptent.</p>
   {% for rk, v in trip_roles.items() %}{% set members = role_members[rk] %}
   <div class="group-item">

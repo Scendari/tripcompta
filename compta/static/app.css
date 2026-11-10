@@ -247,6 +247,23 @@ fieldset { min-width: 0; }
 
 .thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-2); display: grid; place-items: center; font-size: .75rem; color: var(--muted); }
 details.edit summary { cursor: pointer; color: var(--teal-strong); font-size: .85rem; }
+.start-card { border-left: 4px solid var(--accent); margin-bottom: 1.2rem; }
+.start-card h2 { margin-top: 0; }
+.start-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; }
+.start-steps li { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; }
+.start-mark { flex: none; width: 1.9rem; height: 1.9rem; border-radius: 50%; display: grid; place-items: center; font-weight: 700;
+  border: 2px solid var(--field); color: var(--muted); background: var(--card); }
+.start-steps li.done .start-mark { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
+.start-steps li.done b { font-weight: 600; color: var(--muted); }
+.start-steps li.next .start-mark { border-color: var(--accent); color: var(--teal-strong); }
+.start-steps li > .grow { flex: 1 1 14rem; min-width: 0; }
+.home-ask { border: 1px solid var(--border); border-radius: 10px; padding: .6rem .8rem .2rem; margin: 0 0 .8rem; }
+.home-ask legend { font-weight: 700; font-size: .95rem; padding: 0 .3rem; }
+.home-ask .hint { margin: 0 0 .45rem; }
+.home-ask .choice { margin-bottom: .6rem; }
+.home-check { display: block; font-weight: 600; margin: 0 0 .9rem; }
+.home-check input { margin-right: .35rem; }
+.diving-set { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; background: var(--bg-2); border-radius: 9px; padding: .5rem .7rem; margin: 0 0 .8rem; }
 .field-err { color: var(--err); font-size: .9rem; font-weight: 600; margin: .3rem 0 0; }
 form > .field-err { margin: 0 0 .7rem; background: var(--err-bg); border-left: 4px solid var(--err); border-radius: 8px; padding: .45rem .7rem; }
 [aria-invalid="true"] { border-color: var(--err) !important; outline: 2px solid var(--err); outline-offset: 0; }
