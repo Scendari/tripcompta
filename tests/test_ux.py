@@ -20,7 +20,7 @@ PAGES = ["", "/participants", "/p/{pid}", "/depenses", "/categories", "/depenses
          "/repartition", "/en-images", "/desistement", "/desistement?p={pid}", "/argent", "/argent/mouvements", "/justificatifs",
          "/entre-nous", "/entre-nous/{sid}", "/export", "/ia", "/ia?modele=initialisation", "/comptes", "/participants/soldes", "/participants/remises", "/asso", "/envoyer", "/participants/organisation", "/participants/comptes", "/participants/avances"]
 GLOBAL_PAGES = ["/"]
-JARGON = re.compile(r"\b(débit|crédit|debit|credit|écriture|grand livre|solde débiteur|solde créditeur)\b", re.I)
+JARGON = re.compile(r"\b(débits?|crédits?|debit|credit|soldes?|écriture|grand livre|créance|ventilation)\b", re.I)
 
 
 @pytest.fixture(scope="module")
@@ -72,10 +72,9 @@ def test_every_page_desktop(server, browser):
         assert page.locator("h1").count() == 1, url
         assert page.title(), url
         body = page.locator("main").inner_text()
-        if not (url.endswith("/comptes") or url.endswith("/soldes") or "/p/" in url):   # tableau des comptes et fiche : débit / crédit expliqués
-            assert not JARGON.search(body), (url, JARGON.search(body).group(0))
-        else:
-            assert "ce qu'il doit" in body.lower() and "ce qu'il a donné" in body.lower()   # mots expliqués
+        assert not JARGON.search(body), (url, JARGON.search(body).group(0))      # aucune page n'y échappe
+        if url.endswith("/comptes") or url.endswith("/soldes") or "/p/" in url:   # tableau des comptes et fiche
+            assert "ce qu'il doit" in body.lower() and "ce qu'il a donné" in body.lower()   # des mots de tous les jours
         assert not unlabeled_fields(page), (url, unlabeled_fields(page))
         # boutons : tous ont un texte ou un titre
         empty = page.evaluate("""() => [...document.querySelectorAll('button')]

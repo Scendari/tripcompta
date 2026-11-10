@@ -14,11 +14,11 @@
   </div>
 <div class="card statement">
   <h3>Son compte</h3>
-  <p class="hint" style="margin-top:0"><b class="deb">Débit</b> = ce qu'il doit (sa part, l'argent reçu pour {{ asso_name }} ou rendu par {{ asso_name }}). <b class="cre">Crédit</b> = ce qu'il a donné (versements, dépenses qu'il a payées). Clique sur une catégorie pour voir le détail, puis sur une dépense pour voir le calcul.</p>
+  <p class="hint" style="margin-top:0"><b class="deb">Ce qu'il doit</b> : sa part, l'argent reçu pour {{ asso_name }} ou rendu par {{ asso_name }}. <b class="cre">Ce qu'il a donné</b> : ses versements, les dépenses qu'il a payées. <b>Reste</b> : la différence. Clique sur une catégorie pour voir le détail, puis sur une dépense pour voir le calcul.</p>
   {% if not account.groups %}<p class="muted">Rien pour l'instant.</p>{% else %}
   <div class="table-wrap">
   <table class="ledger person-account">
-    <thead><tr><th>Catégorie</th><th class="num deb">Débit</th><th class="num cre">Crédit</th><th class="num" title="Débit − crédit : ce qu'il doit encore, ou ce qu'on lui doit, pour cette catégorie">Solde</th><th class="pct-col"><span class="sr-only">Part du total</span></th></tr></thead>
+    <thead><tr><th>Catégorie</th><th class="num deb">Il doit</th><th class="num cre">Il a donné</th><th class="num" title="Ce qu'il doit, moins ce qu'il a donné : ce qu'il doit encore, ou ce qu'on lui doit, pour cette catégorie">Reste</th><th class="pct-col"><span class="sr-only">Part du total</span></th></tr></thead>
     {% for g in account.groups %}
     {% if g.kind == 'arrondi' %}
     <tbody class="acc-group collapsed" id="g{{ p.id }}-{{ loop.index }}">
@@ -151,7 +151,7 @@
       <div class="row" style="justify-content:space-between"><a href="/v/{{ trip.id }}/entre-nous/{{ sub.id }}">{{ sub.name }}</a>
       <span class="small">{% set b = sub_bal[sub.id] %}{% if b > 0 %}on lui doit {{ b|money }}{% elif b < 0 %}doit {{ (-b)|money }}{% else %}quitte{% endif %}</span></div>
     {% endfor %}
-    <p class="muted small">Hors asso : ces montants n'entrent pas dans le solde ci-contre.</p>
+    <p class="muted small">Hors asso : ces montants n'entrent pas dans son compte ci-contre.</p>
   </div>
   {% endif %}
 

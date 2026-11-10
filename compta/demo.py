@@ -152,7 +152,7 @@ def seed_demo(db: Database, replace: bool = True) -> int:
         receipt(6, "ticket_carburant_thierry.jpg", _receipt_jpg("Station Esso", "172,10 €"), "image/jpeg", [fuel2])
         # Le péage de la voiture de Thierry et le snorkeling n'ont pas de justificatif (alerte de démo).
 
-        # Versements (acompte de 200 € puis soldes pour certains)
+        # Versements (acompte de 200 € puis dernier versement pour certains)
         acompte = d(2027, 3, 1)
         for n in PEOPLE:
             if n not in ("Stéphane", "Hugo"):
@@ -163,7 +163,7 @@ def seed_demo(db: Database, replace: bool = True) -> int:
         for n, amount in [("Marie", 23000), ("Sophie", 21000), ("Luc", 15000), ("Nicolas", 26000),
                           ("Élodie", 26000), ("Thierry", 18000)]:
             s.add(M.Movement(trip_id=t.id, participant_id=P[n], kind="versement", amount=amount,
-                             date=d(2027, 5, 20), note="Solde"))
+                             date=d(2027, 5, 20), note="Dernier versement"))
 
         # Ajustements
         s.add(M.Adjustment(trip_id=t.id, participant_id=P["Hugo"], expense_id=gite.id, value=-4000,

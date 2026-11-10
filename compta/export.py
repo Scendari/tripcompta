@@ -224,7 +224,7 @@ def trip_pdf(trip: M.Trip, mode: str = E.ACTUAL) -> bytes:
     rows = [["Dans la caisse aujourd'hui" if m["cash"] >= 0 else f"Avancé par {asso}",
              _m(m["cash"]) if m["cash"] >= 0 else "− " + _m(-m["cash"])]]
     if m["to_collect"]:
-        rows.append(["+ À recevoir des participants", _m(m["to_collect"])])
+        rows.append(["+ Reste à recevoir des participants", _m(m["to_collect"])])
     if m["to_refund"]:
         rows.append(["− À rembourser aux participants", _m(m["to_refund"])])
     res = m["final"]
@@ -404,8 +404,8 @@ def trip_pdf(trip: M.Trip, mode: str = E.ACTUAL) -> bytes:
         pdf.table_(["Quoi", "Date", "Entrées", "Sorties"], rows, [104, 22, 27, 27], ["LEFT", "LEFT", "RIGHT", "RIGHT"],
                    total=["Total", "", _m(A["cash_in"]), _m(A["cash_out"])], size=7.5)
     fin = [["Dans la caisse aujourd'hui", _m(A["cash"])],
-           ["+ Encore à recevoir des participants", _m(A["to_collect"])],
-           ["− Encore à rendre aux participants", _m(A["to_refund"])]]
+           ["+ Reste à recevoir des participants", _m(A["to_collect"])],
+           ["− Reste à rendre aux participants", _m(A["to_refund"])]]
     if A["unpaid"]:
         fin.append(["− Dépenses de l'asso pas encore payées (prévu)", _m(A["unpaid_total"])])
     pdf.h2("Pour terminer le voyage")
@@ -555,8 +555,8 @@ def account_pdf(trip: M.Trip, acc_key: str, mode: str = E.ACTUAL) -> tuple:
         if pdf.get_y() > 230:
             pdf.add_page()
         pdf.h2(f"Détail : {m.name}" if acc.is_family else "Le détail",
-               "Débit = ce qu'il doit (sa part, l'argent reçu pour l'asso ou rendu par l'asso). "
-               "Crédit = ce qu'il a donné (versements, dépenses qu'il a payées).")
+               "« Il doit » : sa part, l'argent reçu pour l'asso ou rendu par l'asso. "
+               "« Il a donné » : ses versements, les dépenses qu'il a payées. « Reste » : la différence.")
         rows = []
         for g in A["groups"]:
             if g["kind"] == "arrondi":
@@ -582,7 +582,7 @@ def account_pdf(trip: M.Trip, acc_key: str, mode: str = E.ACTUAL) -> tuple:
                              + (f" · {it['note']}" if it.get("note") else ""), calc,
                              _m(it["debit"]) if it["debit"] else "", _m(it["credit"]) if it["credit"] else "", ""])
         if rows:
-            pdf.table_(["Quoi", "Calcul", "Débit", "Crédit", "Solde"], rows, [58, 52, 21, 21, 28],
+            pdf.table_(["Quoi", "Calcul", "Il doit", "Il a donné", "Reste"], rows, [58, 52, 21, 21, 28],
                        ["LEFT", "LEFT", "RIGHT", "RIGHT", "RIGHT"],
                        total=["Total", "", _m(A["debit"]), _m(A["credit"]), _solde(A["debit"] - A["credit"])], size=7.5)
     if trip.note:

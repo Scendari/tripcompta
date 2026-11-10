@@ -61,22 +61,25 @@
     {% set cur = request.url.path %}
     <nav>
       <a href="/v/{{ trip.id }}" class="{{ 'on' if cur == '/v/%d'|format(trip.id) }}">🏠 Où j'en suis</a>
+      <div class="nav-group">Saisir</div>
       <a href="/v/{{ trip.id }}/participants" class="{{ 'on' if '/participants' in cur or '/p/' in cur }}">👥 Participants</a>
       <a href="/v/{{ trip.id }}/depenses" class="{{ 'on' if '/depenses' in cur }}">🧾 Dépenses</a>
-      <a href="/v/{{ trip.id }}/categories" class="{{ 'on' if '/categories' in cur }}">🏷️ Catégories</a>
       <a href="/v/{{ trip.id }}/argent" class="{{ 'on' if '/argent' in cur }}">💶 Argent reçu et rendu</a>
+      <a href="/v/{{ trip.id }}/justificatifs" class="{{ 'on' if '/justificatifs' in cur }}">📎 Justificatifs</a>
+      <a href="/v/{{ trip.id }}/categories" class="{{ 'on' if '/categories' in cur }}">🏷️ Catégories</a>
+      <div class="nav-group">Suivre</div>
       <a href="/v/{{ trip.id }}/repartition" class="{{ 'on' if '/repartition' in cur }}">🧮 Qui paie quoi</a>
       <a href="/v/{{ trip.id }}/en-images" class="{{ 'on' if '/en-images' in cur }}">📊 En images</a>
       <a href="/v/{{ trip.id }}/asso" class="{{ 'on' if cur.endswith('/asso') }}" title="Le compte de {{ asso_name }} pour ce voyage">🏛️ {{ asso_name|capfirst|truncate(28, True, '…') }}</a>
-      <div class="sep"></div>
+      <div class="nav-group">Cas particuliers</div>
       <a href="/v/{{ trip.id }}/desistement" class="{{ 'on' if '/desistement' in cur }}">🚪 Désistement</a>
-      <a href="/v/{{ trip.id }}/justificatifs" class="{{ 'on' if '/justificatifs' in cur }}">📎 Justificatifs</a>
       <a href="/v/{{ trip.id }}/entre-nous" class="{{ 'on' if '/entre-nous' in cur }}">🤝 Entre nous</a>
       <a href="/v/{{ trip.id }}/ia" class="{{ 'on' if '/ia' in cur }}">🤖 IA</a>
-      <div class="sep"></div>
+      <div class="nav-group">Partager</div>
+      <a href="/v/{{ trip.id }}/envoyer" class="{{ 'on' if '/envoyer' in cur }}">📤 Envoyer les comptes</a>
       <a href="/v/{{ trip.id }}/export" class="{{ 'on' if '/export' in cur }}">📄 Exporter le bilan</a>
       <a href="/v/{{ trip.id }}/transfert" class="{{ 'on' if '/transfert' in cur }}">📦 Exporter le voyage</a>
-      <a href="/v/{{ trip.id }}/envoyer" class="{{ 'on' if '/envoyer' in cur }}">📤 Envoyer les comptes</a>
+      <div class="sep"></div>
       <a href="/">← Tous les voyages</a>
     </nav>
   </aside>

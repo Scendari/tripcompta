@@ -44,7 +44,8 @@ def test_ledger_numbers_by_hand(fam):
 def test_ledger_page(fam):
     app, c, tid = fam
     page = clean(c.get(f"/v/{tid}/comptes").text)
-    assert "Débit — ce qu'il doit" in page.replace("&#39;", "'") and "Crédit — ce qu'il a donné" in page.replace("&#39;", "'")
+    assert ">Ce qu'il doit</th>" in page.replace("&#39;", "'") and ">Ce qu'il a donné</th>" in page.replace("&#39;", "'")
+    assert "Débit" not in page and "Crédit" not in page and ">Solde<" not in page   # mots de comptable retirés
     assert "Famille Lebrun" in page and "doit 160,00 €" in page and "on lui doit 25,00 €" in page
     assert "✓ juste" not in page and "Il reste dans la caisse" not in page   # contrôle et caisse : retirés (doublons)
     raw = c.get(f"/v/{tid}/comptes").text                                    # ancienne adresse → onglet Comptes

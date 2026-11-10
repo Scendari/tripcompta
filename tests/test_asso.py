@@ -187,14 +187,14 @@ def test_cashier_wording_never_doubles(tmp_path):
 
 
 def test_asso_page_details_who_owes(tmp_path):
-    """« Encore à recevoir / à rendre » : le détail par personne ou famille, avec un lien pour enregistrer."""
+    """« Reste à recevoir / à rendre » : le détail par personne ou famille, avec un lien pour enregistrer."""
     app, ops, tid = _friends(tmp_path)
     c = TestClient(app)
     c.post(f"/v/{tid}/asso/caisse", data={"cashier": ""})        # l'asso tient la caisse : Paul doit aussi
     page = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", clean(c.get(f"/v/{tid}/asso").text)))
-    assert "Encore à recevoir de 3 personnes ou familles" in page
+    assert "Reste à recevoir de 3 personnes ou familles" in page
     assert "Paul 120,00 € Enregistrer" in page
-    assert "Encore à rendre — personne" in page
+    assert "Reste à rendre — personne" in page
     raw = c.get(f"/v/{tid}/asso").text
     assert "/argent?k=versement&p=" in raw and "a=120#ajout" in raw
 

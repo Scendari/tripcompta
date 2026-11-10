@@ -95,8 +95,8 @@
       {% set st = r.settlements() %}
       {% set owe = st|rejectattr(0, 'equalto', ASSO)|sort(attribute=2, reverse=true)|list %}
       {% set due = st|selectattr(0, 'equalto', ASSO)|sort(attribute=2, reverse=true)|list %}
-      <tr><td>{{ who_details('+ Encore à recevoir', 'de', owe, 'versement', 1) }}</td><td class="num">{{ A.to_collect|money }}</td></tr>
-      <tr><td>{{ who_details('− Encore à rendre', 'à', due, 'remboursement', 2) }}</td><td class="num">{{ A.to_refund|money }}</td></tr>
+      <tr><td>{{ who_details('+ Reste à recevoir', 'de', owe, 'versement', 1) }}</td><td class="num">{{ A.to_collect|money }}</td></tr>
+      <tr><td>{{ who_details('− Reste à rendre', 'à', due, 'remboursement', 2) }}</td><td class="num">{{ A.to_refund|money }}</td></tr>
       {% if A.holder %}
       <tr><td>{{ '+' if A.holder_balance >= 0 else '−' }} Le compte de {{ A.holder.name }} lui-même
         <div class="muted small">{% if A.holder_balance > 0 %}il doit encore cette somme à la caisse ; comme c'est lui qui la tient, rien à verser{% elif A.holder_balance < 0 %}la caisse lui doit cette somme ; comme c'est lui qui la tient, il la garde : rien à virer{% else %}à jour{% endif %}</div></td>

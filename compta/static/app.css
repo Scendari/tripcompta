@@ -87,6 +87,7 @@ h3 { font-size: 1.02rem; }
 .side nav a:hover { background: var(--bg-3); text-decoration: none; }
 .side nav a.on { background: var(--accent); color: #fff; }
 .side nav .sep { height: 1px; background: var(--border); margin: .6rem .4rem; }
+.side nav .nav-group { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: .9rem .6rem .25rem; }
 .main { padding: 1.5rem 2rem 4rem; max-width: 1200px; width: 100%; min-width: 0; }
 .main.full { max-width: none; }
 .page-head { display: flex; align-items: flex-start; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
@@ -97,7 +98,7 @@ h3 { font-size: 1.02rem; }
   .layout { grid-template-columns: 1fr; }
   .side { border-right: 0; border-bottom: 1px solid var(--border); position: static; height: auto; overflow: visible; }
   .side nav { display: flex; flex-wrap: wrap; gap: .2rem; }
-  .side nav .sep { display: none; }
+  .side nav .sep, .side nav .nav-group { display: none; }
   .main { padding: 1rem 16px 3rem; }
 }
 

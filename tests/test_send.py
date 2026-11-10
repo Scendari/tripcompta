@@ -122,14 +122,15 @@ def test_cashier_message(tmp_path):
 
 
 def test_solde_column_on_categories_and_total(trip):
-    """« Son compte » : colonne Solde sur les catégories, sous-catégories et le total (pas sur chaque dépense)."""
+    """« Son compte » : colonne « Reste » sur les catégories, sous-catégories et le total (pas sur chaque dépense)."""
     app, ops, tid = trip
     c = TestClient(app)
     bob = next(p["id"] for p in ops.trip(tid)["participants"] if p["nom"] == "Bob")
     page = clean(c.get(f"/v/{tid}/participants/comptes?p={bob}").text)
     flat = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", page))
     # Bob : transport 85 € de part, a payé le péage aller 40 € -> doit 45 € ; péages : 20 - 40 -> on lui doit 20 €
-    assert ">Solde</th>" in page
+    assert ">Reste</th>" in page and ">Il doit</th>" in page and ">Il a donné</th>" in page
+    assert "Débit" not in page and "Crédit" not in page
     assert re.search(r"Transport / Covoit \(4\) 85,00 € 40,00 € doit 45,00 €", flat)
     assert re.search(r"Péages \(2\) 20,00 € 40,00 € on lui doit 20,00 €", flat)
     assert re.search(r"Total 185,00 € 40,00 € doit 145,00 €", flat)
@@ -138,7 +139,8 @@ def test_solde_column_on_categories_and_total(trip):
         r = S.compute_trip(s.get(M.Trip, tid))
         k = r.account_of(bob).key
     t = pdf_text(c.get(f"/v/{tid}/compte/{k}.pdf").content)
-    assert "Solde" in t and "doit 45,00 €" in t and "on lui doit 20,00 €" in t and "doit 145,00 €" in t
+    assert "Reste" in t and "Il doit" in t and "Il a donné" in t and "Débit" not in t and "Crédit" not in t and "Solde" not in t
+    assert "doit 45,00 €" in t and "on lui doit 20,00 €" in t and "doit 145,00 €" in t
 
 
 def test_share_menu_whatsapp_and_email(trip):
@@ -249,7 +251,7 @@ def test_pdf_summary_matches_mail_and_dashboard(trip):
                  "Coût total du voyage 740,00 €", "La caisse de l'asso", "+ Reçu des participants 450,00 €",
                  "− Payé aux prestataires (hébergement, club…) 700,00 €",
                  "= L'asso a avancé de sa trésorerie 250,00 €", "Une fois tout réglé",
-                 "+ À recevoir des participants 250,00 €", "Le voyage ne coûte rien à l'asso 0,00 €"):
+                 "+ Reste à recevoir des participants 250,00 €", "Le voyage ne coûte rien à l'asso 0,00 €"):
         assert part in txt, part
     assert "Le voyage en un coup d'œil" not in txt and "dépenses payées + remboursements" not in txt
     dash = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", clean(c.get(f"/v/{tid}").text)))

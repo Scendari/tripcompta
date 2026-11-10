@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-head"><div class="grow">
   <h1>Participants</h1>
-  <p class="muted"><b class="deb">Débit</b> = ce qu'une personne doit (sa part, l'argent qu'elle a reçu pour {{ asso_name }} ou que {{ asso_name }} lui a rendu). <b class="cre">Crédit</b> = ce qu'elle a donné (versements, dépenses qu'elle a payées). Solde = débit − crédit.</p>
+  <p class="muted"><b class="deb">Ce qu'il doit</b> : sa part, l'argent qu'il a reçu pour {{ asso_name }} ou que {{ asso_name }} lui a rendu. <b class="cre">Ce qu'il a donné</b> : ses versements, les dépenses qu'il a payées. <b>Reste</b> : la différence, ce qu'il doit encore ou ce qu'on lui doit.</p>
   {{ mode_note(mode) }}
 </div></div>
 {{ people_tabs(trip, 'soldes') }}
@@ -15,9 +15,9 @@
 <table class="ledger">
   <thead>
     <tr><th rowspan="2">Personne ou famille</th>
-      <th colspan="3" class="grp deb">Débit — ce qu'il doit</th>
-      <th colspan="2" class="grp cre">Crédit — ce qu'il a donné</th>
-      <th rowspan="2" class="num">Solde</th><th rowspan="2" class="bar-col"><span class="sr-only">Visuel</span></th></tr>
+      <th colspan="3" class="grp deb">Ce qu'il doit</th>
+      <th colspan="2" class="grp cre">Ce qu'il a donné</th>
+      <th rowspan="2" class="num" title="Ce qu'il doit, moins ce qu'il a donné">Reste</th><th rowspan="2" class="bar-col"><span class="sr-only">Visuel</span></th></tr>
     <tr><th class="num deb">Sa part</th><th class="num deb" title="Argent reçu à la place de {{ asso_name }}">Reçu pour {{ asso_name }}</th><th class="num deb">Rendu par {{ asso_name }}</th>
       <th class="num cre">Versé</th><th class="num cre">Avancé</th></tr>
   </thead>
@@ -26,7 +26,7 @@
     {% if a.family %}
       <tr class="family-row"><td><b>{{ a.name }}</b></td>
         {{ cells(a, a.name) }}
-        <td class="num">{% if a.holds_cash %}<span class="pill grey" title="Son compte se règle avec la caisse qu'il tient">tient la caisse ({{ a.balance|money_sign }})</span>{% else %}{{ tip(pill(a.balance), a.tips.balance, 'Solde de ' ~ a.name) }}{% endif %}</td>
+        <td class="num">{% if a.holds_cash %}<span class="pill grey" title="Son compte se règle avec la caisse qu'il tient">tient la caisse ({{ a.balance|money_sign }})</span>{% else %}{{ tip(pill(a.balance), a.tips.balance, 'Reste pour ' ~ a.name) }}{% endif %}</td>
         <td class="bar-col">{{ bar(a.balance, maxbal) }}</td></tr>
       {% for m in a.members %}
       <tr class="member"><td style="padding-left:1.6rem"><a href="/v/{{ trip.id }}/participants/comptes?p={{ m.id }}#p{{ m.id }}" title="Voir le détail du compte de {{ m.name }}">{{ m.name }}</a>{{ rtag(m.id) }}</td>
@@ -36,7 +36,7 @@
     {% else %}{% set m = a.members[0] %}
       <tr class="{{ 'withdrawn' if m.withdrawn }}"><td><a href="/v/{{ trip.id }}/participants/comptes?p={{ m.id }}#p{{ m.id }}" title="Voir le détail du compte de {{ m.name }}">{{ m.name }}</a>{{ rtag(m.id) }}{% if m.withdrawn %} <span class="pill withdrawn-pill">Désisté</span>{% endif %}</td>
         {{ cells(m, m.name) }}
-        <td class="num">{% if a.holds_cash %}<span class="pill grey" title="Son compte se règle avec la caisse qu'il tient">tient la caisse ({{ a.balance|money_sign }})</span>{% else %}{{ tip(pill(a.balance), m.tips.balance, 'Solde de ' ~ m.name) }}{% endif %}</td>
+        <td class="num">{% if a.holds_cash %}<span class="pill grey" title="Son compte se règle avec la caisse qu'il tient">tient la caisse ({{ a.balance|money_sign }})</span>{% else %}{{ tip(pill(a.balance), m.tips.balance, 'Reste pour ' ~ m.name) }}{% endif %}</td>
         <td class="bar-col">{{ bar(a.balance, maxbal) }}</td></tr>
     {% endif %}
   {% endfor %}
@@ -47,7 +47,7 @@
     <td class="num" colspan="2">{{ (L.total_debit - L.total_credit)|money_sign }}</td></tr></tfoot>
 </table>
 </div>
-<p class="small muted">Total des débits {{ L.total_debit|money }} − total des crédits {{ L.total_credit|money }} = {{ (L.total_debit - L.total_credit)|money_sign }} : c'est ce que les participants doivent encore ({{ r.to_collect|money }}) moins ce que {{ asso_name }} doit rendre ({{ r.to_refund|money }}).</p>
+<p class="small muted">Tout ce qu'ils doivent {{ L.total_debit|money }} − tout ce qu'ils ont donné {{ L.total_credit|money }} = {{ (L.total_debit - L.total_credit)|money_sign }} : c'est ce que les participants doivent encore ({{ r.to_collect|money }}) moins ce que {{ asso_name }} doit rendre ({{ r.to_refund|money }}).</p>
 
 
 {% endblock %}
