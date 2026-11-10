@@ -56,3 +56,15 @@
       <button class="btn small ghost" title="Retirer ce point de la liste">✓ C'est vérifié</button></form></li>{% endfor %}
 </ul>
 {% endmacro %}
+
+{% macro empty_state(text, actions) -%}
+{# État vide : une phrase et le(s) bouton(s) pour avancer. actions = [(libellé, adresse), …] #}
+<div class="card empty"><p>{{ text }}</p>
+  <div class="row empty-actions">{% for label, href in actions %}<a class="btn{{ '' if loop.first else ' ghost' }}" href="{{ href }}">{{ label }}</a>{% endfor %}</div></div>
+{%- endmacro %}
+
+{% macro start_actions(trip) -%}
+{# Ce qu'il manque pour voir quelque chose : d'abord des participants, puis des dépenses. #}
+{{ empty_state("Il faut d'abord des participants : ajoute-les, puis saisis les dépenses." if not trip.participants else "Il n'y a pas encore de dépense : ajoute la première pour voir cette page se remplir.",
+               [("Ajouter des participants", "/v/" ~ trip.id ~ "/participants?ajout=1#ajout")] if not trip.participants else [("Ajouter une dépense", "/v/" ~ trip.id ~ "/depenses/nouvelle")]) }}
+{%- endmacro %}

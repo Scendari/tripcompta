@@ -248,6 +248,10 @@ fieldset { min-width: 0; }
 .thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-2); display: grid; place-items: center; font-size: .75rem; color: var(--muted); }
 details.edit summary { cursor: pointer; color: var(--teal-strong); font-size: .85rem; }
 .empty { text-align: center; padding: 2.5rem 1rem; color: var(--muted); }
+.empty-actions { justify-content: center; gap: .5rem; margin-top: .8rem; }
+.today-btn { display: inline-block; margin-top: .25rem; background: none; border: 0; padding: .1rem 0; font: inherit; font-size: .82rem;
+  color: var(--teal-strong); text-decoration: underline; cursor: pointer; }
+.today-btn:hover { color: var(--text); }
 .check-col { columns: 2 220px; }
 .check-col label { font-weight: 500; display: flex; gap: .4rem; align-items: center; break-inside: avoid; }
 

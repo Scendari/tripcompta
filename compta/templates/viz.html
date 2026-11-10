@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import mode_note with context %}
+{% from "_macros.html" import mode_note, start_actions with context %}
 {% block content %}
 <div class="page-head"><div class="grow">
   <h1>Le voyage en images</h1>
@@ -7,7 +7,7 @@
   {{ mode_note(mode) }}
 </div></div>
 {% if not trip.expenses or not trip.participants %}
-<div class="card empty">Ajoute des participants et des dépenses pour voir les graphiques.</div>
+{{ start_actions(trip) }}
 {% else %}
 
 {# ---------------------------------------------------------------- chiffres clés #}

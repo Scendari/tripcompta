@@ -31,8 +31,8 @@
       <div class="trip-edit-grid">
         <div class="field"><label for="t_name">Nom</label><input id="t_name" type="text" name="name" value="{{ trip.name }}"></div>
         <div class="field"><label for="t_place">Lieu</label><input id="t_place" type="text" name="place" value="{{ trip.place }}"></div>
-        <div class="field"><label for="t_start">Du</label><input id="t_start" type="date" name="start" value="{{ trip.start or '' }}"></div>
-        <div class="field"><label for="t_end">Au</label><input id="t_end" type="date" name="end" value="{{ trip.end or '' }}"></div>
+        <div class="field"><label for="t_start">Du</label><input id="t_start" type="date" name="start" data-no-today value="{{ trip.start or '' }}"></div>
+        <div class="field"><label for="t_end">Au</label><input id="t_end" type="date" name="end" data-no-today value="{{ trip.end or '' }}"></div>
         <div class="field wide"><label for="t_note">Notes <span class="hint">(club, lieu de départ, infos utiles…)</span></label><textarea id="t_note" name="note" rows="2" data-autogrow>{{ trip.note or '' }}</textarea></div>
         {% set o = trip.participants|selectattr('role_list', 'contains', 'organisateur')|list %}
         {% if o %}<input type="hidden" name="organizer" value="{{ trip.organizer }}">

@@ -20,7 +20,8 @@
     <div><b>Qui doit combien à qui</b>{% for a, b, c in v.settlements %}<span>{{ names[a] }} doit <b>{{ c|money }}</b> à {{ names[b] }}</span>{% else %}<span>Personne : tout le monde est quitte ✓</span>{% endfor %}</div>
   </div>
   </div>
-  {% else %}<div class="card empty">Aucun compte pour l'instant.</div>{% endfor %}
+  {% else %}<div class="card empty"><p>Aucun compte pour l'instant. Donne-lui un nom et coche qui participe, dans le formulaire « Nouveau compte ».</p>
+    <div class="row empty-actions"><a class="btn" href="#name" data-focus="#name">Créer le premier compte</a></div></div>{% endfor %}
 </div>
 <form class="card" method="post" action="/v/{{ trip.id }}/entre-nous" id="newsub">
   <h3>+ Nouveau compte</h3>

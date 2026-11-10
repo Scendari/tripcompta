@@ -9,8 +9,8 @@
   <div class="field"><label for="name">Nom du voyage</label>
     <input type="text" id="name" name="name" placeholder="ex. Plongée Port-Cros mai 2027" required {{ 'autofocus' if first }}></div>
   <div class="home-pair">
-    <div class="field"><label for="start">Du</label><input type="date" id="start" name="start"></div>
-    <div class="field"><label for="end">Au</label><input type="date" id="end" name="end"></div>
+    <div class="field"><label for="start">Du</label><input type="date" id="start" name="start" data-no-today></div>
+    <div class="field"><label for="end">Au</label><input type="date" id="end" name="end" data-no-today></div>
   </div>
   <div class="home-pair">
     <div class="field"><label for="place">Lieu <span class="hint">(facultatif)</span></label><input type="text" id="place" name="place"></div>

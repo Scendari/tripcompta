@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import mode_note with context %}
+{% from "_macros.html" import mode_note, start_actions with context %}
 {% block mainclass %}full{% endblock %}
 {% block content %}
 <div class="page-head"><div class="grow">
@@ -8,7 +8,7 @@
   {{ mode_note(mode) }}
 </div></div>
 {% if not trip.expenses or not trip.participants %}
-<div class="card empty">Ajoute des participants et des dépenses pour voir le tableau.</div>
+{{ start_actions(trip) }}
 {% else %}
 <div class="row" style="margin-bottom:.6rem;gap:.5rem">
   <div class="toggle" role="group" aria-label="Affichage">

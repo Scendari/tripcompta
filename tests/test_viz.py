@@ -100,7 +100,7 @@ def test_page_without_planned_amounts_explains(tmp_path):
     page = TestClient(app).get(f"/v/{tid}/en-images").text
     assert "Aucune dépense n" in page and "0 sur 2" in page and "personne ne s" in page
     empty = TestClient(app).get(f"/v/{ops.create_trip('vide')['voyage_id']}/en-images").text
-    assert "Ajoute des participants et des dépenses" in empty
+    assert "Il faut d&#39;abord des participants" in empty and "Ajouter des participants" in empty
 
 
 def test_amounts_written_on_bars(v):

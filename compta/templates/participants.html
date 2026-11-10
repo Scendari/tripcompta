@@ -106,7 +106,8 @@
 <datalist id="families">{% for f in trip.families %}<option value="{{ f.name }}">{% endfor %}</datalist>
 
 <div class="card table-wrap">
-  {% if not trip.participants %}<p class="muted">Personne pour l'instant.</p>{% else %}
+  {% if not trip.participants %}<div class="empty"><p>Personne pour l'instant. Commence par ajouter les participants du voyage.</p>
+    <div class="row empty-actions"><a class="btn" href="/v/{{ trip.id }}/participants?ajout=1#ajout">Ajouter des participants</a></div></div>{% else %}
   <table class="people-table">
     <thead><tr><th>Nom</th><th>Groupes</th><th class="num">Situation</th><th><span class="sr-only">Actions</span></th></tr></thead>
     <tbody>

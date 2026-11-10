@@ -2664,6 +2664,12 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             return refuse(here + f"?remise={pid}", f"Montant invalide : « {f.get('value')} ». Exemple : 50")
         if not val or val <= 0:
             return refuse(here + f"?remise={pid}", "Indique un montant (ex. 50)")
+        by = f.get("by") if f.get("by") in ("asso", "person") else "others"
+        comp = whole(f.get("compensator")) if by == "person" else 0
+        if by == "person" and comp not in names(t):
+            return refuse(here + f"?remise={pid}", "Choisis la personne qui compense")
+        if by == "person" and comp == pid:
+            return refuse(here + f"?remise={pid}", "La personne qui compense ne peut pas être celle qui a la remise")
         aid = f.get("aid") or ""
         a = next((x for x in t.adjustments if str(x.id) == aid and x.expense_id is None), None) if aid else None
         who = names(t)[pid]
@@ -2674,8 +2680,8 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             s.add(a)
         a.participant_id = pid
         a.value = (1 if kind == "Supplément" else -1) * abs(val)
-        a.compensation = E.ASSO if f.get("by") == "asso" else E.OTHERS
-        a.compensator_id = None
+        a.compensation = {"asso": E.ASSO, "person": E.PERSON}.get(by, E.OTHERS)
+        a.compensator_id = comp if by == "person" else None
         a.reason = (f.get("reason") or "").strip()
         s.commit()
         return back(here, f"{kind} de {E.fmt(abs(val))} pour {who} enregistré" + ("e" if kind == "Remise" else ""))

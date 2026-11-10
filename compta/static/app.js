@@ -322,7 +322,52 @@
 
   // Un formulaire en cours de saisie n'est jamais rechargé automatiquement
   document.addEventListener("input", (ev) => { const f = ev.target.closest("form"); if (f) f.dataset.dirty = "1"; });
-  document.addEventListener("submit", (ev) => { delete ev.target.dataset.dirty; });
+  document.addEventListener("submit", (ev) => { if (!ev.defaultPrevented) delete ev.target.dataset.dirty; });
+
+  // Quitter la page alors qu'un formulaire est commencé : on prévient (lien du menu, bouton « Arrêter »…).
+  // Seuls comptent les formulaires qui enregistrent (method=post) et qui sont visibles.
+  const LEAVE = "Tu as commencé à remplir un formulaire sur cette page.\n\nQuitter sans l'enregistrer ?";
+  const unsaved = (except) => [...document.querySelectorAll("form[data-dirty]")].some((f) =>
+    f !== except && (f.getAttribute("method") || "").toLowerCase() === "post" && !f.hasAttribute("data-no-guard") &&
+    f.checkVisibility());
+  document.addEventListener("click", (ev) => {
+    const a = ev.target.closest("a[href]");
+    if (!a || ev.defaultPrevented || a.target === "_blank" || a.hasAttribute("download") || a.dataset.sendPdf ||
+        a.hasAttribute("data-check") || a.hasAttribute("data-focus")) return;
+    const href = a.getAttribute("href");
+    if (href.startsWith("#") || /^(mailto|tel|javascript):/i.test(href) || /\.(pdf|zip|csv|txt|md)(\?|$)/i.test(href)) return;
+    // un lien du formulaire lui-même (« Annuler », « Pas maintenant ») : c'est un abandon voulu, pas de question
+    if (unsaved(a.closest("form")) && !confirm(LEAVE)) ev.preventDefault();
+  });
+  document.addEventListener("submit", (ev) => {            // « Arrêter », « Verrouiller » : quitter aussi
+    const f = ev.target;
+    if (!ev.defaultPrevented && (f.matches(".quit") || /\/verrouiller$/.test(f.getAttribute("action") || "")) &&
+        unsaved(f) && !confirm(LEAVE)) ev.preventDefault();
+  }, true);
+
+  // Bouton « Aujourd'hui » à côté de chaque date (sauf les dates du voyage : data-no-today)
+  document.querySelectorAll('input[type="date"]:not([data-no-today])').forEach((d) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "today-btn"; b.textContent = "Aujourd'hui";
+    b.setAttribute("aria-label", "Mettre la date d'aujourd'hui");
+    b.addEventListener("click", () => {
+      const n = new Date(), p = (x) => String(x).padStart(2, "0");
+      d.value = n.getFullYear() + "-" + p(n.getMonth() + 1) + "-" + p(n.getDate());
+      d.dispatchEvent(new Event("input", { bubbles: true }));
+      d.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    d.insertAdjacentElement("afterend", b);
+  });
+
+  // Lien qui amène à un champ : <a href="#id" data-focus="#id">
+  document.addEventListener("click", (ev) => {
+    const a = ev.target.closest("[data-focus]");
+    const el = a && document.querySelector(a.dataset.focus);
+    if (!el) return;
+    ev.preventDefault();
+    el.scrollIntoView({ block: "center" });
+    el.focus();
+  });
 
   // Après un redémarrage de l'application (mise à jour), l'onglet se recharge tout seul
   (function watchRestart() {
