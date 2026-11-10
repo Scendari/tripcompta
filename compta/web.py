@@ -3552,6 +3552,16 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
                         headers={"Content-Disposition":
                                  f"attachment; filename*=UTF-8''{quote('Bilan_' + _slug(t.name))}.pdf"})
 
+    @app.get("/v/{tid}/export.xlsx")
+    def export_xlsx(tid: int, s: Session = Depends(get_s)):
+        """Tableur : dépenses, argent reçu et rendu, qui paie quoi (trois feuilles)."""
+        from .tableur import trip_workbook
+        t = trip_or_404(s, tid)
+        return Response(trip_workbook(t, s),
+                        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        headers={"Content-Disposition":
+                                 f"attachment; filename*=UTF-8''{quote('Tableur_' + _slug(t.name))}.xlsx"})
+
     @app.get("/v/{tid}/export.zip")
     def export_zip(tid: int, request: Request, s: Session = Depends(get_s)):
         from .export import trip_zip
