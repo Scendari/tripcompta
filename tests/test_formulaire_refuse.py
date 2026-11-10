@@ -137,7 +137,7 @@ def test_payment_row_comes_back_open_and_filled(live):
     pg, base, tid, ops = live
     pg.goto(f"{base}/v/{tid}/argent")
     rows = pg.locator(".settle-table tr:not(.edit-row)")
-    name = rows.nth(1).locator("td").first.inner_text().strip()
+    name = rows.nth(1).locator("td:not(.tick)").first.inner_text().strip()
     rows.nth(1).locator("button[data-toggle-row]").click()
     form = pg.locator(".edit-row:not([hidden]) form.pay-form")
     form.locator("input[name=amount]").fill("cent")

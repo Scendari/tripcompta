@@ -1182,6 +1182,84 @@ def next_trip_name(name: str, existing=()) -> str:
     return new[:200]
 
 
+# ---------------------------------------------------------------- moyen de paiement, doublons, versements en lot
+PAY_METHODS = [("virement", "Virement"), ("cheque", "Chèque"), ("especes", "Espèces"), ("carte", "Carte bancaire"),
+               ("en_ligne", "Paiement en ligne"), ("autre", "Autre")]
+_METHOD_WORDS = {"virement": ("virement", "vir", "transfert", "sepa"), "cheque": ("cheque", "cheques", "chq"),
+                 "especes": ("especes", "espece", "liquide", "cash"), "carte": ("carte", "cb", "carte bancaire"),
+                 "en_ligne": ("en ligne", "en_ligne", "paiement en ligne", "helloasso", "lydia", "paypal", "wero"),
+                 "autre": ("autre",)}
+
+
+def pay_method(value) -> str | None:
+    """Le moyen de paiement reconnu (« Chèque », « cheque », « CB »… → sa clé) ; "" si rien n'est dit ;
+    None si le mot n'est pas reconnu."""
+    k = E.sort_key(str(value or "")).strip()
+    if not k:
+        return ""
+    for key, label in PAY_METHODS:
+        if k in (key, E.sort_key(label)) or k in _METHOD_WORDS[key]:
+            return key
+    return None
+
+
+def pay_method_label(key: str) -> str:
+    return dict(PAY_METHODS).get(key or "", "")
+
+
+def duplicate_movement(trip: M.Trip, pid: int, kind: str, amount: int, date, ignore_id=None):
+    """Un mouvement identique déjà noté (même personne, même sens, même montant, à 3 jours près ou sans date) :
+    sans doute saisi deux fois. Renvoie ce mouvement, ou None."""
+    for m in trip.movements:
+        if m.id == ignore_id or m.participant_id != pid or m.kind != kind or m.amount != amount:
+            continue
+        if date is None or m.date is None or abs((m.date - date).days) <= 3:
+            return m
+    return None
+
+
+def duplicate_expense(trip: M.Trip, label: str, amount, ignore_id=None):
+    """Une dépense du même nom et du même montant déjà notée dans ce voyage (sans doute saisie deux fois)."""
+    key = E.sort_key(label)
+    for e in trip.expenses:
+        if e.id != ignore_id and E.sort_key(e.label) == key and amount is not None and e.best_known() == amount \
+                and not e.pending:
+            return e
+    return None
+
+
+def cheques_to_deposit(trip: M.Trip) -> list:
+    """Chèques reçus des participants et pas encore déposés à la banque."""
+    return [m for m in trip.movements if m.kind == "versement" and m.method == "cheque" and not m.deposited]
+
+
+def settle_amounts(result: E.Result, kind: str, referents) -> list:
+    """Ce qu'il reste exactement à régler pour chaque compte coché (désigné par celui qui paie) : [(compte, centimes)].
+    « versement » : ce que le compte doit encore ; « remboursement » : ce qu'on lui doit. Les comptes déjà à jour, ou
+    qui sont dans l'autre sens, sont ignorés."""
+    wanted = {int(x) for x in referents if x is not None}
+    out = []
+    for a, b, cents in result.settlements():
+        acc = a if kind == "versement" else b
+        if (kind == "versement") != (b is E.ASSO) or acc is E.ASSO or acc.referent not in wanted or cents <= 0:
+            continue
+        out.append((acc, cents))
+    return out
+
+
+def settle_batch(trip: M.Trip, result: E.Result, kind: str, referents, date=None, method: str = "",
+                 note: str = "") -> list:
+    """« Cocher plusieurs lignes, puis Reçu » : un versement (ou un remboursement) par compte coché, du montant
+    qu'il reste exactement à régler."""
+    made = []
+    for acc, cents in settle_amounts(result, kind, referents):
+        m = M.Movement(trip_id=trip.id, participant_id=acc.referent, kind=kind, amount=cents, date=date,
+                       method=method or "", note=note or "")
+        trip.movements.append(m)
+        made.append(m)
+    return made
+
+
 AI_NOTES_MAX = 40
 
 

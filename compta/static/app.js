@@ -640,6 +640,7 @@
         if (el.tagName === "BUTTON") el.title = "Voyage clôturé : rouvre-le pour le modifier";
       });
     });
+    closed.querySelectorAll("input[form]").forEach((el) => { el.disabled = true; });   // cases liées à un formulaire
     // … et les boutons qui ne font qu'ouvrir un de ces formulaires (« ✓ Reçu », « Modifier »…)
     const off = 'form[method="post" i]:not([data-closed-ok])';
     closed.querySelectorAll("[data-toggle-row]").forEach((b) => {
@@ -677,4 +678,77 @@
   set();
   if (window.ResizeObserver) new ResizeObserver(set).observe(top);
   else window.addEventListener("resize", set);
+})();
+
+// « Reste à régler » : cocher plusieurs lignes, puis tout noter d'un coup (chaque ligne pour son montant exact).
+(function () {
+  const euro = (c) => (c / 100).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "\u00a0€";
+  document.querySelectorAll("form[data-batch]").forEach((form) => {
+    const boxes = [...document.querySelectorAll('input[type=checkbox][form="' + form.id + '"]')];
+    const all = form.querySelector("[data-batch-all]"), go = form.querySelector("[data-batch-go]");
+    const none = form.querySelector("[data-batch-none]"), some = form.querySelector("[data-batch-some]");
+    function sync() {
+      const on = boxes.filter((b) => b.checked);
+      const total = on.reduce((a, b) => a + (+b.dataset.amount || 0), 0);
+      none.hidden = on.length > 0;
+      some.hidden = on.length === 0;
+      go.textContent = go.dataset.label + " : " + on.length + (on.length > 1 ? " lignes, " : " ligne, ") + euro(total);
+      all.checked = on.length === boxes.length;
+      all.indeterminate = on.length > 0 && on.length < boxes.length;
+      boxes.forEach((b) => { const tr = b.closest("tr"); if (tr) tr.classList.toggle("ticked", b.checked); });
+    }
+    boxes.forEach((b) => b.addEventListener("change", sync));
+    all.addEventListener("change", () => { boxes.forEach((b) => { if (!b.disabled) b.checked = all.checked; }); sync(); });
+    window.addEventListener("pageshow", sync);
+    sync();
+  });
+})();
+
+// Dépenses : chercher, filtrer (payé par, état) sans recharger la page. Les totaux affichés suivent ce qui est visible.
+(function () {
+  const box = document.querySelector("[data-exp-filter]");
+  if (!box) return;
+  const q = box.querySelector("#exp-q"), payer = box.querySelector("#exp-payer"), state = box.querySelector("#exp-state");
+  const count = box.querySelector("#exp-count");
+  const rows = [...document.querySelectorAll("tr[data-exp]")];
+  const norm = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const euro = (c) => (c / 100).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "\u00a0€";
+  const sum = (list) => list.reduce((a, tr) => a + (+tr.dataset.amount || 0), 0);
+  function total(el, list, active) {
+    if (!el) return;
+    if (el.dataset.full === undefined) el.dataset.full = el.textContent;
+    el.textContent = active ? euro(sum(list)) : el.dataset.full;
+  }
+  function apply() {
+    const words = norm(q.value).split(/\s+/).filter(Boolean), p = payer.value, st = state.value;
+    const active = !!(words.length || p || st);
+    rows.forEach((tr) => {
+      const text = norm(tr.dataset.q);
+      tr.hidden = !(words.every((w) => text.includes(w))
+        && (!p || tr.dataset.payers.split(" ").includes(p)) && (!st || tr.dataset.state.split(" ").includes(st)));
+    });
+    document.querySelectorAll("tr.subcat-row").forEach((h) => {       // sous-catégorie : ses lignes encore visibles
+      const mine = [];
+      for (let n = h.nextElementSibling; n && !n.classList.contains("subcat-row"); n = n.nextElementSibling) {
+        if (n.hasAttribute("data-exp") && !n.hidden) mine.push(n);
+      }
+      h.hidden = !mine.length;
+      total(h.querySelector("[data-exp-total]"), mine, active);
+    });
+    document.querySelectorAll("details[data-exp-group]").forEach((d) => {
+      const mine = [...d.querySelectorAll("tr[data-exp]")].filter((tr) => !tr.hidden);
+      d.hidden = !mine.length;
+      total(d.querySelector("summary [data-exp-total]"), mine, active);
+    });
+    const shown = rows.filter((tr) => !tr.hidden);
+    count.hidden = !active;
+    count.querySelector("span").textContent = !shown.length ? "Aucune dépense ne correspond."
+      : shown.length + (shown.length > 1 ? " dépenses affichées" : " dépense affichée") + " sur " + rows.length
+        + " · " + euro(sum(shown));
+    box.classList.toggle("filtering", active);
+  }
+  [q, payer, state].forEach((el) => { el.addEventListener("input", apply); el.addEventListener("change", apply); });
+  box.querySelector("[data-exp-reset]").addEventListener("click", () => { q.value = ""; payer.value = ""; state.value = ""; apply(); q.focus(); });
+  window.addEventListener("pageshow", apply);          // retour arrière : le navigateur a pu remettre les champs
+  apply();
 })();

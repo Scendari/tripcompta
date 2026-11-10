@@ -285,7 +285,8 @@ def trip_detail(t: M.Trip, mode=E.ACTUAL) -> dict:
         justificatifs=[l.receipt.code for l in e.receipt_links],
     ) for e in t.expenses]
     out["mouvements"] = [dict(id=m.id, type=m.kind, participant=m.participant.name, montant=to_euros(m.amount),
-                              date=m.date.isoformat() if m.date else None, note=m.note) for m in t.movements]
+                              date=m.date.isoformat() if m.date else None, note=m.note,
+                              moyen=S.pay_method_label(m.method).lower() or None) for m in t.movements]
     out["ajustements"] = [dict(
         id=a.id, participant=a.participant.name, sur=a.expense.label if a.expense else "total",
         valeur=to_euros(a.value), verrouille=a.fixed, compense_par=a.compensation,
@@ -653,15 +654,19 @@ def do_update_trip(s, t, nom=None, lieu=None, debut=None, fin=None, organisateur
     return changes
 
 
-def do_add_movement(s, t, participant, montant, type="versement", date=None, note="") -> M.Movement:
+def do_add_movement(s, t, participant, montant, type="versement", date=None, note="", moyen=None) -> M.Movement:
     if type not in ("versement", "remboursement"):
         raise OpsError("Le type doit être « versement » (participant → asso) ou « remboursement » (asso → participant).")
     amt = euros(montant)
     if amt <= 0:
         raise OpsError("Le montant doit être positif.")
+    method = S.pay_method(moyen)
+    if method is None:
+        raise OpsError(f"Moyen de paiement inconnu : « {moyen} ». Choix possibles : "
+                       + ", ".join(label.lower() for _, label in S.PAY_METHODS) + " (ou rien).")
     p = person(t, participant)
     m = M.Movement(participant_id=p.id, kind=type, amount=amt, date=date_of(date) or dt.date.today(),
-                   note=note or "")
+                   note=note or "", method=method)
     t.movements.append(m)
     s.flush()
     return m
@@ -919,10 +924,17 @@ class Ops:
 
     # ---- argent
     def add_movement(self, trip_id, participant, montant, type="versement", date=None, note="",
-                     simulation=False) -> dict:
+                     simulation=False, moyen=None) -> dict:
         def fn(s, t):
-            m = do_add_movement(s, t, participant, montant, type, date, note)
-            return dict(message=f"{type.capitalize()} de {E.fmt(m.amount)} ({m.participant.name}) enregistré.")
+            p_ = person(t, participant)
+            same = S.duplicate_movement(t, p_.id, type, euros(montant), date_of(date) or dt.date.today()) \
+                if type in ("versement", "remboursement") else None
+            m = do_add_movement(s, t, participant, montant, type, date, note, moyen)
+            msg = f"{type.capitalize()} de {E.fmt(m.amount)} ({m.participant.name}) enregistré."
+            if same is not None:
+                msg += (f" Attention : un {type} identique était déjà noté"
+                        + (f" le {same.date:%d/%m/%Y}" if same.date else "") + " (peut-être un doublon).")
+            return dict(message=msg)
         return self._write(f"{type} de {participant} (IA)", fn, trip_id, simulation)
 
     # ---- ajustements

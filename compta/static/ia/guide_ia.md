@@ -195,7 +195,7 @@ Deux situations :
      "pour": "tous", "sauf": ["Tom Lebrun", "Antoine"]}
   ],
   "versements": [
-    {"participant": "Marie", "montant": "150", "date": "2027-03-10", "note": "acompte"},
+    {"participant": "Marie", "montant": "150", "date": "2027-03-10", "note": "acompte", "moyen": "chèque"},
     {"participant": "Antoine", "montant": "300", "date": "2027-03-12", "note": "acompte"},
     {"participant": "Famille Lebrun", "montant": "600", "date": "2027-03-15"},
     {"participant": "Luc", "montant": "20", "type": "remboursement", "note": "trop-perçu"}
@@ -318,6 +318,8 @@ On n'y met que ce qui change. Les noms de dépenses et de personnes sont ceux de
   qu'il paie quand même. `remboursement` : l'argent **déjà rendu** ; `date_remboursement` : quand (sinon la date
   du désistement).
 - `versements.type` : `"versement"` (par défaut, participant → asso) ou `"remboursement"` (asso → participant).
+- `versements.moyen` (facultatif, seulement si l'utilisateur le dit) : `"virement"`, `"chèque"`, `"espèces"`,
+  `"carte bancaire"`, `"paiement en ligne"` ou `"autre"`.
 - `a_verifier` : les points restés incertains, en phrases courtes. Ils seront affichés à l'utilisateur.
 - Les justificatifs (photos de tickets) ne passent pas par le JSON : l'utilisateur les ajoutera dans
   l'application (écran « Justificatifs »).

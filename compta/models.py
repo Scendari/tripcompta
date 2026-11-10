@@ -277,6 +277,8 @@ class Movement(Base):
     amount: Mapped[int] = mapped_column(Integer)
     date: Mapped[Optional[dt.date]] = mapped_column(Date, nullable=True)
     note: Mapped[str] = mapped_column(String(300), default="")
+    method: Mapped[str] = mapped_column(String(20), default="")       # moyen de paiement (services.PAY_METHODS) ; "" : pas précisé
+    deposited: Mapped[bool] = mapped_column(Boolean, default=False)   # chèque reçu : déposé à la banque ?
 
     trip: Mapped[Trip] = relationship(back_populates="movements")
     participant: Mapped[Participant] = relationship()

@@ -10,12 +10,24 @@
 {% if not trip.expenses %}
 <div class="card empty"><p>Aucune dépense pour l'instant.</p><a class="btn" href="/v/{{ trip.id }}/depenses/nouvelle">Ajouter la première</a></div>
 {% endif %}
+{% if trip.expenses|length >= 4 %}
+<div class="card exp-tools" id="outils" data-exp-filter>
+  <div class="field grow"><label for="exp-q">Chercher une dépense</label><input type="search" id="exp-q" placeholder="ex. essence, restaurant…" autocomplete="off"></div>
+  <div class="field"><label for="exp-payer">Payé par</label>
+    <select id="exp-payer"><option value="">Tout le monde</option>{% if asso_pays %}<option value="asso">{{ asso_name|capfirst }}</option>{% endif %}{% for p in payers %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></div>
+  <div class="field"><label for="exp-state">Afficher</label>
+    <select id="exp-state"><option value="">Toutes les dépenses</option><option value="sansjustif">Sans justificatif</option><option value="prevu">Montant prévu seulement</option><option value="avenir">Montant à venir</option></select></div>
+  <div class="field"><label for="exp-sort">Ranger</label>
+    <select id="exp-sort" data-nav="/v/{{ trip.id }}/depenses?tri="><option value="" {{ 'selected' if not sort }}>Par catégorie</option><option value="date" {{ 'selected' if sort == 'date' }}>Par date</option><option value="montant" {{ 'selected' if sort == 'montant' }}>Par montant</option><option value="nom" {{ 'selected' if sort == 'nom' }}>De A à Z</option></select></div>
+  <p class="exp-count" id="exp-count" hidden aria-live="polite"><span></span> <button type="button" class="btn link small" data-exp-reset>Tout afficher</button></p>
+</div>
+{% endif %}
 {% for c, es in groups if es %}
-<details class="card" open>
+<details class="card" open data-exp-group>
   <summary style="cursor:pointer;display:flex;justify-content:space-between;gap:1rem">
-    <h3 style="margin:0">{{ c.name if c else 'Sans catégorie' }}</h3>
+    <h3 style="margin:0">{{ flat_title or (c.name if c else 'Sans catégorie') }}</h3>
     {% set ns = namespace(t=0) %}{% for e in es %}{% set ns.t = ns.t + r.expense_totals.get(e.id, 0) %}{% endfor %}
-    <span class="num"><b>{{ ns.t|money }}</b></span>
+    <span class="num"><b data-exp-total>{{ ns.t|money }}</b></span>
   </summary>
   <div class="table-wrap" style="margin-top:.6rem">
   <table>
@@ -26,10 +38,11 @@
       {% set grouped = e.category_id in with_subs %}
       {% if grouped and (e.subcategory or '') != sub.cur %}{% set sub.cur = e.subcategory or '' %}
       <tr class="subcat-row"><td colspan="7"><span class="chev" aria-hidden="true">↳</span> {{ e.subcategory or "Autres (sans sous-catégorie)" }}</td>
-        <td class="num"><b>{{ subtotals[(e.category_id, e.subcategory or '')]|money }}</b></td></tr>
+        <td class="num"><b data-exp-total>{{ subtotals[(e.category_id, e.subcategory or '')]|money }}</b></td></tr>
       {% endif %}
-      <tr id="e{{ e.id }}" class="{{ 'in-subcat' if grouped }}{{ ' to-check' if e.id in checks }}">
-        <td><a href="/v/{{ trip.id }}/depenses/{{ e.id }}/modifier"><b>{{ e.label }}</b></a>{% if e.is_income %} <span class="pill ok">recette</span>{% endif %}{% if e.pending %} <span class="pill doit">montant à venir</span>{% endif %}{% if e.id in bad %} <span class="pill doit" title="La somme des parts ne fait pas le montant de la dépense : vérifie qui la paie et les ajustements">⚠ à vérifier</span>{% endif %}
+      {% set states = [] %}{% if e.pending %}{% set _ = states.append('avenir') %}{% elif e.actual is none %}{% set _ = states.append('prevu') %}{% elif not e.receipt_links %}{% set _ = states.append('sansjustif') %}{% endif %}
+      <tr id="e{{ e.id }}" class="{{ 'in-subcat' if grouped }}{{ ' to-check' if e.id in checks }}" data-exp data-amount="{{ r.expense_totals.get(e.id, 0) }}" data-state="{{ states|join(' ') }}" data-payers="{% for pid, _c in e.splits() %}{{ pid if pid else 'asso' }} {% endfor %}" data-q="{{ e.label }} {{ e.subcategory }} {{ e.category.name if e.category else '' }} {{ e.note }}">
+        <td><a href="/v/{{ trip.id }}/depenses/{{ e.id }}/modifier"><b>{{ e.label }}</b></a>{% if e.is_income %} <span class="pill ok">recette</span>{% endif %}{% if e.pending %} <span class="pill doit">montant à venir</span>{% endif %}{% if e.id in bad %} <span class="pill doit" title="La somme des parts ne fait pas le montant de la dépense : vérifie qui la paie et les ajustements">⚠ à vérifier</span>{% endif %}{% if flat_title and e.category %}<div class="muted small exp-cat">{{ e.category.name }}{% if e.subcategory %} · {{ e.subcategory }}{% endif %}</div>{% endif %}
           {%- if e.id in checks %}{% set joins = checks[e.id]|rejectattr('0.reason', 'equalto', 'désistement')|list %}{% set leaves = checks[e.id]|selectattr('0.reason', 'equalto', 'désistement')|list %}<div class="check-note">⚠️
             {%- if joins %} {% for c, name, _ in joins %}{{ name }} a rejoint « {{ c.reason }} »{{ ', ' if not loop.last }}{% endfor %} : ajoute {{ 'leur part' if joins|length > 1 else 'sa part' }} à la main si besoin.{% endif %}
             {%- for c, name, no_free in leaves %} Désistement de {{ name }} : sa part est répartie entre les montants non fixés ; vérifie les montants fixés 🔒.{% if no_free %} Tous les montants sont fixés : personne ne reprend sa part.{% endif %}{% endfor %}

@@ -179,10 +179,12 @@ def build_server(data_dir: Optional[str] = None):
     @mcp.tool()
     @_safe
     def enregistrer_mouvement(voyage: Ref, participant: Ref, montant: Union[float, str], type: str = "versement",
-                              date: Optional[str] = None, note: str = "", simulation: bool = False) -> dict:
+                              date: Optional[str] = None, note: str = "", simulation: bool = False,
+                              moyen: Optional[str] = None) -> dict:
         """type = « versement » (le participant a donné de l'argent à l'asso) ou « remboursement »
-        (l'asso a rendu de l'argent au participant)."""
-        return ops.add_movement(voyage, participant, montant, type, date, note, simulation)
+        (l'asso a rendu de l'argent au participant).
+        moyen (facultatif) : virement, chèque, espèces, carte bancaire, paiement en ligne ou autre."""
+        return ops.add_movement(voyage, participant, montant, type, date, note, simulation, moyen)
 
     @mcp.tool()
     @_safe

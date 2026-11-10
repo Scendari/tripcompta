@@ -76,9 +76,9 @@ def workbook(tmp_path):
     cl = TestClient(app)
     tid = seed(app)
     cl.post(f"/v/{tid}/argent", data={"participant": pid(app, "Bruno"), "kind": "versement", "amount": "50",
-                                       "date": "2027-03-02", "note": "Acompte"}, follow_redirects=False)
+                                       "date": "2027-03-02", "note": "Acompte", "method": "cheque"}, follow_redirects=False)
     cl.post(f"/v/{tid}/argent", data={"participant": pid(app, "Chloé"), "kind": "versement", "amount": "120",
-                                       "date": "2027-03-05"}, follow_redirects=False)
+                                       "date": "2027-03-05", "method": "virement"}, follow_redirects=False)
     cl.post(f"/v/{tid}/argent", data={"participant": pid(app, "Chloé"), "kind": "remboursement", "amount": "20",
                                        "date": "2027-04-01", "note": "Trop versé"}, follow_redirects=False)
     r = cl.get(f"/v/{tid}/export.xlsx")
@@ -119,10 +119,10 @@ def test_expenses_sheet_amounts(tmp_path):
 def test_money_sheet_amounts(tmp_path):
     app, cl, tid, wb = workbook(tmp_path)
     rows = wb["Argent reçu et rendu"]["rows"]
-    assert rows[0] == ["Date", "Personne", "Reçu par l'asso", "Rendu par l'asso", "Note"]
-    assert rows[1] == [dt.date(2027, 3, 2), "Bruno", 50.0, None, "Acompte"]
-    assert rows[2] == [dt.date(2027, 3, 5), "Chloé", 120.0]
-    assert rows[3] == [dt.date(2027, 4, 1), "Chloé", None, 20.0, "Trop versé"]
+    assert rows[0] == ["Date", "Personne", "Reçu par l'asso", "Rendu par l'asso", "Moyen de paiement", "Note"]
+    assert rows[1] == [dt.date(2027, 3, 2), "Bruno", 50.0, None, "Chèque (à déposer)", "Acompte"]
+    assert rows[2] == [dt.date(2027, 3, 5), "Chloé", 120.0, None, "Virement"]
+    assert rows[3] == [dt.date(2027, 4, 1), "Chloé", None, 20.0, None, "Trop versé"]
     assert rows[4] == ["Total", None, 170.0, 20.0]
     assert rows[5] == ["Reçu moins rendu", None, 150.0]
 

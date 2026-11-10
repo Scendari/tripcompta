@@ -241,19 +241,27 @@ def expenses_sheet(trip: M.Trip, r: E.Result, caisse: str) -> Sheet:
     return Sheet("Dépenses", rows, widths={len(head) - 1: 40})
 
 
+def _method(m) -> str:
+    """« Chèque (à déposer) », « Virement »… ; vide si le moyen de paiement n'est pas précisé."""
+    label = S.pay_method_label(m.method)
+    if m.method == "cheque" and m.kind == "versement":
+        label += " (déposé)" if m.deposited else " (à déposer)"
+    return label
+
+
 def money_sheet(trip: M.Trip, caisse: str) -> Sheet:
-    rows = [["Date", "Personne", f"Reçu par {caisse}", f"Rendu par {caisse}", "Note"]]
+    rows = [["Date", "Personne", f"Reçu par {caisse}", f"Rendu par {caisse}", "Moyen de paiement", "Note"]]
     received = given = 0
     moves = sorted(trip.movements, key=lambda m: (m.date is None, m.date or dt.date.min, m.id))
     for m in moves:
         is_in = m.kind == "versement"
         rows.append([m.date, m.participant.name if m.participant else "?", Money(m.amount) if is_in else None,
-                     None if is_in else Money(m.amount), " ".join((m.note or "").split())])
+                     None if is_in else Money(m.amount), _method(m), " ".join((m.note or "").split())])
         received += m.amount if is_in else 0
         given += 0 if is_in else m.amount
     rows.append([Bold("Total"), None, Bold(Money(received)), Bold(Money(given))])
     rows.append([Bold("Reçu moins rendu"), None, Bold(Money(received - given))])
-    return Sheet("Argent reçu et rendu", rows, widths={4: 40})
+    return Sheet("Argent reçu et rendu", rows, widths={4: 22, 5: 40})
 
 
 def matrix_sheet(trip: M.Trip, r: E.Result, caisse: str) -> Sheet:

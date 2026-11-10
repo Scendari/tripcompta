@@ -339,7 +339,7 @@ def _run_import(s, data, t, expected_id, require_id) -> dict:
 
         def add_mov(d):
             m = do_add_movement(s, t, _g(d, "participant", "nom"), _g(d, "montant"), _g(d, "type", default="versement"),
-                                _g(d, "date"), _g(d, "note", default=""))
+                                _g(d, "date"), _g(d, "note", default=""), _g(d, "moyen", default=None))
             who = m.participant.family.label if m.participant.family else m.participant.name
             return (f"{who} a versé {E.fmt(m.amount)}" if m.kind == "versement"
                     else f"L'asso a rendu {E.fmt(m.amount)} à {who}")

@@ -2402,7 +2402,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
 
     # ------------------------------------------------------------------ dépenses
     @app.get("/v/{tid}/depenses", response_class=HTMLResponse)
-    def expenses(tid: int, request: Request, s: Session = Depends(get_s)):
+    def expenses(tid: int, request: Request, s: Session = Depends(get_s), tri: str = ""):
         t = trip_or_404(s, tid)
         r = S.compute_trip(t)
         groups = []
@@ -2422,9 +2422,19 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
                 subtotals[k] = subtotals.get(k, 0) + r.expense_totals.get(e.id, 0)
         # contrôle : une dépense dont la répartition ne tombe pas juste (rare) est signalée sur sa ligne
         bad = {x["id"] for x in S.ledger(t, r)["expenses"] if not x["ok"] and not x["pending"]}
+        # tri : par catégorie (comme d'habitude), ou toutes les dépenses en une seule liste
+        flat = {"date": ("Toutes les dépenses, les plus récentes en haut",
+                         lambda e: (e.date is None, -(e.date.toordinal() if e.date else 0), E.sort_key(e.label), e.id)),
+                "montant": ("Toutes les dépenses, les plus grosses en haut",
+                            lambda e: (-abs(r.expense_totals.get(e.id, 0)), E.sort_key(e.label), e.id)),
+                "nom": ("Toutes les dépenses, de A à Z", lambda e: (E.sort_key(e.label), e.id))}.get(tri)
+        if flat:
+            groups, with_subs = [(None, sorted(t.expenses, key=flat[1]))], set()
+        paid_by = {pid for e in t.expenses for pid, _ in e.splits()}
         return render(request, "expenses.html", trip=t, r=r, groups=groups, nb=len(t.participants), bad=bad,
                       who_label=S.who_label, who_detail=S.who_detail, payer_label=S.payer_label, names=names(t),
-                      subtotals=subtotals,
+                      subtotals=subtotals, sort=tri if flat else "", flat_title=flat[0] if flat else None,
+                      payers=[p for p in t.participants if p.id in paid_by], asso_pays=None in paid_by,
                       with_subs=with_subs)
 
     def _expense_form_ctx(t, e=None):
@@ -2732,12 +2742,14 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             if total_ and sum(c for _, c in payments) > total_:
                 return refuse(ref, f"Les payeurs totalisent {E.fmt(sum(c for _, c in payments))}, "
                                    f"plus que le montant ({E.fmt(total_)})")
+        same_exp = None
         if eid:
             e = s.get(M.Expense, eid)
             if not e or e.trip_id != tid:
                 raise HTTPException(404, "Dépense introuvable")
             db.snapshot(f"modification de la dépense « {e.label} »")
         else:
+            same_exp = S.duplicate_expense(t, label, actual if actual is not None else planned)
             db.snapshot(f"ajout de la dépense « {label} »")
             e = M.Expense(trip_id=tid, label=label)
             s.add(e)
@@ -2807,9 +2819,13 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         if not_joined:
             return back(f"/v/{tid}/depenses/{e.id}/modifier", f"« {label} » enregistrée, mais " + _refused_files(not_joined),
                         err=True)
+        twice = ""
+        if same_exp is not None:                # même nom, même montant : sans doute saisie deux fois
+            twice = (f". ⚠️ Attention : une dépense « {same_exp.label} » de {E.fmt(same_exp.best_known())} existait "
+                     "déjà. Si c'est la même, clique sur « Défaire »")
         if f.get("again"):
-            return back(f"/v/{tid}/depenses/nouvelle", f"« {label} » enregistrée. Dépense suivante :")
-        return back(f"/v/{tid}/depenses#e{e.id}", f"« {label} » enregistrée")
+            return back(f"/v/{tid}/depenses/nouvelle", f"« {label} » enregistrée{twice}. Dépense suivante :")
+        return back(f"/v/{tid}/depenses#e{e.id}", f"« {label} » enregistrée{twice}")
 
     @app.post("/v/{tid}/depenses/{eid}/verifiee")
     async def expense_checked(tid: int, eid: int, s: Session = Depends(get_s)):
@@ -3190,10 +3206,10 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         for m in t.movements:
             if m.kind == "versement":
                 rows.append(dict(date=m.date, label=f"Versement de {m.participant.name}", inc=m.amount, out=None,
-                                 note=m.note, mid=m.id, m=m))
+                                 note=m.note, mid=m.id, m=m, method=S.pay_method_label(m.method)))
             else:
                 rows.append(dict(date=m.date, label=f"Remboursement à {m.participant.name}", inc=None,
-                                 out=m.amount, note=m.note, mid=m.id, m=m))
+                                 out=m.amount, note=m.note, mid=m.id, m=m, method=S.pay_method_label(m.method)))
         for e in t.expenses:
             if e.actual is None:
                 continue
@@ -3218,7 +3234,8 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         return render(request, "money.html", trip=t, r=r, rows=rows, total_in=total_in, total_out=total_out,
                       advances=advances, to_pay=to_pay, pending=pending, payer_label=S.payer_label, names=names(t), today=dt.date.today().isoformat(),
                       sel=request.query_params.get("p"), kind=request.query_params.get("k", "versement"),
-                      prefill=request.query_params.get("a", ""), tab=tab,
+                      prefill=request.query_params.get("a", ""), tab=tab, methods=S.PAY_METHODS,
+                      cheques=sorted(S.cheques_to_deposit(t), key=lambda m: (m.date is None, m.date or dt.date.min, m.id)),
                       open_form=tab == "mouvements" and bool(request.query_params.get("k") or request.query_params.get("p")))
 
     @app.post("/v/{tid}/argent")
@@ -3234,16 +3251,80 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
                 else f"/v/{tid}/argent/mouvements?k={kind}"
             return refuse(here, "Choisis une personne et un montant positif", "amount")
         who = names(t)[pid]
+        date = S.parse_date(f.get("date"))
+        same = S.duplicate_movement(t, pid, kind, amt, date)
         db.snapshot(f"{kind} de {E.fmt(amt)} ({who})")
-        s.add(M.Movement(trip_id=tid, participant_id=pid, kind=kind, amount=amt,
-                         date=S.parse_date(f.get("date")), note=(f.get("note") or "").strip()))   # pas de date d'office
+        s.add(M.Movement(trip_id=tid, participant_id=pid, kind=kind, amount=amt, date=date,   # pas de date d'office
+                         note=(f.get("note") or "").strip(), method=S.pay_method(f.get("method")) or ""))
         s.commit()
         dest = f.get("next") or f"/v/{tid}/argent"
         if not dest.startswith("/"):
             dest = f"/v/{tid}/argent"
         txt = f"Versement de {E.fmt(amt)} par {who} enregistré" if kind == "versement" else \
             f"Remboursement de {E.fmt(amt)} à {who} enregistré"
+        if same is not None:                    # sans doute saisi deux fois : on prévient, « Défaire » est juste à côté
+            txt += (f". ⚠️ Attention : un {kind} de {E.fmt(amt)} était déjà noté pour {who}"
+                    + (f" (le {same.date:%d/%m/%Y})" if same.date else "")
+                    + ". Si c'est le même, clique sur « Défaire »")
         return back(dest, txt)
+
+    @app.post("/v/{tid}/argent/lot")
+    async def money_batch(tid: int, request: Request, s: Session = Depends(get_s)):
+        """Plusieurs lignes cochées dans « Reste à régler » : un versement (ou un remboursement) par ligne, du
+        montant qu'il reste exactement à régler. Les montants sont recalculés ici, jamais lus dans le formulaire."""
+        t = trip_or_404(s, tid)
+        f = await request.form()
+        kind = f.get("kind", "versement")
+        if kind not in ("versement", "remboursement"):
+            raise HTTPException(400, "Type de mouvement inconnu")
+        r = S.compute_trip(t)
+        todo = S.settle_amounts(r, kind, [whole(x) for x in f.getlist("qui")])
+        if not todo:
+            return refuse(f"/v/{tid}/argent", "Coche d'abord au moins une ligne" if not f.getlist("qui") else
+                          "Ces lignes sont déjà réglées : rien n'a été enregistré")
+        total = sum(c for _, c in todo)
+        received = kind == "versement"
+        db.snapshot(f"{len(todo)} {kind}s notés d'un coup ({E.fmt(total)})" if len(todo) > 1 else
+                    f"{kind} de {E.fmt(total)} ({todo[0][0].name})")
+        S.settle_batch(t, r, kind, [acc.referent for acc, _ in todo], date=S.parse_date(f.get("date")),
+                       method=S.pay_method(f.get("method")) or "", note=(f.get("note") or "").strip())
+        s.commit()
+        who = ", ".join(f"{acc.name} {E.fmt(c)}" for acc, c in todo[:6]) + ("…" if len(todo) > 6 else "")
+        if len(todo) == 1:
+            return back(f"/v/{tid}/argent", f"{'Versement' if received else 'Remboursement'} de {E.fmt(total)} "
+                                             f"{'par' if received else 'à'} {todo[0][0].name} enregistré")
+        return back(f"/v/{tid}/argent", f"{len(todo)} {'versements reçus' if received else 'remboursements faits'} "
+                                         f"enregistrés, {E.fmt(total)} en tout : {who}")
+
+    @app.post("/v/{tid}/argent/cheques-deposes")
+    def cheques_all_deposited(tid: int, s: Session = Depends(get_s)):
+        t = trip_or_404(s, tid)
+        todo = S.cheques_to_deposit(t)
+        if not todo:
+            return back(f"/v/{tid}/argent/mouvements", "Aucun chèque à déposer")
+        db.snapshot(f"{len(todo)} chèque{'s' if len(todo) > 1 else ''} déposé{'s' if len(todo) > 1 else ''} à la banque")
+        for m in todo:
+            m.deposited = True
+        s.commit()
+        return back(f"/v/{tid}/argent/mouvements",
+                    f"{len(todo)} chèques notés comme déposés" if len(todo) > 1 else "Chèque noté comme déposé")
+
+    @app.post("/v/{tid}/argent/{mid}/depose")
+    async def cheque_deposited(tid: int, mid: int, request: Request, s: Session = Depends(get_s)):
+        trip_or_404(s, tid)
+        m = s.get(M.Movement, mid)
+        if not m or m.trip_id != tid:
+            raise HTTPException(404, "Mouvement introuvable")
+        f = await request.form()
+        done = f.get("etat", "1") != "0"
+        if m.method != "cheque" or m.kind != "versement":
+            return refuse(f"/v/{tid}/argent/mouvements", "Ce mouvement n'est pas un chèque reçu")
+        db.snapshot(f"chèque de {m.participant.name} ({E.fmt(m.amount)}) "
+                    + ("déposé à la banque" if done else "plus noté comme déposé"))
+        m.deposited = done
+        s.commit()
+        return back(f"/v/{tid}/argent/mouvements", f"Chèque de {m.participant.name} ({E.fmt(m.amount)}) "
+                    + ("noté comme déposé" if done else "remis dans les chèques à déposer"))
 
     @app.post("/v/{tid}/argent/{mid}")
     async def money_edit(tid: int, mid: int, request: Request, s: Session = Depends(get_s)):
@@ -3261,6 +3342,12 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         m.participant_id, m.amount, m.kind = pid, amt, kind
         m.date = S.parse_date(f.get("date")) or m.date
         m.note = (f.get("note") or "").strip()
+        if "method" in f:
+            m.method = S.pay_method(f.get("method")) or ""
+        if "deposited_shown" in f:                       # la case « déposé » était affichée (chèque reçu)
+            m.deposited = bool(f.get("deposited"))
+        if m.method != "cheque" or m.kind != "versement":
+            m.deposited = False
         s.commit()
         return back(f"/v/{tid}/argent", f"{'Versement' if kind == 'versement' else 'Remboursement'} de "
                                          f"{E.fmt(amt)} ({names(t)[pid]}) modifié")

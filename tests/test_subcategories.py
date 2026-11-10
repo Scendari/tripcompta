@@ -162,7 +162,7 @@ def test_expenses_without_subcategory_get_their_own_subtotal(trip):
     add(c, tid, P, "Péage", "40", new_sub="Péages")
     add(c, tid, P, "Essence", "90", new_sub="Essence")
     page = clean(c.get(f"/v/{tid}/depenses").text)
-    rows = re.findall(r'class="subcat-row"><td colspan="7">.*?</span> ([^<]+)</td>\s*<td class="num"><b>([^<]+)</b>', page)
+    rows = re.findall(r'class="subcat-row"><td colspan="7">.*?</span> ([^<]+)</td>\s*<td class="num"><b data-exp-total>([^<]+)</b>', page)
     assert rows == [("Essence", "90,00 €"), ("Péages", "40,00 €"), ("Autres (sans sous-catégorie)", "603,00 €")]
     # une catégorie sans aucune sous-catégorie n'a pas de « Autres »
     c.post(f"/v/{tid}/depenses", data={"label": "Pizza", "category": "Repas", "actual": "30", "payer": "asso",

@@ -78,6 +78,7 @@ class MovementIn(BaseModel):
     type: str = Field("versement", description="« versement » (participant → asso) ou « remboursement » (asso → participant)")
     date: Optional[str] = None
     note: str = ""
+    moyen: Optional[str] = Field(None, description="virement, chèque, espèces, carte bancaire, paiement en ligne ou autre")
     simulation: bool = False
 
 

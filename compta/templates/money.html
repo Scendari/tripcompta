@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% macro method_field(id, value='') %}<div class="field"><label for="{{ id }}">Moyen de paiement <span class="hint">(facultatif)</span></label>
+  <select id="{{ id }}" name="method"><option value="">— pas précisé —</option>{% for k, l in methods %}<option value="{{ k }}" {{ 'selected' if k == value }}>{{ l }}</option>{% endfor %}</select></div>{% endmacro %}
 {% block content %}
 <div class="page-head"><div class="grow">
   <h1>Argent reçu et rendu</h1>
@@ -19,28 +21,43 @@
   <div class="settle-block {{ cls }}">
     <div class="settle-head"><b>{{ title }}</b> <span class="muted small">{{ rows|length }} {{ 'personnes ou familles' if rows|length > 1 else 'personne ou famille' }}</span>
       <span class="grow"></span><b class="num">{{ rows|sum(attribute=2)|money }}</b></div>
+    {% set many = rows|length > 1 %}
     <table class="settle-table">
       {% for a, b, c in rows %}{% set acc = a if kind == 'versement' else b %}
-      <tr><td><a href="/v/{{ trip.id }}/participants/comptes?p={{ acc.referent }}#p{{ acc.referent }}">{{ acc.name }}</a>{% if acc.is_family %} <span class="muted small">(à {{ r.people[acc.referent].name }})</span>{% endif %}</td>
+      <tr>{% if many %}<td class="tick"><input type="checkbox" name="qui" value="{{ acc.referent }}" form="lot-{{ kind }}" data-amount="{{ c }}" aria-label="Cocher {{ acc.name }}"></td>{% endif %}<td><a href="/v/{{ trip.id }}/participants/comptes?p={{ acc.referent }}#p{{ acc.referent }}">{{ acc.name }}</a>{% if acc.is_family %} <span class="muted small">(à {{ r.people[acc.referent].name }})</span>{% endif %}</td>
         <td class="num amt">{{ c|money }}</td>
         <td class="row-actions"><button type="button" class="btn small ghost" data-toggle-row="#pay-{{ kind }}-{{ acc.referent }}" aria-expanded="false">{{ btn }}</button></td></tr>
-      <tr class="edit-row" id="pay-{{ kind }}-{{ acc.referent }}" hidden><td colspan="3">
+      <tr class="edit-row" id="pay-{{ kind }}-{{ acc.referent }}" hidden><td colspan="{{ 4 if many else 3 }}">
         <form method="post" action="/v/{{ trip.id }}/argent" class="pay-form">
           <input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="participant" value="{{ acc.referent }}">
           <input type="hidden" name="next" value="/v/{{ trip.id }}/argent">
           <div class="field"><label for="pa-{{ kind }}-{{ acc.referent }}">Montant {{ 'reçu' if kind == 'versement' else 'remboursé' }} (€)</label>
             <input class="amount" type="text" inputmode="decimal" id="pa-{{ kind }}-{{ acc.referent }}" name="amount" value="{{ c|amount_input }}" required></div>
           <div class="field"><label for="pd-{{ kind }}-{{ acc.referent }}">Date</label><input type="date" id="pd-{{ kind }}-{{ acc.referent }}" name="date" value=""></div>
-          <div class="field grow"><label for="pn-{{ kind }}-{{ acc.referent }}">Note <span class="hint">(facultatif)</span></label><input type="text" id="pn-{{ kind }}-{{ acc.referent }}" name="note" placeholder="ex. chèque, virement, acompte…"></div>
+          {{ method_field('pm-' ~ kind ~ '-' ~ acc.referent) }}
+          <div class="field grow"><label for="pn-{{ kind }}-{{ acc.referent }}">Note <span class="hint">(facultatif)</span></label><input type="text" id="pn-{{ kind }}-{{ acc.referent }}" name="note" placeholder="ex. acompte, numéro du chèque…"></div>
           <div class="row" style="gap:.4rem;align-self:end"><button type="button" class="btn small ghost" data-toggle-row="#pay-{{ kind }}-{{ acc.referent }}">Fermer</button><button class="btn small">Enregistrer</button></div>
         </form>
         <p class="hint" style="margin:.2rem 0 0">Un paiement partiel ? Change le montant : le reste restera à régler.</p>
       </td></tr>
       {% endfor %}
     </table>
+    {% if many %}
+    <form method="post" action="/v/{{ trip.id }}/argent/lot" id="lot-{{ kind }}" class="batch-bar" data-batch="{{ kind }}">
+      <input type="hidden" name="kind" value="{{ kind }}">
+      <label class="batch-all"><input type="checkbox" data-batch-all> Tout cocher</label>
+      <span class="muted small" data-batch-none>Plusieurs {{ 'paiements reçus' if kind == 'versement' else 'remboursements faits' }} d'un coup ? Coche les lignes : chacune sera notée pour son montant exact.</span>
+      <div class="batch-fields" data-batch-some hidden>
+        {{ method_field('lot-m-' ~ kind) }}
+        <div class="field"><label for="lot-d-{{ kind }}">Date</label><input type="date" id="lot-d-{{ kind }}" name="date" value=""></div>
+        <button class="btn small" data-batch-go data-label="{{ '✓ Reçu' if kind == 'versement' else '✓ Remboursé' }}">{{ btn }}</button>
+      </div>
+    </form>
+    {% endif %}
   </div>
   {% endfor %}
 </div>
+{% if cheques %}<p class="cheque-line"><a href="/v/{{ trip.id }}/argent/mouvements#cheques">📝 {{ cheques|length }} chèque{{ 's' if cheques|length > 1 }} reçu{{ 's' if cheques|length > 1 }}, pas encore déposé{{ 's' if cheques|length > 1 }} à la banque ({{ cheques|sum(attribute='amount')|money }})</a></p>{% endif %}
 {% if pending %}
 <h2>Montants pas encore connus</h2>
 <p class="muted small">Ces dépenses sont notées mais comptent pour 0 € tant que leur montant n'est pas saisi.</p>
@@ -79,11 +96,25 @@
   </div>
   <div class="grid k2" style="gap:.8rem">
     <div class="field"><label for="date">Date</label><input type="date" id="date" name="date" value=""></div>
-    <div class="field"><label for="note">Note <span class="hint">(facultatif)</span></label><input type="text" id="note" name="note" placeholder="ex. acompte, dernier versement…"></div>
+    {{ method_field('method') }}
   </div>
+  <div class="field"><label for="note">Note <span class="hint">(facultatif)</span></label><input type="text" id="note" name="note" placeholder="ex. acompte, dernier versement, numéro du chèque…"></div>
   <div class="row" style="gap:.5rem;justify-content:flex-end"><button type="button" class="btn small ghost" data-toggle-row="#ajout">Fermer</button><button class="btn small">Enregistrer</button></div>
 </form>
 
+{% if cheques %}
+<div class="card cheque-card" id="cheques">
+  <div class="row" style="justify-content:space-between;gap:.6rem;align-items:baseline">
+    <h3 style="margin:0">📝 Chèques à déposer à la banque</h3>
+    <b class="num">{{ cheques|sum(attribute='amount')|money }}</b></div>
+  <p class="muted small" style="margin:.2rem 0 .5rem">Ces chèques sont notés comme reçus. Coche « Déposé » quand tu les as portés à la banque : c'est juste un pense-bête, les comptes ne changent pas.</p>
+  <table class="settle-table">
+    {% for m in cheques %}<tr><td>{{ m.participant.name }}{% if m.note %} <span class="muted small">· {{ m.note }}</span>{% endif %}</td><td class="small muted">{{ m.date|date if m.date else 'sans date' }}</td><td class="num amt">{{ m.amount|money }}</td>
+      <td class="row-actions"><form method="post" action="/v/{{ trip.id }}/argent/{{ m.id }}/depose" class="inline"><input type="hidden" name="etat" value="1"><button class="btn small ghost">✓ Déposé</button></form></td></tr>{% endfor %}
+  </table>
+  {% if cheques|length > 1 %}<form method="post" action="/v/{{ trip.id }}/argent/cheques-deposes" class="row" style="justify-content:flex-end;margin-top:.4rem"><button class="btn small">✓ Tous déposés</button></form>{% endif %}
+</div>
+{% endif %}
 <h2 style="margin-top:.4rem">Entrées et sorties de la caisse</h2>
 <div class="legend-box small">
   <div><span class="src-tag mv">💶 Mouvement</span> versement ou remboursement saisi ici : <b>Modifier</b> ou <b>Supprimer</b> directement sur la ligne.</div>
@@ -94,7 +125,7 @@
   <thead><tr><th>Date</th><th>Opération</th><th class="num">Entrées</th><th class="num">Sorties</th><th></th></tr></thead>
   <tbody>
   {% for x in rows %}
-    <tr><td>{{ x.date|date }}</td><td><span class="src-tag {{ 'mv' if x.mid else 'exp' }}" title="{{ 'Mouvement saisi ici' if x.mid else 'Vient d’une dépense' }}">{{ '💶' if x.mid else '🧾' }}</span> {{ x.label }}{% if x.note %} <span class="muted small">· {{ x.note }}</span>{% endif %}</td>
+    <tr><td>{{ x.date|date }}</td><td><span class="src-tag {{ 'mv' if x.mid else 'exp' }}" title="{{ 'Mouvement saisi ici' if x.mid else 'Vient d’une dépense' }}">{{ '💶' if x.mid else '🧾' }}</span> {{ x.label }}{% if x.method %} <span class="pay-tag{% if x.m.method == 'cheque' and x.m.kind == 'versement' %}{{ ' ok' if x.m.deposited else ' todo' }}{% endif %}">{{ x.method|lower }}{% if x.m.method == 'cheque' and x.m.kind == 'versement' %}{{ ' déposé' if x.m.deposited else ' à déposer' }}{% endif %}</span>{% endif %}{% if x.note %} <span class="muted small">· {{ x.note }}</span>{% endif %}</td>
       <td class="num" style="color:var(--ok)">{{ x.inc|money if x.inc }}</td>
       <td class="num">{{ x.out|money if x.out }}</td>
       <td class="row-actions">{% if x.mid %}{% set m = x.m %}
@@ -112,7 +143,9 @@
           <select id="mp{{ m.id }}" name="participant">{% for p in trip.participants %}<option value="{{ p.id }}" {{ 'selected' if p.id == m.participant_id }}>{{ p.name }}</option>{% endfor %}</select></div>
         <div class="field"><label for="ma{{ m.id }}">Montant (€)</label><input class="amount" type="text" inputmode="decimal" id="ma{{ m.id }}" name="amount" value="{{ m.amount|amount_input }}" required></div>
         <div class="field"><label for="md{{ m.id }}">Date</label><input type="date" id="md{{ m.id }}" name="date" value="{{ m.date or '' }}"></div>
+        {{ method_field('mm' ~ m.id, m.method) }}
         <div class="field"><label for="mn{{ m.id }}">Note</label><input type="text" id="mn{{ m.id }}" name="note" value="{{ m.note }}"></div>
+        {% if m.method == 'cheque' and m.kind == 'versement' %}<input type="hidden" name="deposited_shown" value="1"><label class="check"><input type="checkbox" name="deposited" value="1" {{ 'checked' if m.deposited }}> Chèque déposé à la banque</label>{% endif %}
         <div class="row"><button class="btn small">Enregistrer</button>
           <button type="button" class="btn small ghost" data-toggle-row="#edit-m{{ m.id }}">Fermer</button></div>
       </form>
