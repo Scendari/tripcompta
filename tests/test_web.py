@@ -57,7 +57,7 @@ def test_full_flow(client):
     data = {"label": "Péage", "category": "Autoroute", "actual": "30,50", "payer": str(P["Bob"]),
             f"inc_{P['Anne']}": "1", f"w_{P['Anne']}": "1", f"inc_{P['Bob']}": "1", f"w_{P['Bob']}": "1"}
     client.post(f"/v/{tid}/depenses", data=data,
-                files={"files": ("ticket.jpg", b"\xff\xd8fake", "image/jpeg")})
+                files={"files": ("ticket.jpg", b"\xff\xd8\xfffake", "image/jpeg")})
 
     # Aperçu d'une dépense
     pv = client.post(f"/v/{tid}/depenses/apercu", data={"label": "x", "actual": "10",

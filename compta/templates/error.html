@@ -1,8 +1,15 @@
 {% extends "base.html" %}
 {% block page %}
 <div class="card empty">
+  {% if unexpected %}
+  <h1>Trip Compta a rencontré un problème</h1>
+  <p><b>Rien de ce qui était enregistré n'est perdu.</b> Seule la dernière action n'a peut-être pas été prise en compte.</p>
+  <p>Reviens à tes voyages et recommence. Si le problème revient, note l'heure ci-dessous et préviens la personne qui t'a fait connaître Trip Compta.</p>
+  <p class="muted small">Problème noté à {{ when }} dans le journal de l'application :<br><span class="data-path">{{ journal_file }}</span></p>
+  {% else %}
   <h1>Oups</h1>
   <p>{{ detail }}</p>
+  {% endif %}
   <p><a class="btn" href="/">Retour à mes voyages</a></p>
 </div>
 {% endblock %}

@@ -15,6 +15,7 @@ from pathlib import Path
 
 from sqlalchemy import Date, DateTime, inspect
 
+from . import fichiers
 from . import models as M
 from . import services as S
 
@@ -226,10 +227,15 @@ def import_trip(s, v: dict, z: zipfile.ZipFile, receipts_dir: Path) -> M.Trip:
     files = set(z.namelist())
     for row in v.get("justificatifs") or []:
         old = row.get("stored_name") or ""
-        stored = f"{t.id}_{uuid.uuid4().hex}{Path(old).suffix.lower()[:10]}"
-        if f"justificatifs/{old}" in files:
-            (receipts_dir / stored).write_bytes(z.read(f"justificatifs/{old}"))
+        # type et extension : ceux du contenu du fichier, pas ceux écrits dans l'archive (qui vient d'ailleurs)
+        data = z.read(f"justificatifs/{old}") if f"justificatifs/{old}" in files else None
+        kind = fichiers.sniff(data[:fichiers.SNIFF_BYTES]) if data is not None else None
+        ctype, ext = kind or ("application/octet-stream", ".bin")
+        stored = f"{t.id}_{uuid.uuid4().hex}{ext}"
+        if data is not None:
+            (receipts_dir / stored).write_bytes(data)
         r = _new(M.Receipt, row, trip_id=t.id, stored_name=stored)
+        r.content_type = ctype
         s.add(r)
         s.flush()
         R[row["id"]] = r.id

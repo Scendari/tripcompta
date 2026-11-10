@@ -41,7 +41,7 @@ def test_ops_scenario_like_an_ai(ops, tmp_path):
     assert bob["sa_part"] == 180.0 + 240.0 + 19.28
     # justificatif depuis un fichier local
     f = tmp_path / "ticket.jpg"
-    f.write_bytes(b"\xff\xd8x")
+    f.write_bytes(b"\xff\xd8\xff\xe0" + b"0" * 20)
     assert ops.add_receipt(tid, str(f), ["Carburant"])["code"] == "J01"
     # entre nous
     ops.create_subaccount(tid, "Resto", ["Anne", "Bob"])

@@ -5,7 +5,6 @@ from markupsafe import Markup
 import datetime as dt
 import io
 import os
-import mimetypes
 import re
 import sys
 import uuid
@@ -13,6 +12,7 @@ from pathlib import Path
 from urllib.parse import quote, urlparse
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response,
                                StreamingResponse)
 from fastapi.staticfiles import StaticFiles
@@ -20,6 +20,8 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from . import engine as E
+from . import fichiers
+from . import journal
 from . import models as M
 from . import services as S
 from .db import (Database, DamagedDatabaseError, DataUnavailableError, NewerDatabaseError, human_when,
@@ -375,8 +377,12 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         return newer_data_app(err, upd)
     except (DataUnavailableError, DamagedDatabaseError) as err:
         return data_problem_app(err, upd, restart)
+    backup_failed = None
     if vault_box is None or not vault_box.locked:
-        db.daily_backup()
+        try:
+            db.daily_backup()
+        except Exception as exc:                 # la copie du jour est un filet : son échec n'empêche pas d'ouvrir
+            backup_failed = (dt.date.today().isoformat(), exc)
         with db.Session() as s_:                 # centimes d'arrondi : un tirage pour les dépenses qui n'en ont pas
             if any([S.store_draws(t_) for t_ in s_.query(M.Trip).all()]):
                 s_.commit()
@@ -389,6 +395,15 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     app.state.port = None                 # donnés par run.py (pour relancer après une mise à jour)
     app.state.argv = []
     app.state.update_notice = None if upd.dev else upd.startup_notice()
+    # jour où la copie de secours quotidienne a échoué (bandeau sur les pages, jusqu'à la prochaine copie réussie)
+    app.state.backup_failed = backup_failed[0] if backup_failed else None
+    if journal.setup():
+        if backup_failed:
+            journal.log.error("copie de secours du jour impossible", exc_info=backup_failed[1])
+        journal.log.info("démarrage : Trip Compta %s, %s, Python %s", upd.label, sys.platform,
+                         ".".join(map(str, sys.version_info[:3])))
+        if db.recovered:
+            journal.log.warning("fichier des voyages abîmé au démarrage : dernière copie intacte reprise")
     app.state.coffre = vault_box
     app.state.startup_notices = [n for n in (db.recovered_notice(), writer_notice(db)) if n]
     if vault_box is not None:
@@ -464,8 +479,12 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
                 and not (vault_box is not None and vault_box.locked)):
             try:
                 db.daily_backup()
-            except Exception:
-                pass
+                app.state.backup_failed = None
+            except Exception as exc:
+                # dit une fois dans le journal, et affiché sur les pages tant que la copie du jour n'existe pas
+                if not app.state.backup_failed:
+                    journal.log.error("copie de secours du jour impossible", exc_info=exc)
+                app.state.backup_failed = dt.date.today().isoformat()
         return response
 
     @app.middleware("http")
@@ -529,6 +548,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
                        else Markup("Caisse de ") + ctx["asso_name"])
         ctx["request"] = request
         ctx.setdefault("dossier", folder_status())
+        ctx.setdefault("backup_failed", bool(app.state.backup_failed))
         if vault_box is not None and vault_box.notice and not ctx.get("msg"):
             ctx["msg"], vault_box.notice = vault_box.notice, None
         ctx.setdefault("app_version", upd.label)
@@ -606,6 +626,14 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     class FormError(Exception):
         pass
 
+    def whole(v, default: int = 0) -> int:
+        """Nombre entier venu d'un formulaire (une personne ou une ligne choisie) ; autre chose : la valeur par défaut."""
+        v = str(v if v is not None else "").strip()
+        return int(v) if v.isdigit() else default
+
+    def wholes(values) -> list:
+        return [int(x) for x in values if str(x).strip().isdigit()]
+
     def amount(form, key):
         try:
             v = E.parse_amount(form.get(key))
@@ -632,6 +660,29 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             dict(request=request, status=exc.status_code, detail=exc.detail, mode=mode_of(request),
                  msg=None, last_action=db.last_action()),
             status_code=exc.status_code)
+
+    @app.exception_handler(RequestValidationError)
+    async def bad_address(request: Request, exc: RequestValidationError):
+        """Adresse mal formée (« /v/abc ») : une page en français, pas un message technique. L'API garde le sien."""
+        if request.url.path.startswith("/api/"):
+            from fastapi.exception_handlers import request_validation_exception_handler
+            return await request_validation_exception_handler(request, exc)
+        return await http_error(request, HTTPException(404, "Cette page n'existe pas."))
+
+    @app.exception_handler(Exception)
+    async def unexpected_error(request: Request, exc: Exception):
+        """Erreur que l'application n'avait pas prévue : notée dans le journal (avec l'heure, pour la retrouver), et
+        une page en français qui dit quoi faire. Rien de ce qui était enregistré n'est touché."""
+        when = dt.datetime.now().strftime("%H:%M:%S")
+        journal.log.error("erreur imprévue : %s %s", request.method, request.url.path, exc_info=exc)
+        if request.url.path.startswith("/api/"):
+            return JSONResponse({"detail": "Trip Compta a rencontré un problème imprévu. Rien de ce qui était "
+                                           "enregistré n'est perdu."}, status_code=500)
+        return templates.TemplateResponse(
+            request, "error.html",
+            dict(request=request, status=500, detail="", unexpected=True, when=when, journal_file=str(journal.file()),
+                 mode=mode_of(request), msg=None, last_action=None),
+            status_code=500)
 
     # ------------------------------------------------------------------ global
     @app.get("/mode")
@@ -2502,20 +2553,27 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             e.cents_mode = f.get("cents_mode") if f.get("cents_mode") in (E.ROUND_PARTICIPANTS, E.ROUND_ASSO) else ""
             e.cents_who = ",".join(str(x) for x in S.cents_ids(f.get("cents_who")))
         # justificatifs existants
-        wanted = {int(x) for x in f.getlist("receipts")}
+        wanted = set(wholes(f.getlist("receipts")))
         s.query(M.ReceiptLink).filter_by(expense_id=e.id).delete()
         for rid in wanted:
             s.add(M.ReceiptLink(receipt_id=rid, expense_id=e.id))
         # nouveaux fichiers
+        not_joined = []
         for up in f.getlist("files"):
             if getattr(up, "filename", None):
                 rec = await _store_receipt(s, t, up)
+                if rec is None:                  # ni photo ni PDF : la dépense est enregistrée, sans ce fichier
+                    not_joined.append(Path(up.filename).name)
+                    continue
                 s.add(M.ReceiptLink(receipt_id=rec.id, expense_id=e.id))
         e.checks.clear()                         # « à vérifier » : la dépense vient d'être revue
         s.flush()
         s.refresh(e)
         S.normalize_shares(e)                    # un montant tapé égal à la répartition : pas de cadenas
         s.commit()
+        if not_joined:
+            return back(f"/v/{tid}/depenses/{e.id}/modifier", f"« {label} » enregistrée, mais " + _refused_files(not_joined),
+                        err=True)
         if f.get("again"):
             return back(f"/v/{tid}/depenses/nouvelle", f"« {label} » enregistrée. Dépense suivante :")
         return back(f"/v/{tid}/depenses#e{e.id}", f"« {label} » enregistrée")
@@ -2682,7 +2740,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         t = trip_or_404(s, tid)
         f = await request.form()
         if f.get("cashier") == "p":
-            pid = int(f.get("participant") or 0)
+            pid = whole(f.get("participant"))
             if pid not in {p.id for p in t.participants}:
                 return refuse(f"/v/{tid}/asso", "Choisis le participant qui tient la caisse")
             t.cashier_id = pid
@@ -2820,8 +2878,8 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
                       withdrawn=withdrawn, wcur=cur, today=dt.date.today().isoformat())
 
     def _withdraw_from_form(t, f):
-        pid = int(f.get("participant") or 0)
-        kept = {int(x) for x in f.getlist("kept")}
+        pid = whole(f.get("participant"))
+        kept = set(wholes(f.getlist("kept")))
         return E.Withdrawal(pid, f.get("absorber", E.GROUP), kept, f.get("date", ""))
 
     @app.post("/v/{tid}/desistement/apercu", response_class=HTMLResponse)
@@ -2927,7 +2985,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     async def money_add(tid: int, request: Request, s: Session = Depends(get_s)):
         t = trip_or_404(s, tid)
         f = await request.form()
-        pid = int(f.get("participant") or 0)
+        pid = whole(f.get("participant"))
         amt = amount(f, "amount")
         kind = f.get("kind", "versement")
         if pid not in names(t) or not amt or amt <= 0 or kind not in ("versement", "remboursement"):
@@ -2951,7 +3009,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         if not m or m.trip_id != tid:
             raise HTTPException(404, "Mouvement introuvable")
         f = await request.form()
-        pid = int(f.get("participant") or m.participant_id)
+        pid = whole(f.get("participant"), m.participant_id)
         amt = amount(f, "amount")
         kind = f.get("kind", m.kind)
         if pid not in names(t) or not amt or amt <= 0 or kind not in ("versement", "remboursement"):
@@ -2977,17 +3035,29 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         return back(ref, "Mouvement supprimé")
 
     # ------------------------------------------------------------------ justificatifs
-    async def _store_receipt(s, t, up) -> M.Receipt:
+    async def _store_receipt(s, t, up) -> M.Receipt | None:
+        """Enregistre une photo ou un PDF ; None pour tout autre fichier (reconnu à son contenu, pas à son nom)."""
         data = await up.read()
-        ext = Path(up.filename).suffix.lower()[:10]
+        kind = fichiers.sniff(data[:fichiers.SNIFF_BYTES])
+        if kind is None:
+            return None
+        ctype, ext = kind
         stored = f"{t.id}_{uuid.uuid4().hex}{ext}"
         (db.receipts_dir / stored).write_bytes(data)
         number = max([r.number for r in t.receipts] or [0]) + 1
         rec = M.Receipt(trip_id=t.id, number=number, original_name=Path(up.filename).name, stored_name=stored,
-                        content_type=up.content_type or mimetypes.guess_type(up.filename)[0] or "")
+                        content_type=ctype)
         t.receipts.append(rec)
         s.flush()
         return rec
+
+    def _refused_files(names_: list) -> str:
+        """« x.html » n'a pas été joint… : phrase pour les fichiers qui ne sont ni une photo ni un PDF."""
+        if not names_:
+            return ""
+        shown = ", ".join(f"« {n} »" for n in names_[:3]) + ("…" if len(names_) > 3 else "")
+        return (f"{shown} {'n’a pas été joint' if len(names_) == 1 else 'n’ont pas été joints'} : "
+                f"un justificatif doit être {fichiers.WHAT}.")
 
     @app.get("/v/{tid}/justificatifs", response_class=HTMLResponse)
     def receipts(tid: int, request: Request, s: Session = Depends(get_s)):
@@ -3003,13 +3073,23 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         if not files:
             return refuse(f"/v/{tid}/justificatifs", "Choisis au moins un fichier")
         db.snapshot(f"ajout de {len(files)} justificatif(s)")
-        link_to = {int(x) for x in f.getlist("expenses")}
+        link_to = set(wholes(f.getlist("expenses")))
+        added, not_joined = 0, []
         for up in files:
             rec = await _store_receipt(s, t, up)
+            if rec is None:
+                not_joined.append(Path(up.filename).name)
+                continue
+            added += 1
             for eid in link_to:
                 s.add(M.ReceiptLink(receipt_id=rec.id, expense_id=eid))
         s.commit()
-        return back(f"/v/{tid}/justificatifs", f"{len(files)} justificatif(s) ajouté(s)")
+        if not added:
+            return refuse(f"/v/{tid}/justificatifs", _refused_files(not_joined))
+        done = "1 justificatif ajouté" if added == 1 else f"{added} justificatifs ajoutés"
+        if not_joined:
+            return refuse(f"/v/{tid}/justificatifs", f"{done}, mais " + _refused_files(not_joined))
+        return back(f"/v/{tid}/justificatifs", done)
 
     @app.post("/v/{tid}/justificatifs/{rid}")
     async def receipt_links(tid: int, rid: int, request: Request, s: Session = Depends(get_s)):
@@ -3020,7 +3100,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         f = await request.form()
         db.snapshot(f"liens du justificatif {rec.code}")
         s.query(M.ReceiptLink).filter_by(receipt_id=rid).delete()
-        for eid in {int(x) for x in f.getlist("expenses")}:
+        for eid in set(wholes(f.getlist("expenses"))):
             s.add(M.ReceiptLink(receipt_id=rid, expense_id=eid))
         s.commit()
         return back(f"/v/{tid}/justificatifs", f"Justificatif {rec.code} mis à jour")
@@ -3076,8 +3156,17 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         path = db.receipts_dir / rec.stored_name
         if not path.exists():
             raise HTTPException(404, "Fichier introuvable sur le disque")
-        return FileResponse(path, media_type=rec.content_type or None,
-                            headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(rec.original_name)}"})
+        # Le type vient du contenu du fichier, jamais de ce qui a été annoncé à l'envoi ou écrit dans un voyage
+        # importé. Photo ou PDF : affiché. Tout le reste : téléchargement seulement, jamais ouvert dans l'application.
+        kind = fichiers.sniff_file(path)
+        name = quote(rec.original_name)
+        if kind is None:
+            return FileResponse(path, media_type="application/octet-stream",
+                                headers={"Content-Disposition": f"attachment; filename*=UTF-8''{name}",
+                                         "X-Content-Type-Options": "nosniff"})
+        return FileResponse(path, media_type=kind[0],
+                            headers={"Content-Disposition": f"inline; filename*=UTF-8''{name}",
+                                     "X-Content-Type-Options": "nosniff"})
 
     # ------------------------------------------------------------------ Entre nous
     @app.get("/v/{tid}/entre-nous", response_class=HTMLResponse)
@@ -3091,7 +3180,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         t = trip_or_404(s, tid)
         f = await request.form()
         name = (f.get("name") or "").strip()
-        members = [int(x) for x in f.getlist("members")]
+        members = wholes(f.getlist("members"))
         if not name or len(members) < 2:
             return refuse(f"/v/{tid}/entre-nous", "Donne un nom et choisis au moins 2 personnes")
         db.snapshot(f"création du compte « {name} »")
@@ -3120,8 +3209,8 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         f = await request.form()
         label = (f.get("label") or "").strip()
         amt = amount(f, "amount")
-        payer = int(f.get("payer") or 0)
-        bens = [int(x) for x in f.getlist("for") if int(x) in sub.members]
+        payer = whole(f.get("payer"))
+        bens = [x for x in wholes(f.getlist("for")) if x in sub.members]
         if not label or not amt or amt <= 0 or payer not in sub.members or not bens:
             return refuse(f"/v/{tid}/entre-nous/{sid}", "Remplis le libellé, le montant, qui a payé et pour qui")
         db.snapshot(f"dépense « {label} » dans « {sub.name} »")
@@ -3135,10 +3224,12 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         t = trip_or_404(s, tid)
         sub = _sub_or_404(s, tid, sid)
         f = await request.form()
-        a, b = int(f.get("sender")), int(f.get("receiver"))
+        a, b = whole(f.get("sender")), whole(f.get("receiver"))
         amt = amount(f, "amount")
         if not amt or amt <= 0:
             return refuse(f"/v/{tid}/entre-nous/{sid}", "Montant invalide")
+        if a not in sub.members or b not in sub.members or a == b:
+            return refuse(f"/v/{tid}/entre-nous/{sid}", "Choisis qui rembourse et qui reçoit, parmi les personnes de ce compte")
         n = names(t)
         db.snapshot(f"{n[a]} a remboursé {n[b]}")
         s.add(M.SubTransfer(sub_id=sid, sender_id=a, receiver_id=b, amount=amt, date=dt.date.today()))
@@ -3152,9 +3243,9 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         f = await request.form()
         db.snapshot("suppression d'une ligne « Entre nous »")
         if f.get("expense"):
-            obj = s.get(M.SubExpense, int(f.get("expense")))
+            obj = s.get(M.SubExpense, whole(f.get("expense")))
         else:
-            obj = s.get(M.SubTransfer, int(f.get("transfer")))
+            obj = s.get(M.SubTransfer, whole(f.get("transfer")))
         if obj and obj.sub_id == sid:
             s.delete(obj)
             s.commit()

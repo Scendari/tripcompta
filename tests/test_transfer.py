@@ -58,7 +58,7 @@ def test_round_trip_to_another_installation(tmp_path, seed):
         S.set_asso_name(s, "Club Subaqua")
         s.commit()
     ca = TestClient(a)
-    ca.post(f"/v/{tid}/justificatifs", files={"files": ("ticket.jpg", b"\xff\xd8JPEGDATA", "image/jpeg")},
+    ca.post(f"/v/{tid}/justificatifs", files={"files": ("ticket.jpg", b"\xff\xd8\xffJPEGDATA", "image/jpeg")},
             data={"expenses": [str(e.id)]})
     before = snapshot(a, tid)
     r = ca.get(f"/v/{tid}/voyage.zip")
@@ -83,7 +83,7 @@ def test_round_trip_to_another_installation(tmp_path, seed):
         assert s.get(M.Trip, new_id).asso_name == "Club Subaqua"   # nom de l'asso du voyage
         assert S.asso_name(s) == "Club Subaqua"              # devient le nom proposé (il manquait ici)
         rec = next(x for x in s.get(M.Trip, new_id).receipts if x.original_name == "ticket.jpg")
-        assert (b.state.db.receipts_dir / rec.stored_name).read_bytes() == b"\xff\xd8JPEGDATA"
+        assert (b.state.db.receipts_dir / rec.stored_name).read_bytes() == b"\xff\xd8\xffJPEGDATA"
     assert cb.post(f"/importer/{token}", follow_redirects=True).text.count("expiré") >= 1   # usage unique
 
 

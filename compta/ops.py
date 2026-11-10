@@ -9,13 +9,13 @@ Principes :
 from __future__ import annotations
 
 import datetime as dt
-import mimetypes
 import shutil
 import uuid
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
 from . import engine as E
+from . import fichiers
 from . import models as M
 from . import services as S
 from .db import Database
@@ -941,14 +941,16 @@ class Ops:
         src = Path(chemin).expanduser()
         if not src.is_file():
             raise OpsError(f"Fichier introuvable : {chemin}")
+        kind = fichiers.sniff_file(src)
+        if kind is None:
+            raise OpsError(f"« {src.name} » n'est pas accepté : un justificatif doit être {fichiers.WHAT}.")
 
         def fn(s, t):
-            ext = src.suffix.lower()[:10]
-            stored = f"{t.id}_{uuid.uuid4().hex}{ext}"
+            stored = f"{t.id}_{uuid.uuid4().hex}{kind[1]}"
             shutil.copyfile(src, self.db.receipts_dir / stored)
             number = max([r.number for r in t.receipts] or [0]) + 1
             rec = M.Receipt(trip_id=t.id, number=number, original_name=src.name, stored_name=stored,
-                            content_type=mimetypes.guess_type(src.name)[0] or "")
+                            content_type=kind[0])
             t.receipts.append(rec)
             s.flush()
             for ref in depenses or []:

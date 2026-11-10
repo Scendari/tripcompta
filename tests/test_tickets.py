@@ -173,7 +173,7 @@ def test_one_photo_for_several_expenses(env):
                     voyage=tid, verifier_id=tid)
     dep = {d["libelle"]: d["id"] for d in ops.trip(tid)["depenses"]}
     c.post(f"/v/{tid}/justificatifs", data={"expenses": [str(dep["Péage aller"])]},
-           files={"files": ("peages.jpg", b"\xff\xd8fake", "image/jpeg")})
+           files={"files": ("peages.jpg", b"\xff\xd8\xfffake", "image/jpeg")})
     form = c.get(f"/v/{tid}/depenses/{dep['Péage retour']}/modifier").text
     assert 'class="rcard"' in form and "déjà pour : Péage aller" in form and "Voir en grand" in form
     rid = re.search(r'name="receipts" value="(\d+)"', form).group(1)
@@ -196,7 +196,7 @@ def test_thumbnails_for_pdf_and_photo(env):
     im = Image.new("RGB", (1200, 900), "#336699"); buf = io.BytesIO(); im.save(buf, "JPEG")
     c.post(f"/v/{tid}/justificatifs", files=[("files", ("facture.pdf", bytes(pdf.output()), "application/pdf")),
                                              ("files", ("photo.jpg", buf.getvalue(), "image/jpeg")),
-                                             ("files", ("casse.pdf", b"pas un pdf", "application/pdf"))])
+                                             ("files", ("casse.pdf", b"%PDF-1.4 fichier abime", "application/pdf"))])   # PDF illisible
     with app.state.db.Session() as s:
         recs = {r.original_name: r.id for r in s.get(M.Trip, tid).receipts}
     for name, size in (("facture.pdf", 240), ("photo.jpg", 240)):

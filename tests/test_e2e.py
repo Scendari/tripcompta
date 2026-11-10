@@ -147,7 +147,7 @@ def test_every_screen_and_main_flows(server, page):
                                                       "buffer": b"%PDF-1.4 fake"}])
     page.check("label:has-text('Péage A7 aller-retour — voiture de Thierry') input >> nth=0")
     page.click("form button.btn:has-text('Enregistrer')")
-    expect_flash(page, "1 justificatif(s) ajouté(s)")
+    expect_flash(page, "1 justificatif ajouté")
     shot(page, "11_justificatifs")
 
     # Entre nous : nouvelle dépense puis règlement

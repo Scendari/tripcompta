@@ -41,6 +41,10 @@
 <div class="folder-banner warn" role="status"><span>⚠️ {{ 'Une autre version' if dossier.conflicts == 1 else dossier.conflicts ~ ' autres versions' }} de tes voyages {{ 'est apparue' if dossier.conflicts == 1 else 'sont apparues' }} dans le dossier (Trip Compta ouvert sur deux ordinateurs en même temps ?). Rien n'est perdu.</span>
   <a class="btn small" href="/reglages/donnees#conflits">Voir</a></div>
 {% endif %}
+{% if backup_failed %}
+<div class="folder-banner warn" role="alert"><span>⚠️ <b>La copie de secours d'aujourd'hui n'a pas pu être faite.</b> Tes voyages restent enregistrés normalement. Vérifie qu'il reste de la place sur le disque et que le dossier de tes voyages est accessible.</span>
+  <a class="btn small" href="/reglages/donnees">Voir le dossier</a></div>
+{% endif %}
 {% if update_banner %}
 <div class="update-banner" role="status">
   <span>🎁 <b>Trip Compta {{ update_banner.version }} est disponible.</b></span>
