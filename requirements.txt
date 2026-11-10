@@ -1,15 +1,20 @@
-fastapi>=0.115
-uvicorn[standard]>=0.30
-jinja2>=3.1
-sqlalchemy>=2.0
-python-multipart>=0.0.12
-fpdf2>=2.8
-Pillow>=10
-mcp>=2.3
-pypdfium2>=4
+# Versions exactes : celles avec lesquelles l'application a été essayée (tests, fabrication Mac et Windows).
+# Une fabrication refaite dans six mois prend ainsi les mêmes briques qu'aujourd'hui.
+# Les briques dont celles-ci dépendent sont figées dans constraints.txt.
+# Pour tout mettre à jour : voir l'en-tête de constraints.txt.
+-c constraints.txt
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+jinja2==3.1.6
+sqlalchemy==2.1.6
+python-multipart==0.0.33
+fpdf2==2.9.0
+Pillow==13.0.0
+mcp==2.3.0
+pypdfium2==5.14.0
 # Mac Intel : cryptography 49 et plus n'a plus de paquet tout fait pour Intel (il serait compilé contre l'OpenSSL de
 # Homebrew, fait pour macOS 15) ; la 48.0.1 a un paquet universel avec son propre OpenSSL (macOS 10.9 et plus)
-cryptography>=43; sys_platform != "darwin" or platform_machine != "x86_64"
-cryptography>=43,<49; sys_platform == "darwin" and platform_machine == "x86_64"
-keyring>=25
-pywebview==6.2.1; sys_platform == "darwin" or sys_platform == "win32"  # épinglé : compta/fenetre.py touche ses rouages internes (essayer toute nouvelle version : smoke.py --fenetre)
+cryptography==50.0.2; sys_platform != "darwin" or platform_machine != "x86_64"
+cryptography==48.0.1; sys_platform == "darwin" and platform_machine == "x86_64"
+keyring==25.7.0
+pywebview==6.2.1; sys_platform == "darwin" or sys_platform == "win32"  # compta/fenetre.py touche ses rouages internes (essayer toute nouvelle version : smoke.py --fenetre)
