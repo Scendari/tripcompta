@@ -12,15 +12,12 @@ from __future__ import annotations
 import argparse
 import functools
 import os
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 from .db import Database
 from .ops import Ops, OpsError
 
-try:  # SDK MCP 2.x
-    from mcp.server.mcpserver import MCPServer as _Server
-except ImportError:  # SDK MCP 1.x
-    from mcp.server.fastmcp import FastMCP as _Server  # type: ignore
+from mcp.server.mcpserver import MCPServer as _Server
 
 Ref = Union[int, str]
 

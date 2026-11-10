@@ -61,7 +61,8 @@ def test_window_routes(tmp_path):
 def test_window_routes_on_too_old_screen(tmp_path):
     from compta import updater as U
     d = tmp_path / "d"
-    Database(d, app_version="9.0.0")
+    from compta.db import SCHEMA
+    Database(d, app_version="9.0.0", schema=SCHEMA + 1)
     app = create_app(d, updater=U.Updater(info=dict(version="1.0.0", commit="x", dev=False), fetch=lambda: None))
     f = FakeWindows()
     app.state.fenetres = f

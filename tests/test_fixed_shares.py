@@ -24,45 +24,6 @@ def _shares(path, tid):
         return {p.name: p.share for p in r.people.values()}, r
 
 
-def test_old_data_converted_once_with_identical_shares(tmp_path):
-    """Avant : un ajustement « fixé à 60 € sur le Gîte, compensé par les autres » et une dépense en
-    « montants différents » (poids = centimes). Après conversion : mêmes parts au centime près."""
-    d = tmp_path / "d"
-    ops, tid = _trip(d)
-    gite = ops.add_expense(tid, "Gîte", montant_reel="400")["depense_id"]
-    plong = ops.add_expense(tid, "Plongées", montant_reel="1196")["depense_id"]
-    db = d / "compta.db"
-    con = sqlite3.connect(db)
-    ids = {n: i for i, n in con.execute("SELECT id, name FROM participants")}
-    con.execute("INSERT INTO adjustments (trip_id, participant_id, expense_id, value, fixed, compensation, reason, "
-                "created) VALUES (?, ?, ?, 6000, 1, 'others', 'enfant', '2026-01-01')", (tid, ids["A"], gite))
-    for n, w in (("A", 40000), ("B", 40000), ("C", 39600), ("D", 0)):
-        if w:
-            con.execute("UPDATE expense_shares SET weight=? WHERE expense_id=? AND participant_id=?", (w, plong, ids[n]))
-        else:
-            con.execute("DELETE FROM expense_shares WHERE expense_id=? AND participant_id=?", (plong, ids[n]))
-    con.execute("DELETE FROM settings WHERE key='fixed_shares'")      # comme une base d'avant
-    con.commit()
-    con.close()
-    # Gîte : A 60, les 3 autres (400 − 60) / 3 = 113,333… ; Plongées : 400 / 400 / 396
-    # A : 60 + 400 = 460 ; B, C, D : 113,33 chacun sur le gîte, + 1 centime pour l'un d'eux (tiré au sort)
-    shares, r = _shares(d, tid)                        # ouvrir la base lance la conversion
-    assert shares["A"] == 46000 and r.is_balanced()
-    assert sorted([shares["B"] - 40000, shares["C"] - 39600, shares["D"]]) == [11333, 11333, 11334]
-    assert sum(shares.values()) == 40000 + 119600       # chaque dépense tombe juste
-    con = sqlite3.connect(db)
-    assert con.execute("SELECT COUNT(*) FROM adjustments").fetchone()[0] == 0
-    fx = dict(con.execute("SELECT participant_id, fixed FROM expense_shares WHERE expense_id=? AND fixed IS NOT NULL",
-                          (gite,)).fetchall())
-    assert fx == {ids["A"]: 6000}
-    pl = dict(con.execute("SELECT participant_id, fixed FROM expense_shares WHERE expense_id=?", (plong,)).fetchall())
-    assert pl == {ids["A"]: 40000, ids["B"]: 40000, ids["C"]: 39600}
-    assert {w for (w,) in con.execute("SELECT weight FROM expense_shares WHERE expense_id=?", (plong,))} == {1.0}
-    con.close()
-    # une seule fois : un nouvel ajustement de ce type n'est plus converti ensuite
-    assert _shares(d, tid)[0] == shares
-
-
 def test_ia_parts_become_fixed_amounts(tmp_path):
     """Plus de « parts » : des parts (2, 1, 1) données par l'IA : A paie double, 60 € fixés 🔒 ; B et C (une part)
     restent libres et se partagent le reste, 30 € chacun."""

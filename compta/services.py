@@ -274,26 +274,6 @@ def _dp_role(trip) -> str:
     return add_trip_role(trip, DP_NAME)
 
 
-def convert_legacy_dp(trip) -> bool:
-    """L'ancien rôle « DP » (directeur de plongée, prévu d'office) devient une étiquette ordinaire « DP », seulement
-    dans les voyages où quelqu'un l'a. True si quelque chose a changé."""
-    changed = False
-    try:
-        raw = json.loads(trip.roles_conf) if trip.roles_conf else {}
-    except ValueError:
-        raw = {}
-    if LEGACY_DP in (raw.get("masques") or []):
-        raw["masques"] = [x for x in raw["masques"] if x != LEGACY_DP]
-        trip.roles_conf = json.dumps(raw, ensure_ascii=False)
-        changed = True
-    for p in trip.participants:
-        rs = [r for r in (p.roles or "").split(",") if r]
-        if LEGACY_DP in rs:
-            key = _dp_role(trip)
-            p.roles = ",".join(dict.fromkeys(key if r == LEGACY_DP else r for r in rs))
-            changed = True
-    return changed
-
 
 def with_role(trip: M.Trip, role: str) -> list:
     return [p for p in trip.participants if role in p.role_list]

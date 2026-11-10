@@ -462,6 +462,8 @@ def compute(participants, expenses, adjustments=(), withdrawals=(), movements=()
         else:
             amount_free, active_free = Fraction(amount), active
         total_w = sum(active_free.values())
+        same_free = len(set(active_free.values())) == 1    # une fois par dépense (pas pour chaque personne)
+        same_all = len(set(active.values())) == 1
         for p, w in active_free.items():
             l = line(p, e)
             base = Fraction(amount_free) * w / total_w
@@ -475,13 +477,13 @@ def compute(participants, expenses, adjustments=(), withdrawals=(), movements=()
                 rest_txt = f"{shown} − {fmt(round(sum(fixed.values())))} fixés ({who_fx}) = {fmt(round(rest))}"
                 if w == total_w:
                     txt = f"{e.label} : {rest_txt} pour lui seul"
-                elif len(set(active_free.values())) == 1:
+                elif same_free:
                     txt = f"{e.label} : {rest_txt} ÷ {len(active_free)} personnes"
                 else:
                     txt = f"{e.label} : {rest_txt}, part inégale {fmt_weight(w)} sur {fmt_weight(total_w)}"
             elif w == total_w:
                 txt = f"{e.label} : {shown} pour lui seul"
-            elif len(set(active.values())) == 1:
+            elif same_all:
                 txt = f"{e.label} : {shown} ÷ {len(active)} personnes"
             else:
                 # répartition saisie en montants (en centimes depuis l'écran, ou en euros par une IA)
@@ -496,7 +498,7 @@ def compute(participants, expenses, adjustments=(), withdrawals=(), movements=()
         for p in released_asso:
             l = lines[(p, e.id)]
             moved = l.exact
-            l.add(f"Désistement : sa part est reprise par l'asso", -moved)
+            l.add("Désistement : sa part est reprise par l'asso", -moved)
             asso.append(AssoCharge(e.label, f"désistement de {name(p)}", moved, expense=e.id))
 
         # Ajustements sur cette dépense

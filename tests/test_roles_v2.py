@@ -11,30 +11,6 @@ from compta.ops import Ops
 from compta.web import create_app
 
 
-def test_old_data_gets_diver_role_once(tmp_path):
-    db = Database(tmp_path / "d")
-    ops = Ops(db)
-    tid = ops.import_trip({"voyage": {"nom": "x"}, "participants": ["Anne", {"nom": "Léa", "accompagnant": True}]})["voyage_id"]
-    path = next((tmp_path / "d").glob("*.db"))
-    con = sqlite3.connect(path)                      # comme une ancienne base : pas de rôle plongeur / accompagnant
-    con.execute("UPDATE participants SET roles = REPLACE(REPLACE(roles, 'plongeur', ''), 'accompagnant', '')")
-    con.execute("DELETE FROM settings WHERE key='roles_plongeur'")
-    con.commit()
-    con.close()
-    db2 = Database(tmp_path / "d")
-    with db2.Session() as s:
-        t = s.get(M.Trip, tid)
-        roles = {p.name: [r for r in p.role_list] for p in t.participants}
-    assert roles["Anne"] == ["plongeur"] and roles["Léa"] == ["accompagnant"]
-    # une seule fois : retirer « plongeur » à Anne n'est pas annulé au redémarrage
-    with db2.Session() as s:
-        t = s.get(M.Trip, tid)
-        S.set_roles(t, next(p for p in t.participants if p.name == "Anne"), [])
-        s.commit()
-    with Database(tmp_path / "d").Session() as s:
-        assert next(p for p in s.get(M.Trip, tid).participants if p.name == "Anne").role_list == []
-
-
 def test_roles_pills_and_who_chips(tmp_path):
     app = create_app(tmp_path / "d")
     ops = Ops(app.state.db)

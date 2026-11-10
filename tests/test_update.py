@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from compta import updater as U
 from compta import version as V
-from compta.db import Database, NewerDatabaseError, stored_version
+from compta.db import SCHEMA, Database, NewerDatabaseError, stored_schema, stored_version
 from compta.web import create_app
 
 RELEASE = dict(tag_name="v1.1.0", body="- Nouveau : le mail au trésorier\n- Correction : arrondis",
@@ -176,21 +176,66 @@ def test_available_only_if_newer_and_later():
 
 # ---------------------------------------------------------------- base de données
 
-def test_db_remembers_version_and_refuses_newer(tmp_path):
+def test_db_remembers_version_and_refuses_newer_structure(tmp_path):
+    """Ce qui compte, c'est le numéro de structure écrit dans la base : une application qui en connaît un plus
+    petit refuse d'y toucher ; deux versions au même numéro s'entendent, quel que soit leur numéro de version."""
     d = tmp_path / "donnees"
-    Database(d, app_version="1.1.0")
-    assert stored_version(d / "compta.db") == "1.1.0"
+    Database(d, app_version="1.1.0", schema=SCHEMA + 1)        # une version future, structure suivante
+    assert stored_version(d / "compta.db") == "1.1.0" and stored_schema(d / "compta.db") == SCHEMA + 1
     before = hashlib.sha256((d / "compta.db").read_bytes()).hexdigest()
     with pytest.raises(NewerDatabaseError) as e:
         Database(d, app_version="1.0.0")
     assert (e.value.stored, e.value.current) == ("1.1.0", "1.0.0")
     assert "plus récente" in str(e.value)
     assert hashlib.sha256((d / "compta.db").read_bytes()).hexdigest() == before   # rien modifié
-    Database(d, app_version="1.1.0-beta2")                     # même 1.1.x : pas de souci
-    Database(d, app_version="1.1.0-dev")
-    db = Database(d, app_version="1.2.0")
+    db = Database(d, app_version="1.2.0", schema=SCHEMA + 1)   # même structure : pas de souci
     assert stored_version(db.path) == "1.2.0"
-    assert stored_version(tmp_path / "absente.db") is None
+    assert stored_version(tmp_path / "absente.db") is None and stored_schema(tmp_path / "absente.db") is None
+
+
+def test_same_structure_opens_whatever_the_version(tmp_path):
+    """Un ordinateur resté à la version d'avant n'est pas bloqué tant que la structure n'a pas changé."""
+    d = tmp_path / "donnees"
+    Database(d, app_version="1.6.0")
+    assert stored_schema(d / "compta.db") == SCHEMA
+    db = Database(d, app_version="1.5.0")                      # plus ancienne, même structure : elle ouvre
+    assert stored_version(db.path) == "1.5.0" and stored_schema(db.path) == SCHEMA
+
+
+def test_sqlite_settings_are_explicit(tmp_path):
+    """Un seul fichier au repos (pas de -wal / -shm à côté), écriture complète sur le disque, clés étrangères, attente."""
+    db = Database(tmp_path / "d")
+    with db.engine.connect() as c:
+        get = lambda name: c.exec_driver_sql(f"PRAGMA {name}").scalar()
+        assert get("journal_mode") == "delete"
+        assert get("synchronous") == 3                         # EXTRA
+        assert get("foreign_keys") == 1
+        assert get("busy_timeout") == 5000
+    with db.Session() as s:
+        from compta import models as M
+        s.add(M.Trip(name="x"))
+        s.commit()
+    assert sorted(p.name for p in (tmp_path / "d").glob("compta.db*")) == ["compta.db"]
+
+
+def test_missing_columns_are_added_from_the_models(tmp_path):
+    """Une base dont la structure est plus ancienne est alignée sur les modèles : les colonnes absentes sont
+    ajoutées avec leur valeur par défaut, les données restent, et le numéro de structure est écrit."""
+    d = tmp_path / "ancienne"
+    Database(d)
+    con = sqlite3.connect(d / "compta.db")
+    con.execute("INSERT INTO trips (name, place, organizer, note, asso_name, is_demo, groups, roles_conf, rounding, "
+                "pay_info, created) VALUES ('Avant', '', '', '', '', 0, '', '', 'participants', 'x', '2026-01-01')")
+    con.execute("ALTER TABLE trips DROP COLUMN pay_info")
+    con.execute("PRAGMA user_version = 1")
+    con.commit()
+    con.close()
+    db = Database(d)
+    assert stored_schema(db.path) == SCHEMA
+    with db.Session() as s:
+        from compta import models as M
+        t = s.query(M.Trip).one()
+        assert (t.name, t.pay_info, t.rounding) == ("Avant", "", "participants")
 
 
 def test_old_database_without_version_opens(tmp_path):
@@ -206,7 +251,7 @@ def test_old_database_without_version_opens(tmp_path):
 
 def test_newer_database_page(tmp_path):
     d = tmp_path / "donnees"
-    Database(d, app_version="2.0.0")
+    Database(d, app_version="2.0.0", schema=SCHEMA + 1)
     app = create_app(d, updater=make(version="1.0.0"))
     assert app.state.db is None
     c = TestClient(app)
@@ -456,37 +501,11 @@ def test_install_route_runs_job(client, monkeypatch):
     assert c.get("/maj/etat").json() == {"step": "aucune"}          # erreur vue une fois : on peut réessayer
 
 
-def test_renamed_app_found_and_relaunched(tmp_path):
-    """1.2 : « Trip Compta » devient « TripCompta » (fichiers sans espace). Une installation à l'ancien nom trouve la
-    nouvelle application dans l'archive et relance son programme sous son nouveau nom (remplacée au même endroit)."""
-    import plistlib
-    out = tmp_path / "nouvelle"
-    app = out / "TripCompta.app"
-    (app / "Contents" / "MacOS").mkdir(parents=True)
-    (app / "Contents" / "MacOS" / "TripCompta").write_text("x")
-    (app / "Contents" / "Info.plist").write_bytes(plistlib.dumps({"CFBundleExecutable": "TripCompta",
-                                                                   "CFBundleName": "Trip Compta"}))
-    new = U.find_app(out, Path("/Applications/Trip Compta.app"))
-    assert new == app
-    assert U.new_exe_rel(new, str(Path("Contents/MacOS/Trip Compta"))) == str(Path("Contents/MacOS/TripCompta"))
-    win = tmp_path / "w" / "TripCompta"
-    win.mkdir(parents=True)
-    (win / "TripCompta.exe").write_text("x")
-    assert U.find_app(tmp_path / "w", Path("C:/Users/x/Trip Compta")) == win
-    assert U.new_exe_rel(win, "Trip Compta.exe") == "TripCompta.exe"
-    assert U.new_exe_rel(win, "TripCompta.exe") == "TripCompta.exe"
-    old = tmp_path / "o" / "Trip Compta"                  # une archive d'avant la 1.2 reste lisible
-    old.mkdir(parents=True)
-    (old / "Trip Compta").write_text("x")
-    assert U.find_app(tmp_path / "o", Path("/opt/TripCompta")) == old
-    assert U.new_exe_rel(old, "TripCompta") == "Trip Compta"
-
-
 def test_newer_database_page_offers_update(tmp_path, monkeypatch):
     """Données ouvertes par une version plus récente : si la version publiée sait les ouvrir, un bouton met à
     jour directement depuis cet écran (sans toucher aux données) ; sinon, le lien de téléchargement."""
     d = tmp_path / "donnees"
-    Database(d, app_version="1.1.0")                        # publiée : 1.1.0 (FakeGitHub)
+    Database(d, app_version="1.1.0", schema=SCHEMA + 1)     # publiée : 1.1.0 (FakeGitHub)
     before = (d / "compta.db").read_bytes()
     u = make(version="1.0.0")
     monkeypatch.setattr(u, "installable", lambda: (True, ""))
@@ -513,7 +532,7 @@ def test_newer_database_page_offers_update(tmp_path, monkeypatch):
 def test_newer_database_page_published_too_old(tmp_path):
     """Données ouvertes par une 2.0.0, publiée : 1.1.0 → la mise à jour n'aiderait pas : pas de bouton."""
     d = tmp_path / "donnees"
-    Database(d, app_version="2.0.0")
+    Database(d, app_version="2.0.0", schema=SCHEMA + 1)
     c = TestClient(create_app(d, updater=make(version="1.0.0")))
     r = c.get("/")
     assert "Mettre à jour vers" not in r.text and "Télécharger la dernière version" in r.text
@@ -523,7 +542,7 @@ def test_newer_database_page_published_too_old(tmp_path):
 def test_newer_database_page_not_installable(tmp_path, monkeypatch):
     """Mise à jour impossible (ex. Mac : app ouverte depuis Téléchargements) : on dit pourquoi, et le lien."""
     d = tmp_path / "donnees"
-    Database(d, app_version="1.1.0")
+    Database(d, app_version="1.1.0", schema=SCHEMA + 1)
     u = make(version="1.0.0")
     monkeypatch.setattr(U, "install_location", lambda *a, **k: (
         Path("/private/var/folders/x/T/AppTranslocation/ABC/d/Trip Compta.app"), "Contents/MacOS/Trip Compta"))

@@ -216,7 +216,6 @@ def import_trip(s, v: dict, z: zipfile.ZipFile, receipts_dir: Path) -> M.Trip:
                        expense_id=E_.get(row.get("expense_id")), compensator_id=P.get(row.get("compensator_id"))))
     s.flush()
     s.expire(t, ["participants"])
-    S.convert_legacy_dp(t)                     # export d'avant : l'ancien rôle « DP » devient une étiquette
     for row in v.get("desistements") or []:
         if row.get("participant_id") in P:
             s.add(_new(M.Withdrawal, row, trip_id=t.id, participant_id=P[row["participant_id"]],
@@ -320,10 +319,6 @@ def import_example(s, receipts_dir: Path) -> M.Trip:
 
 def import_zip(s, content: bytes, receipts_dir: Path) -> tuple[list, list]:
     data, z = read_zip(content)
-    old_name = str((data.get("reglages") or {}).get(S.ASSO_NAME_KEY) or "").strip()[:100]
-    for v in data["voyages"]:    # export d'une version plus ancienne : le nom commun devient celui du voyage
-        if old_name and not str((v.get("voyage") or {}).get("asso_name") or "").strip():
-            v["voyage"] = dict(v["voyage"], asso_name=old_name)
     trips = [import_trip(s, v, z, receipts_dir) for v in data["voyages"]]
     done = merge_settings(s, data.get("reglages") or {})
     named = [t.asso_name for t in trips if (t.asso_name or "").strip()]

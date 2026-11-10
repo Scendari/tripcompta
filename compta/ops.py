@@ -12,7 +12,7 @@ import datetime as dt
 import shutil
 import uuid
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Iterable, Optional
 
 from . import engine as E
 from . import fichiers

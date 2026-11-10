@@ -40,7 +40,6 @@ CHECK_EVERY = 24 * 3600
 SUMS = "SHA256SUMS.txt"
 PENDING = "en-cours.txt"
 APP_NAME = "TripCompta"                  # nom des fichiers : TripCompta.app, TripCompta.exe
-OLD_APP_NAME = "Trip Compta"             # jusqu'à la 1.1 (installations faites avant le renommage)
 SCRIPTS = Path(__file__).parent / "scripts"
 
 
@@ -347,10 +346,8 @@ def extract(archive: Path, dest: Path):
 
 
 def find_app(folder: Path, target: Path) -> Path:
-    """La nouvelle application dans l'archive dépliée : « TripCompta.app » ou le dossier « TripCompta » (ou l'ancien
-    nom « Trip Compta », avant la 1.2)."""
-    for cand in (folder / target.name, folder / (APP_NAME + ".app"), folder / APP_NAME,
-                 folder / (OLD_APP_NAME + ".app"), folder / OLD_APP_NAME):
+    """La nouvelle application dans l'archive dépliée : « TripCompta.app » ou le dossier « TripCompta »."""
+    for cand in (folder / target.name, folder / (APP_NAME + ".app"), folder / APP_NAME):
         if cand.exists():
             return cand
     raise UpdateError("Le fichier téléchargé ne contient pas l'application.")
@@ -370,9 +367,8 @@ def new_exe_rel(new: Path, exe_rel: str) -> str:
         if exe and (new / "Contents" / "MacOS" / exe).exists():
             return str(Path("Contents") / "MacOS" / exe)
     suffix = Path(exe_rel).suffix
-    for name in (APP_NAME + suffix, OLD_APP_NAME + suffix):
-        if (new / name).exists():
-            return name
+    if (new / (APP_NAME + suffix)).exists():
+        return APP_NAME + suffix
     return exe_rel
 
 

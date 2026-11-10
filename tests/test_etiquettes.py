@@ -183,31 +183,6 @@ def test_new_trip_takes_labels_of_the_last_trip(env):
 
 # ---------------------------------------------------------------- l'ancien rôle DP
 
-def test_old_database_dp_becomes_a_label(tmp_path):
-    d = tmp_path / "old"
-    db = Database(d)
-    with db.Session() as s:
-        a, b = M.Trip(name="Avec DP"), M.Trip(name="Sans DP", roles_conf='{"perso": [], "masques": ["dp"]}')
-        a.participants = [M.Participant(name="Luc"), M.Participant(name="Marie")]
-        b.participants = [M.Participant(name="Hugo")]
-        s.add_all([a, b])
-        s.commit()
-    con = sqlite3.connect(d / "compta.db")                                  # comme écrit par une version d'avant
-    con.execute("UPDATE participants SET roles='plongeur,dp' WHERE name='Luc'")
-    con.execute("UPDATE participants SET roles='organisateur,dp' WHERE name='Marie'")
-    con.commit()
-    con.close()
-    for _ in range(2):                                                      # deux lancements : même résultat
-        db = Database(d)
-        with db.Session() as s:
-            a = s.query(M.Trip).filter_by(name="Avec DP").one()
-            b = s.query(M.Trip).filter_by(name="Sans DP").one()
-            assert {p.name: p.role_list for p in a.participants} == {"Luc": ["plongeur", "perso:DP"],
-                                                                     "Marie": ["organisateur", "perso:DP"]}
-            assert json.loads(a.roles_conf)["perso"] == ["DP"] and "DP" not in S.trip_roles(b).values()
-            assert json.loads(b.roles_conf)["masques"] == []
-
-
 def test_example_trip_keeps_its_dp_as_a_label(tmp_path):
     app = create_app(tmp_path / "d")
     c = TestClient(app)
@@ -220,25 +195,6 @@ def test_example_trip_keeps_its_dp_as_a_label(tmp_path):
     dash = c.get(f"/v/{tid}").text
     tile = dash.split('<div class="label">Équipe</div>')[1].split('<div class="card kpi">')[0].split("</div></div>")[0]
     assert "DP" not in tile and "organisateur" in tile                      # l'Équipe : organisation seulement
-
-
-def test_old_export_with_dp_is_converted(tmp_path):
-    from compta import transfer
-    app = create_app(tmp_path / "a")
-    ops = Ops(app.state.db)
-    tid = ops.import_trip({"voyage": {"nom": "Exporté"}, "participants": ["Luc", "Anne"]})["voyage_id"]
-    with app.state.db.Session() as s:
-        t = s.get(M.Trip, tid)
-        next(p for p in t.participants if p.name == "Luc").roles = "plongeur,dp"     # comme une ancienne version
-        s.commit()
-    data = TestClient(app).get(f"/v/{tid}/voyage.zip").content
-    app2 = create_app(tmp_path / "b")
-    with app2.state.db.Session() as s:
-        trips, _ = transfer.import_zip(s, data, app2.state.db.receipts_dir)
-        s.commit()
-        t = s.get(M.Trip, trips[0].id)
-        assert next(p for p in t.participants if p.name == "Luc").role_list == ["plongeur", "perso:DP"]
-        assert "DP" in S.trip_roles(t).values()
 
 
 # ---------------------------------------------------------------- caisse

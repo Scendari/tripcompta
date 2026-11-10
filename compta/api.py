@@ -6,7 +6,7 @@ les montants sont en euros.
 """
 from __future__ import annotations
 
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import JSONResponse

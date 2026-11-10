@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from markupsafe import Markup
 import datetime as dt
-import io
 import os
 import re
 import sys
@@ -13,8 +12,7 @@ from urllib.parse import quote, urlparse
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response,
-                               StreamingResponse)
+from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -518,12 +516,8 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             s.close()
 
     # ------------------------------------------------------------------ helpers
-    def mode_of(request: Request) -> str:
-        """Toujours le montant réel s'il est connu, sinon le prévu (plus de bouton « prévu / réel »)."""
-        return E.ACTUAL
-
     def render(request: Request, name: str, **ctx):
-        ctx.setdefault("mode", mode_of(request))
+        ctx.setdefault("mode", E.ACTUAL)
         ctx.setdefault("msg", request.query_params.get("msg"))
         # message de refus (rouge) : seulement celui de l'adresse, pas un avis posé ensuite à sa place
         ctx.setdefault("msg_err", bool(ctx["msg"]) and ctx["msg"] == request.query_params.get("msg")
@@ -657,7 +651,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     async def http_error(request: Request, exc: HTTPException):
         return templates.TemplateResponse(
             request, "error.html",
-            dict(request=request, status=exc.status_code, detail=exc.detail, mode=mode_of(request),
+            dict(request=request, status=exc.status_code, detail=exc.detail, mode=E.ACTUAL,
                  msg=None, last_action=db.last_action()),
             status_code=exc.status_code)
 
@@ -681,18 +675,10 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         return templates.TemplateResponse(
             request, "error.html",
             dict(request=request, status=500, detail="", unexpected=True, when=when, journal_file=str(journal.file()),
-                 mode=mode_of(request), msg=None, last_action=None),
+                 mode=E.ACTUAL, msg=None, last_action=None),
             status_code=500)
 
     # ------------------------------------------------------------------ global
-    @app.get("/mode")
-    def set_mode(request: Request, m: str = E.ACTUAL, next: str = "/"):
-        if not next.startswith("/"):
-            next = "/"
-        r = RedirectResponse(next, status_code=303)
-        r.set_cookie("mode", m if m in (E.ACTUAL, E.PLANNED) else E.ACTUAL, max_age=3600 * 24 * 365)
-        return r
-
     def _return_path(request: Request) -> str:
         path = urlparse(request.headers.get("referer") or "/").path or "/"
         path = re.sub(r"/(nouvelle|\d+/modifier)$", "", path)
@@ -1438,19 +1424,6 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         d_.mkdir(exist_ok=True)
         return d_
     INIT, UPDATE = "initialisation", "mise-a-jour"
-    # Brouillon unique des versions précédentes (avant l'IA par voyage) : gardé à part s'il contenait quelque chose.
-    for legacy in ("brouillon_ia.txt", "brouillon_ia.md", "brouillon_ia.precedent.txt", "brouillon_ia.precedent.md",
-                   "brouillon_ia.ancien-markdown.txt"):
-        f_ = db.dir / legacy
-        if f_.exists():
-            from . import importer as _imp
-            txt = f_.read_text(encoding="utf-8")
-            if _imp.is_old_markdown_draft(txt):
-                txt = _imp.markdown_draft_to_text(txt)
-            if txt.strip() and txt.strip() != _imp.template().strip() and "Nom du voyage :\n" not in txt[:600]:
-                (drafts() / f"ancien-{legacy.replace('.md', '.txt')}").write_text(txt, encoding="utf-8")
-            f_.unlink()
-
     def draft_paths(tid: int, mode: str):
         base = drafts() / f"voyage-{tid}-{mode}"
         return base.with_suffix(".txt"), Path(str(base) + ".precedent.txt")
@@ -1489,14 +1462,10 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         dfile, dprev = draft_paths(t.id, mode)
         blank = importer.template() if mode == INIT else importer.update_template()
         draft = dfile.read_text(encoding="utf-8") if dfile.exists() else None
-        if mode == UPDATE and draft and draft.lstrip().startswith("=== METTRE À JOUR LE VOYAGE ===") and not any(
-                l.strip().startswith("- ") and l.strip()[2:].strip() for l in draft.splitlines()):
-            draft = None            # ancien modèle à rubriques, jamais rempli : on repart d'un texte libre
         saved = dt.datetime.fromtimestamp(dfile.stat().st_mtime) if draft is not None else None
-        legacy = sorted(p_.name for p_ in drafts().glob("ancien-*.txt"))
         return render(request, "ai.html", trip=t, ia_mode=mode, INIT=INIT, UPDATE=UPDATE, modele=blank,
                       guide=importer.guide(), state=trip_state_for_ai(t), draft=draft, draft_saved=saved,
-                      has_prev=dprev.exists(), legacy=legacy, cur=f"/v/{t.id}/ia", **mcp_conf(request), **ctx)
+                      has_prev=dprev.exists(), cur=f"/v/{t.id}/ia", **mcp_conf(request), **ctx)
 
     @app.get("/ia")
     def ai_global():
@@ -1521,14 +1490,6 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         text = importer.template() if mode == INIT else importer.update_template()
         return Response(text, media_type="text/plain; charset=utf-8",
                         headers={"Content-Disposition": f'attachment; filename="modele_{mode}.txt"'})
-
-    @app.get("/ia/ancien-brouillon/{name}")
-    def ai_legacy(name: str):
-        f_ = drafts() / name
-        if not name.startswith("ancien-") or "/" in name or not f_.exists():
-            raise HTTPException(404, "Brouillon introuvable")
-        return Response(f_.read_text(encoding="utf-8"), media_type="text/plain; charset=utf-8",
-                        headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
     @app.put("/v/{tid}/ia/brouillon/{mode}")
     @app.post("/v/{tid}/ia/brouillon/{mode}")
@@ -1611,7 +1572,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         # d'abord ; le voyage d'exemple en dernier
         cards = []
         for t in trips:
-            r = S.compute_trip(t, mode_of(request))
+            r = S.compute_trip(t)
             cards.append((t, r))
         q = request.query_params
         return render(request, "index.html", cards=cards, data_dir=db.home,
@@ -1717,7 +1678,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     @app.get("/v/{tid}", response_class=HTMLResponse)
     def dashboard(tid: int, request: Request, s: Session = Depends(get_s)):
         t = trip_or_404(s, tid)
-        r = S.compute_trip(t, mode_of(request))
+        r = S.compute_trip(t)
         asso_paid = sum(c for e in t.expenses if e.actual is not None and not e.is_income
                         for pid, c in e.splits() if pid is None)
         cat_totals = {}
@@ -1733,7 +1694,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     @app.get("/v/{tid}/participants", response_class=HTMLResponse)
     def participants(tid: int, request: Request, s: Session = Depends(get_s)):
         t = trip_or_404(s, tid)
-        r = S.compute_trip(t, mode_of(request))
+        r = S.compute_trip(t)
         groups = S.trip_groups(t)
         known = S.known_people(t)
         return render(request, "participants.html", trip=t, r=r, groups=groups, export_cols=S.EXPORT_COLS,
@@ -2153,7 +2114,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     @app.get("/v/{tid}/participants/comptes", response_class=HTMLResponse)
     def people_accounts(tid: int, request: Request, s: Session = Depends(get_s)):
         t = trip_or_404(s, tid)
-        mode = mode_of(request)
+        mode = E.ACTUAL
         r = S.compute_trip(t, mode)
         rp = S.compute_trip(t, E.PLANNED)
         sends = _send_rows(t, r)
@@ -2176,7 +2137,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     @app.get("/v/{tid}/depenses", response_class=HTMLResponse)
     def expenses(tid: int, request: Request, s: Session = Depends(get_s)):
         t = trip_or_404(s, tid)
-        r = S.compute_trip(t, mode_of(request))
+        r = S.compute_trip(t)
         groups = []
         order = lambda e: (not e.subcategory, E.sort_key(e.subcategory or ""), e.id)    # « Autres » en dernier
         for c in t.categories:
@@ -2616,7 +2577,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         q = request.query_params
         fmt_ = q.get("format", "csv")
         cols = [c for c in (q.get("cols") or "").split(",") if c] or [k for k, _, on in S.EXPORT_COLS if on]
-        r = S.compute_trip(t, mode_of(request))
+        r = S.compute_trip(t)
         heads, rows = S.participants_export(t, r, cols, q.get("desistes", "1") != "0")
         money_cols = {i for i, c in enumerate(cols) if c in ("part", "verse", "solde")}
 
@@ -2654,7 +2615,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         t = trip_or_404(s, tid)
         if remise is not None:              # anciens liens : l'onglet Remises / suppléments
             return RedirectResponse(f"/v/{tid}/participants/remises?remise={remise}", status_code=303)
-        r = S.compute_trip(t, mode_of(request))
+        r = S.compute_trip(t)
         tags = {}
         for a in t.adjustments:
             if a.expense_id is None:
@@ -2716,13 +2677,13 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     @app.get("/v/{tid}/en-images", response_class=HTMLResponse)
     def visuals(tid: int, request: Request, s: Session = Depends(get_s)):
         t = trip_or_404(s, tid)
-        r = S.compute_trip(t, mode_of(request))
+        r = S.compute_trip(t)
         return render(request, "viz.html", trip=t, r=r, V=S.trip_visuals(t, r))
 
     @app.get("/v/{tid}/asso", response_class=HTMLResponse)
     def asso_page(tid: int, request: Request, s: Session = Depends(get_s)):
         t = trip_or_404(s, tid)
-        r = S.compute_trip(t, mode_of(request))
+        r = S.compute_trip(t)
         return render(request, "asso.html", trip=t, r=r, A=S.asso_account(t, r), cashier=S.cashier(t),
                       asso_custom=S.trip_asso_name(t) != "l'asso", asso_real=S.trip_asso_name(t))
 
@@ -2768,7 +2729,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     @app.get("/v/{tid}/repartition", response_class=HTMLResponse)
     def matrix(tid: int, request: Request, s: Session = Depends(get_s)):
         t = trip_or_404(s, tid)
-        r = S.compute_trip(t, mode_of(request))
+        r = S.compute_trip(t)
         has_global = any(l.expense is None for l in r.lines.values())
         # par défaut : sous-totaux ; « ▸ catégorie » déplie une catégorie (?o=id), « Tout déplier » = ?vue=detail
         all_open = request.query_params.get("vue") == "detail"
@@ -2862,7 +2823,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     @app.get("/v/{tid}/desistement", response_class=HTMLResponse)
     def withdraw_page(tid: int, request: Request, p: int | None = None, s: Session = Depends(get_s)):
         t = trip_or_404(s, tid)
-        r = S.compute_trip(t, mode_of(request))
+        r = S.compute_trip(t)
         withdrawn = {w.participant_id for w in t.withdrawals}
         person_ = s.get(M.Participant, p) if p else None
         if person_ and person_.trip_id != tid:
@@ -2873,7 +2834,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         inputs = S.engine_inputs(t)
         r_full = E.compute(**{**inputs, "withdrawals": [w for w in inputs["withdrawals"]
                                                          if not person_ or w.participant != person_.id]},
-                           mode=mode_of(request)) if person_ else r
+                           mode=E.ACTUAL) if person_ else r
         return render(request, "withdraw.html", trip=t, r=r, r_full=r_full, sel=person_, exps=exps,
                       withdrawn=withdrawn, wcur=cur, today=dt.date.today().isoformat())
 
@@ -2889,7 +2850,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         w = _withdraw_from_form(t, f)
         if not w.participant:
             return HTMLResponse('<p class="muted">Choisis une personne.</p>')
-        mode = mode_of(request)
+        mode = E.ACTUAL
         inputs = S.engine_inputs(t)
         r0 = E.compute(**inputs, mode=mode)                     # aujourd'hui (avec un éventuel désistement déjà noté)
         others = [x for x in inputs["withdrawals"] if x.participant != w.participant]
@@ -2945,7 +2906,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         t = trip_or_404(s, tid)
         if request.query_params.get("k") or request.query_params.get("p"):   # lien « Enregistrer un versement de … »
             tab = "mouvements"
-        r = S.compute_trip(t, mode_of(request))
+        r = S.compute_trip(t)
         rows = []
         for m in t.movements:
             if m.kind == "versement":
@@ -3273,7 +3234,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     @app.get("/v/{tid}/export", response_class=HTMLResponse)
     def export_page(tid: int, request: Request, s: Session = Depends(get_s)):
         t = trip_or_404(s, tid)
-        r = S.compute_trip(t, mode_of(request))
+        r = S.compute_trip(t)
         subject, body = S.treasurer_mail(t, r)
         return render(request, "export.html", trip=t, r=r, alerts=S.alerts(t, r), mail_subject=subject, mail_body=body,
                       mail_link=f"mailto:?subject={quote(subject)}&body={quote(body)}")
@@ -3364,7 +3325,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     @app.get("/v/{tid}/envoyer", response_class=HTMLResponse)
     def send_page(tid: int, request: Request, s: Session = Depends(get_s)):
         t = trip_or_404(s, tid)
-        r = S.compute_trip(t, mode_of(request))
+        r = S.compute_trip(t)
         return render(request, "send.html", trip=t, r=r, rows=_send_rows(t, r), pay_info=t.pay_info or "",
                       pay_max=S.PAY_INFO_MAX, owing=sum(1 for a in r.accounts if S.owes_money(a)))
 
@@ -3386,10 +3347,10 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     def account_pdf_route(tid: int, key: str, request: Request, s: Session = Depends(get_s)):
         from .export import account_pdf
         t = trip_or_404(s, tid)
-        r = S.compute_trip(t, mode_of(request))
+        r = S.compute_trip(t)
         if key not in {a.key for a in r.accounts}:
             raise HTTPException(404, "Compte introuvable")
-        data, name = account_pdf(t, key, mode_of(request))
+        data, name = account_pdf(t, key, E.ACTUAL)
         return Response(data, media_type="application/pdf",
                         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"})
 
@@ -3397,7 +3358,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     def accounts_zip_route(tid: int, request: Request, s: Session = Depends(get_s)):
         from .export import accounts_zip
         t = trip_or_404(s, tid)
-        return Response(accounts_zip(t, mode_of(request)), media_type="application/zip",
+        return Response(accounts_zip(t, E.ACTUAL), media_type="application/zip",
                         headers={"Content-Disposition":
                                  f"attachment; filename*=UTF-8''{quote('Comptes_' + _slug(t.name))}.zip"})
 
@@ -3405,7 +3366,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     def export_pdf(tid: int, request: Request, s: Session = Depends(get_s)):
         from .export import trip_pdf
         t = trip_or_404(s, tid)
-        data = trip_pdf(t, mode_of(request))
+        data = trip_pdf(t, E.ACTUAL)
         return Response(data, media_type="application/pdf",
                         headers={"Content-Disposition":
                                  f"attachment; filename*=UTF-8''{quote('Bilan_' + _slug(t.name))}.pdf"})
@@ -3414,7 +3375,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     def export_zip(tid: int, request: Request, s: Session = Depends(get_s)):
         from .export import trip_zip
         t = trip_or_404(s, tid)
-        data = trip_zip(t, mode_of(request), db.receipts_dir)
+        data = trip_zip(t, E.ACTUAL, db.receipts_dir)
         return Response(data, media_type="application/zip",
                         headers={"Content-Disposition":
                                  f"attachment; filename*=UTF-8''{quote('Justificatifs_' + _slug(t.name))}.zip"})

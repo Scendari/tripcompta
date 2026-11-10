@@ -325,38 +325,6 @@ def test_correct_a_payment(demo_app):
     assert after == before + 50
 
 
-def test_legacy_global_drafts(tmp_path):
-    d = tmp_path / "d"
-    d.mkdir()
-    (d / "brouillon_ia.txt").write_text(OLD_MD, encoding="utf-8")                 # ancien modèle jamais rempli
-    (d / "brouillon_ia.precedent.txt").write_text("Gîte 1800 € pour 10 personnes", encoding="utf-8")
-    app = create_app(d)
-    assert not (d / "brouillon_ia.txt").exists() and not (d / "brouillon_ia.precedent.txt").exists()
-    kept = sorted(x.name for x in (d / "brouillons_ia").glob("ancien-*"))
-    assert kept == ["ancien-brouillon_ia.precedent.txt"]                         # seul le brouillon rempli est gardé
-    tid = Ops(app.state.db).create_trip("x")["voyage_id"]
-    c = TestClient(app)
-    assert "ancien-brouillon_ia.precedent.txt" in c.get(f"/v/{tid}/ia").text
-    assert "Gîte 1800" in c.get("/ia/ancien-brouillon/ancien-brouillon_ia.precedent.txt").text
-    assert c.get("/ia/ancien-brouillon/compta.db").status_code == 404
-
-
-def test_filled_markdown_draft_is_converted_without_loss():
-    filled = (OLD_MD.replace("- **Nom du voyage :** ", "- **Nom du voyage :** Banyuls 2027")
-                    .replace("- *Marie (plongeuse)*\n- ", "- *Marie (plongeuse)*\n- Paul (**accompagnant**)")
-                    .replace("- *Hugo — 40 € de moins sur le gîte, pris en charge par l'asso — étudiant*\n- ",
-                             "- *Hugo — 40 € de moins sur le gîte, pris en charge par l'asso — étudiant*\n"
-                             "- Zoé : *tarif* étudiant, 30 € de moins"))
-    out = importer.markdown_draft_to_text(filled)
-    assert "**" not in out and "##" not in out and "\n> " not in out and "*" not in out
-    assert "- Nom du voyage : Banyuls 2027" in out
-    assert "- Paul (accompagnant)" in out
-    assert "- Zoé : tarif étudiant, 30 € de moins" in out
-    assert "Exemple : Luc (plongeur) — 06 12 34 56 78" in out
-    assert "=== MON VOYAGE ===" in out and "\nDÉPENSES\n" in out and "\nFAMILLES\n" in out
-    assert "italique" not in out
-
-
 def test_drafts_per_trip_and_template(demo_app):
     app, c, tid = demo_app
     other = Ops(app.state.db).create_trip("Autre")["voyage_id"]
@@ -554,19 +522,3 @@ def type_after(pg, marker, text):
         ta.focus(); ta.setSelectionRange(end, end); }""", [marker])
     pg.keyboard.type(text)
 
-
-def test_old_update_template_draft(demo_app):
-    """Un brouillon de l'ancien modèle « à rubriques », jamais rempli, n'encombre plus la zone de texte ;
-    un brouillon où l'on a écrit quelque chose est gardé tel quel."""
-    app, c, tid = demo_app
-    dd = app.state.db.dir / "brouillons_ia"
-    dd.mkdir(exist_ok=True)
-    f = dd / f"voyage-{tid}-mise-a-jour.txt"
-    old = ("=== METTRE À JOUR LE VOYAGE ===\nÉcris seulement ce qui est nouveau.\n\nNOUVELLES DÉPENSES\n"
-           "Exemple : Pot de fin — 45 € — avancé par Marie — pour tous\n-\n\nAUTRE CHOSE\n-\n")
-    f.write_text(old, encoding="utf-8")
-    zone = c.get(f"/v/{tid}/ia?modele=mise-a-jour").text.split('id="modele"')[1].split("</textarea>")[0]
-    assert "NOUVELLES DÉPENSES" not in zone and zone.rstrip().endswith(">")
-    f.write_text(old.replace("\n-\n\nAUTRE", "\n- Hugo a versé 150 €\n\nAUTRE"), encoding="utf-8")
-    zone = c.get(f"/v/{tid}/ia?modele=mise-a-jour").text.split('id="modele"')[1].split("</textarea>")[0]
-    assert "Hugo a versé 150 €" in zone

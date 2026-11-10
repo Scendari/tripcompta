@@ -42,7 +42,6 @@
     <button type="button" class="btn small ghost" id="modele-restore" {{ '' if has_prev else 'hidden' }}>Récupérer mon brouillon précédent</button>
     <button type="button" class="btn small ghost" id="modele-dl">Télécharger mon texte</button>
   </div>
-  {% if legacy %}<p class="hint">Un brouillon de l'ancienne version a été gardé : {% for n in legacy %}<a href="/ia/ancien-brouillon/{{ n }}">{{ n }}</a>{{ ', ' if not loop.last }}{% endfor %}.</p>{% endif %}
 </fieldset>
 
 <fieldset class="step">

@@ -12,7 +12,7 @@ from . import engine as E
 from .ops import (GROUPS, FixedShare, OpsError, do_add_expense, do_add_movement, do_add_participants, do_adjust,
                   do_create_subaccount, do_fix_share,
                   do_create_trip, do_add_subexpense, do_delete_expense, do_delete_movement, do_update_expense,
-                  do_update_participant, do_update_trip, do_withdraw, euros, trip_detail)
+                  do_update_participant, do_update_trip, do_withdraw, trip_detail)
 
 IA_DIR = Path(__file__).parent / "static" / "ia"
 GUIDE_FILE = IA_DIR / "guide_ia.md"
@@ -42,55 +42,6 @@ class ImportErrors(OpsError):
     def __init__(self, errors: list):
         super().__init__("\n".join(errors))
         self.errors = errors
-
-
-# Ancien modèle (version « Markdown », abandonnée) : pour reconnaître et convertir les brouillons faits avec.
-OLD_MD_TITLE = "# Mon voyage"
-
-
-def is_old_markdown_draft(text: str) -> bool:
-    return (text or "").lstrip().startswith(OLD_MD_TITLE)
-
-
-def markdown_draft_to_text(text: str) -> str:
-    """Convertit un brouillon de l'ancien modèle Markdown en texte simple, sans rien perdre de ce qui a été écrit.
-    Si le brouillon n'a pas été touché (que des exemples et des cases vides), on rend le nouveau modèle."""
-    lines = (text or "").splitlines()
-    filled = []
-    for l in lines:
-        st = l.strip()
-        if st.startswith("- **") and st.count("**") >= 2:          # « - **Nom du voyage :** valeur »
-            value = st.split("**", 2)[2].replace("du … au …", "").strip()
-            if value:
-                filled.append(l)
-        elif st.startswith("- ") and not (st.startswith("- *") and st.endswith("*")) and st[2:].strip():
-            filled.append(l)                                         # une ligne de liste remplie
-    if not filled:
-        return template()
-    out = []
-    for l in lines:
-        st = l.rstrip()
-        if st.startswith("# "):
-            out.append("=== " + st[2:].strip().upper() + " ===")
-            continue
-        if st.startswith("#"):
-            title = st.lstrip("#").strip()
-            out += ["", title.upper()]
-            continue
-        if st.startswith(">"):
-            st = st.lstrip("> ").rstrip()
-            if "en *italique*" in st:
-                st = "Les lignes qui commencent par « Exemple : » sont là pour t'aider : remplace-les ou efface-les."
-        bullet = st.startswith("- ")
-        body = st[2:] if bullet else st
-        if bullet and body.startswith("*") and body.endswith("*") and not body.startswith("**") and len(body) > 2:
-            out.append("Exemple : " + body[1:-1])
-            continue
-        body = re.sub(r"\*\*(.+?)\*\*", r"\1", body)
-        body = re.sub(r"(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])", r"\1", body)
-        body = body.replace("**", "")
-        out.append(("- " + body) if bullet else body)
-    return "\n".join(out).rstrip() + "\n"
 
 
 def guide() -> str:

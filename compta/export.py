@@ -388,7 +388,6 @@ def trip_pdf(trip: M.Trip, mode: str = E.ACTUAL) -> bytes:
                    [22, 70, 38, 28, 22], ["LEFT", "LEFT", "LEFT", "RIGHT", "LEFT"])
 
     # ---------------------------------------------------------------- compte de l'asso
-    from sqlalchemy.orm import object_session
     aname = S.caisse_label(trip)
     A = S.asso_account(trip, r)
     pdf.add_page()

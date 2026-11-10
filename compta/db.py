@@ -16,6 +16,10 @@ from .models import Base
 UNDO_KEEP = 30
 BACKUP_KEEP = 10
 VERSION_KEY = "app_version"
+# Numéro de la structure de la base (tables, colonnes), gardé dans le fichier lui-même (PRAGMA user_version).
+# À augmenter de 1 à chaque changement de structure : une application qui connaît un numéro plus petit refuse
+# d'ouvrir la base (elle ne saurait pas la lire sans l'abîmer) ; deux versions au même numéro s'entendent.
+SCHEMA = 2
 WRITER_KEY = "dernier_ecrivain"        # {"ordinateur", "quand"} : le dernier ordinateur qui a modifié les voyages
 
 
@@ -120,9 +124,41 @@ def stored_version(path: Path) -> str | None:
     return row[0] if row else None
 
 
+def stored_schema(path: Path) -> int | None:
+    """Le numéro de structure écrit dans cette base (lecture seule, sans rien créer) ; None si illisible ou absente."""
+    if not path.exists():
+        return None
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            return int(con.execute("PRAGMA user_version").fetchone()[0])
+        finally:
+            con.close()
+    except (sqlite3.Error, TypeError, ValueError):
+        return None
+
+
 def default_data_dir() -> Path:
     from .paths import default_data_dir as _d
     return _d()
+
+
+SQLITE_SETTINGS = ("foreign_keys=ON", "journal_mode=DELETE", "synchronous=EXTRA", "busy_timeout=5000")
+
+
+def _column_ddl(col, engine) -> str:
+    """« nom TYPE [NOT NULL DEFAULT valeur] » pour ajouter à une table existante une colonne du modèle."""
+    ddl = f'"{col.name}" {col.type.compile(engine.dialect)}'
+    default = col.default.arg if col.default is not None and col.default.is_scalar else None
+    if default is None:
+        return ddl                                 # sans valeur par défaut : la colonne reste vide (NULL)
+    if isinstance(default, bool):
+        lit = "1" if default else "0"
+    elif isinstance(default, (int, float)):
+        lit = repr(default)
+    else:
+        lit = "'" + str(default).replace("'", "''") + "'"
+    return f"{ddl} NOT NULL DEFAULT {lit}"
 
 
 class Database:
@@ -131,18 +167,20 @@ class Database:
     dans `data_dir`."""
 
     def __init__(self, data_dir: Path | str | None = None, app_version: str | None = None,
-                 home: Path | str | None = None, receipts_in_home: bool = True):
+                 home: Path | str | None = None, receipts_in_home: bool = True, schema: int | None = None):
         """receipts_in_home=False (dossier protégé par un mot de passe) : les justificatifs en clair restent dans
         `data_dir`, sur l'ordinateur ; le dossier ne contient que leurs versions chiffrées (voir coffre.py)."""
         from . import version as V
-        self._args = (data_dir, app_version, home, receipts_in_home)
+        self._args = (data_dir, app_version, home, receipts_in_home, schema)
+        self.schema = schema or SCHEMA
         self.dir = Path(data_dir) if data_dir else default_data_dir()
         self.home = Path(home) if home else self.dir
         self.app_version = app_version or V.build_info()["version"]
-        # AVANT toute écriture : une version plus ancienne refuse une base passée par une version plus récente
-        stored = stored_version(self.dir / "compta.db")
-        if stored and V.base(stored) and V.base(self.app_version) and V.base(stored) > V.base(self.app_version):
-            raise NewerDatabaseError(stored, self.app_version, self.dir)
+        # AVANT toute écriture : une application qui ne connaît pas la structure de cette base n'y touche pas
+        found = stored_schema(self.dir / "compta.db")
+        if found is not None and found > self.schema:
+            raise NewerDatabaseError(stored_version(self.dir / "compta.db") or "plus récente", self.app_version,
+                                     self.dir)
         self.dir.mkdir(parents=True, exist_ok=True)
         self.receipts_dir = (self.home if receipts_in_home else self.dir) / "justificatifs"
         self.thumbs_dir = (self.receipts_dir if self.home == self.dir else self.dir) / ".vignettes"
@@ -169,12 +207,17 @@ class Database:
         self.engine = create_engine(f"sqlite:///{self.path}", connect_args={"check_same_thread": False})
 
         @event.listens_for(self.engine, "connect")
-        def _fk(conn, _):
-            conn.execute("PRAGMA foreign_keys=ON")
+        def _settings(conn, _):
+            # Réglages écrits noir sur blanc (ne pas dépendre de ceux par défaut de la bibliothèque SQLite) :
+            #  - un seul fichier « compta.db » au repos (pas de fichiers -wal / -shm à côté, qu'un dossier
+            #    synchronisé recopierait séparément) ;
+            #  - chaque enregistrement est écrit pour de bon sur le disque avant de rendre la main ;
+            #  - si la base est occupée un instant, on patiente 5 secondes au lieu d'échouer.
+            for pragma in SQLITE_SETTINGS:
+                conn.execute(f"PRAGMA {pragma}").fetchall()
             conn.create_function("unaccent", 1, lambda v: sort_key(v or ""), deterministic=True)
 
-        Base.metadata.create_all(self.engine)
-        self._migrate()
+        self._open_structure()
         self._remember_version()
         self.Session = sessionmaker(self.engine, expire_on_commit=False)
 
@@ -185,9 +228,9 @@ class Database:
             self.engine.dispose()
         except Exception:
             pass
-        d, v, h, r = self._args
+        d, v, h, r, sc = self._args
         self.__init__(data_dir if data_dir is not None else d, v, h,
-                      receipts_in_home if receipts_in_home is not None else r)
+                      receipts_in_home if receipts_in_home is not None else r, sc)
 
     def _remember_version(self):
         with self.engine.begin() as c:              # écrire seulement si elle change (sinon la base « bouge » pour rien)
@@ -219,121 +262,19 @@ class Database:
         except Exception:
             return None
 
-    # Colonnes ajoutées après la première version : on les crée dans les bases existantes.
-    MIGRATIONS = {
-        "participants": {"family_id": "INTEGER", "companion": "BOOLEAN NOT NULL DEFAULT 0",
-                         "roles": "VARCHAR(100) NOT NULL DEFAULT ''"},
-        "categories": {"audience": "VARCHAR(20) NOT NULL DEFAULT ''"},
-        "expenses": {"kind": "VARCHAR(20) NOT NULL DEFAULT 'depense'", "refund": "INTEGER",
-                     "refund_to_id": "INTEGER", "subcategory": "VARCHAR(100) NOT NULL DEFAULT ''",
-                     "tickets": "TEXT NOT NULL DEFAULT ''", "cents_mode": "VARCHAR(20) NOT NULL DEFAULT ''",
-                     "cents_who": "TEXT NOT NULL DEFAULT ''"},
-        "expense_shares": {"fixed": "INTEGER"},
-        "trips": {"note": "TEXT NOT NULL DEFAULT ''", "cashier_id": "INTEGER", "asso_name": "VARCHAR(100) NOT NULL DEFAULT ''",
-                  "is_demo": "BOOLEAN NOT NULL DEFAULT 0", "groups": "TEXT NOT NULL DEFAULT ''",
-                  "roles_conf": "TEXT NOT NULL DEFAULT ''",
-                  "rounding": "VARCHAR(20) NOT NULL DEFAULT 'participants'"},
-    }
-
-    def _migrate(self):
+    def _open_structure(self):
+        """Crée les tables qui manquent, ajoute les colonnes qui manquent, puis écrit le numéro de structure.
+        Rien de propre à une ancienne version ici : la base est simplement alignée sur les modèles (models.py)."""
+        Base.metadata.create_all(self.engine)
         with self.engine.begin() as c:
-            for table, cols in self.MIGRATIONS.items():
-                have = {r[1] for r in c.exec_driver_sql(f"PRAGMA table_info({table})")}
-                for col, ddl in cols.items():
-                    if col not in have:
-                        c.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
-                        if (table, col) == ("trips", "asso_name"):   # chaque voyage garde le nom commun d'avant
-                            c.exec_driver_sql("UPDATE trips SET asso_name = COALESCE((SELECT substr(trim(value), 1, 100) "
-                                              "FROM settings WHERE key = 'nom_asso'), '')")
-            self._migrate_roles(c)
-            self._migrate_dp(c)
-            self._migrate_fixed_adjustments(c)
-
-    @staticmethod
-    def _migrate_roles(c):
-        """Une seule fois : plongeur et accompagnant deviennent des rôles (« roles »), à partir de « companion »."""
-        tables = {r[0] for r in c.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")}
-        if "settings" not in tables or "participants" not in tables:
-            return
-        if c.exec_driver_sql("SELECT 1 FROM settings WHERE key='roles_plongeur'").first():
-            return
-        for pid, roles, comp in c.exec_driver_sql("SELECT id, roles, companion FROM participants").fetchall():
-            rs = [r for r in (roles or "").split(",") if r]
-            if "plongeur" not in rs and "accompagnant" not in rs:
-                rs.insert(0, "accompagnant" if comp else "plongeur")
-                c.exec_driver_sql("UPDATE participants SET roles=? WHERE id=?", (",".join(rs), pid))
-        c.exec_driver_sql("INSERT INTO settings (key, value) VALUES ('roles_plongeur', '1')")
-
-    @staticmethod
-    def _migrate_dp(c):
-        """L'ancien rôle « DP » (directeur de plongée, prévu d'office) devient une étiquette ordinaire « DP » du voyage,
-        seulement là où quelqu'un l'a (mêmes personnes ; les dépenses ne changent pas). Sans effet la 2e fois."""
-        import json
-        tables = {r[0] for r in c.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")}
-        if not {"trips", "participants"} <= tables:
-            return
-        cols = {r[1] for r in c.exec_driver_sql("PRAGMA table_info(trips)")}
-        if "roles_conf" not in cols:
-            return
-        for tid, raw in c.exec_driver_sql("SELECT id, roles_conf FROM trips").fetchall():
-            try:
-                conf = json.loads(raw) if raw else {}
-            except ValueError:
-                conf = {}
-            if not isinstance(conf, dict):
-                conf = {}
-            changed = False
-            if "dp" in (conf.get("masques") or []):
-                conf["masques"] = [x for x in conf["masques"] if x != "dp"]
-                changed = True
-            rows = [(pid, [r for r in (roles or "").split(",") if r]) for pid, roles in
-                    c.exec_driver_sql("SELECT id, roles FROM participants WHERE trip_id=?", (tid,)).fetchall()]
-            rows = [(pid, rs) for pid, rs in rows if "dp" in rs]
-            if rows:
-                perso = [str(x) for x in conf.get("perso") or []]
-                name = next((n for n in perso if n.strip().lower() == "dp"), None)
-                if name is None:
-                    name = "DP"
-                    perso.append(name)
-                    conf["perso"] = perso
-                    changed = True
-                for pid, rs in rows:
-                    new = ",".join(dict.fromkeys(f"perso:{name}" if r == "dp" else r for r in rs))
-                    c.exec_driver_sql("UPDATE participants SET roles=? WHERE id=?", (new, pid))
-            if changed:
-                c.exec_driver_sql("UPDATE trips SET roles_conf=? WHERE id=?", (json.dumps(conf, ensure_ascii=False), tid))
-
-    @staticmethod
-    def _migrate_fixed_adjustments(c):
-        """Une seule fois : un ajustement « montant fixé sur une dépense, compensé par les autres » devient
-        un montant fixé 🔒 dans la dépense elle-même (même calcul : le reste est réparti entre les autres)."""
-        tables = {r[0] for r in c.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")}
-        if not {"settings", "adjustments", "expense_shares"} <= tables:
-            return
-        if c.exec_driver_sql("SELECT 1 FROM settings WHERE key='fixed_shares'").first():
-            return
-        rows = c.exec_driver_sql("SELECT id, participant_id, expense_id, value FROM adjustments "
-                                 "WHERE expense_id IS NOT NULL AND fixed = 1 AND compensation = 'others' "
-                                 "ORDER BY id").fetchall()
-        for aid, pid, eid, value in rows:
-            hit = c.exec_driver_sql("UPDATE expense_shares SET fixed=? WHERE expense_id=? AND participant_id=?",
-                                    (value, eid, pid))
-            if hit.rowcount:
-                c.exec_driver_sql("DELETE FROM adjustments WHERE id=?", (aid,))
-        # Anciennes dépenses en « montants différents » (le poids de chacun = son montant en centimes) :
-        # chaque montant devient un montant fixé 🔒 (mêmes parts, et la somme tombe juste).
-        exps = c.exec_driver_sql("SELECT id, COALESCE(actual, planned), COALESCE(refund, 0) FROM expenses").fetchall()
-        for eid, total, refund in exps:
-            shares = c.exec_driver_sql("SELECT participant_id, weight, fixed FROM expense_shares WHERE expense_id=?",
-                                       (eid,)).fetchall()
-            ws = [w for _, w, fx in shares if fx is None]
-            if (not total or refund or len(ws) != len(shares) or len(set(ws)) < 2
-                    or round(sum(ws)) != total or any(w != int(w) for w in ws)):
-                continue
-            for pid, w, _ in shares:
-                c.exec_driver_sql("UPDATE expense_shares SET fixed=?, weight=1 WHERE expense_id=? AND participant_id=?",
-                                  (int(w), eid, pid))
-        c.exec_driver_sql("INSERT INTO settings (key, value) VALUES ('fixed_shares', '1')")
+            if int(c.exec_driver_sql("PRAGMA user_version").scalar() or 0) == self.schema:
+                return
+            for table in Base.metadata.sorted_tables:
+                have = {r[1] for r in c.exec_driver_sql(f'PRAGMA table_info("{table.name}")')}
+                for col in table.columns:
+                    if col.name not in have:
+                        c.exec_driver_sql(f'ALTER TABLE "{table.name}" ADD COLUMN {_column_ddl(col, self.engine)}')
+            c.exec_driver_sql(f"PRAGMA user_version = {int(self.schema)}")
 
     # ---------------------------------------------------------- sauvegardes
     def _recover(self) -> dict:
@@ -421,11 +362,10 @@ class Database:
         self.mark_writer()
 
     def after_replace(self):
-        """La base a été remplacée sur le disque (Annuler, version reprise du dossier synchronisé) : on la rouvre
-        et on la met à niveau si elle vient d'une version plus ancienne."""
+        """La base a été remplacée sur le disque (Annuler, version reprise du dossier synchronisé) : on la rouvre,
+        alignée sur la structure de cette version."""
         self.engine.dispose()
-        Base.metadata.create_all(self.engine)
-        self._migrate()
+        self._open_structure()
 
     def drop_last_snapshot(self):
         """Supprime le dernier instantané (opération finalement annulée / en erreur)."""
