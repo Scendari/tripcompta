@@ -193,7 +193,7 @@ def test_browser_pick_and_autofill(env):
             pg.locator("#a-name").dispatch_event("change")
             assert pg.locator("#a-phone").input_value() == "06 22 22 22 22"
             assert pg.locator("#add-form input[name=r_accompagnant]").is_checked()
-            pg.locator("#add-form").get_by_role("button", name="Ajouter").click()
+            pg.locator("#add-form").get_by_role("button", name="Ajouter", exact=True).click()
             pg.wait_for_load_state()
             br.close()
     finally:

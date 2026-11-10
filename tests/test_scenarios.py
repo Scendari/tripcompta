@@ -36,8 +36,12 @@ class Orga:
         return r
 
     def flash(self, r):
-        m = re.search(r'<div class="flash"[^>]*>(.*?)</div>', r.text, re.S)
+        m = re.search(r'<div class="flash[^"]*"[^>]*>(.*?)</div>', r.text, re.S)   # vert (réussite) ou rouge (refus)
         return m.group(1).strip() if m else None
+
+    def refused(self, r):
+        """Le message affiché est un refus : bandeau rouge, annoncé comme une alerte."""
+        return bool(re.search(r'<div class="flash err" role="alert">', r.text))
 
     def create_trip(self, name, people):
         r = self.c.post("/voyages", data={"name": name, "start": "2027-06-01", "end": "2027-06-03"})
@@ -216,6 +220,7 @@ def test_mistakes_are_caught_with_clear_messages(app):
     # montant illisible
     r = o.post("/depenses", {"label": "Gîte", "actual": "douze", f"inc_{o.P['Anne']}": "1"}, referer=ref)
     assert "Montant invalide" in o.flash(r) and r.url.path.endswith("/depenses/nouvelle")
+    assert o.refused(r)                                        # en rouge, pas dans le bandeau vert des réussites
     # montant négatif
     r = o.post("/depenses", {"label": "Gîte", "actual": "-12", f"inc_{o.P['Anne']}": "1"}, referer=ref)
     assert "positif" in o.flash(r)
@@ -314,7 +319,7 @@ def test_entre_nous_is_isolated(app):
     assert "Resto" not in o.c.get(f"/v/{o.tid}/export.pdf").text
     # un compte d'une seule personne est refusé
     r = o.post("/entre-nous", {"name": "Solo", "members": [o.P["Anne"]]})
-    assert "au moins 2" in o.flash(r)
+    assert "au moins 2" in o.flash(r) and o.refused(r)
 
 
 # --------------------------------------------------------------------------- scénario 8

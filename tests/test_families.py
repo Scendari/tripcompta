@@ -347,7 +347,7 @@ def test_browser_family_screens(fam_server):
         pg.fill("#a-name", "Pia Lebrun")
         pg.click("#add-form label:has-text('Lebrun')")                 # famille existante : une pastille
         pg.check('#add-form input[name="r_accompagnant"]')
-        pg.click("#add-form button:has-text('Ajouter')")
+        pg.click("#add-form button:text-is('Ajouter')")
         assert "dans la famille Lebrun" in pg.locator(".flash").inner_text()
         # proposition : les dépenses de tout le monde et celle des accompagnants (pas les plongées), rien de coché ;
         # « Tout cocher » les coche toutes

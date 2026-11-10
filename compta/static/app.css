@@ -18,6 +18,7 @@
   --ok-bg:       #dff3e6;
   --blue-bg:     #e1edf8;
   --err-bg:      #fbe3df;
+  --err:         #a12a2a;
   --shadow:      0 6px 22px rgba(60,50,30,.10);
   --radius:      12px;
 }
@@ -26,14 +27,14 @@
     --bg: #07111f; --bg-2: #0d2137; --bg-3: #1a4d7a; --card: #0f1e30; --border: #1e3a55;
     --text: #e8f4f8; --muted: #8ab0c8; --teal: #1fada8; --teal-strong: #4ecdc4; --accent: #13716d; --ocean: #5aa3dd;
     --coral: #ff6b6b; --amber: #f0b45a; --amber-bg: #3a2c12; --ok: #3ccf7f; --ok-bg: #1a3d2a;
-    --blue-bg: #13304d; --err-bg: #3d1a1a; --shadow: 0 8px 28px rgba(0,0,0,.45);
+    --blue-bg: #13304d; --err-bg: #3d1a1a; --err: #ffa3a3; --shadow: 0 8px 28px rgba(0,0,0,.45);
   }
 }
 :root[data-theme="dark"] {
   --bg: #07111f; --bg-2: #0d2137; --bg-3: #1a4d7a; --card: #0f1e30; --border: #1e3a55;
   --text: #e8f4f8; --muted: #8ab0c8; --teal: #1fada8; --teal-strong: #4ecdc4; --accent: #13716d; --ocean: #5aa3dd;
   --coral: #ff6b6b; --amber: #f0b45a; --amber-bg: #3a2c12; --ok: #3ccf7f; --ok-bg: #1a3d2a;
-  --blue-bg: #13304d; --err-bg: #3d1a1a; --shadow: 0 8px 28px rgba(0,0,0,.45);
+  --blue-bg: #13304d; --err-bg: #3d1a1a; --err: #ffa3a3; --shadow: 0 8px 28px rgba(0,0,0,.45);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -825,7 +826,12 @@ textarea.modele.modele-libre { min-height: 11rem; height: 14rem; }
 .data-card { max-width: 760px; margin-bottom: 1rem; }
 .data-path { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9rem; background: var(--bg-2); padding: .5rem .7rem; border-radius: 8px; margin: .3rem 0; word-break: break-all; }
 .warn-box { background: var(--amber-bg); border-radius: 8px; padding: .6rem .8rem; }
-.flash.err { background: var(--err-bg); color: var(--coral); }
+.flash.err { background: var(--err-bg); color: var(--err); box-shadow: inset 0 0 0 1.5px var(--err); }
+.flash-ico { flex: none; }
+.add-many { margin-top: .9rem; border-top: 1px solid var(--border); padding-top: .7rem; }
+.add-many > summary { list-style: none; display: inline-block; }
+.add-many > summary::-webkit-details-marker { display: none; }
+.add-many textarea { width: 100%; }
 .flash.warn { background: var(--amber-bg); color: var(--text); font-weight: 500; }
 .mail-card { margin-top: 1rem; }
 .mail-preview pre.msg { white-space: pre-wrap; font-family: inherit; font-size: .88rem; background: var(--bg-2); padding: .6rem .8rem; border-radius: 8px; margin: .4rem 0 0; max-height: 26rem; overflow: auto; }

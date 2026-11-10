@@ -40,9 +40,21 @@
     </div>
     <div class="row" style="margin-top:.6rem;gap:.5rem;justify-content:flex-end">
       <button type="button" class="btn small ghost" onclick="this.closest('details').open=false">Fermer</button>
-      <button class="btn small">Ajouter</button>
+      {# « Ajouter » reste le bouton de la touche Entrée (premier dans la page), affiché en dernier #}
+      <button class="btn small" style="order:1">Ajouter</button>
+      <button class="btn small ghost" name="again" value="1" title="Ajoute cette personne et garde ce formulaire ouvert pour la suivante">Ajouter et continuer</button>
     </div>
   </form>
+  <details class="add-many" id="ajout-liste" {{ 'open' if open_list }}>
+    <summary class="btn link small">Plusieurs personnes d'un coup</summary>
+    <form method="post" action="/v/{{ trip.id }}/participants" id="add-many-form">
+      <input type="hidden" name="roles_form" value="1">
+      <div class="field wide"><label for="a-names">Un nom par ligne <span class="hint">(tu peux coller une liste venue d'un tableur ou d'un message)</span></label>
+        <textarea id="a-names" name="names" rows="6" required placeholder="Alice Martin&#10;Bruno Petit&#10;Célia Roux">{{ list_text }}</textarea></div>
+      <p class="hint">Un nom déjà dans la liste n'est pas ajouté deux fois. Téléphone, e-mail, rôles, famille et groupes se remplissent ensuite, en cliquant sur chaque nom.</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn small">Ajouter la liste</button></div>
+    </form>
+  </details>
 </details>
 </div>
 {% if trip.participants %}

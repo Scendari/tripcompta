@@ -254,7 +254,7 @@ def test_first_time_user_only_clicks(server, browser):
             assert not page.is_visible("#a-name")
             page.click("summary:has-text('Ajouter un participant')")
         page.fill("#a-name", n)
-        page.click("#add-form button:has-text('Ajouter')")
+        page.click("#add-form button:text-is('Ajouter')")
         pw.expect(page.locator(".flash")).to_contain_text(f"{n} ajouté")
     # 3. Le tableau de bord me guide : « Aucune dépense saisie » -> lien
     page.click("nav >> text=Où j'en suis")

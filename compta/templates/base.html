@@ -77,7 +77,7 @@
     </nav>
   </aside>
   <main class="main {% block mainclass %}{% endblock %}">
-    {% if msg %}<div class="flash" role="status"><span>{{ msg }}</span>
+    {% if msg %}<div class="flash{{ ' err' if msg_err }}" role="{{ 'alert' if msg_err else 'status' }}">{% if msg_err %}<span class="flash-ico" aria-hidden="true">⚠️</span>{% endif %}<span>{{ msg }}</span>
       {% if undo_token %}<form method="post" action="/annuler" class="inline"><input type="hidden" name="d" value="{{ undo_token }}"><button class="btn small ghost" title="Défaire : {{ undo_label }}">↶ Défaire</button></form>{% endif %}
       {% if redo_token %}<form method="post" action="/retablir" class="inline"><input type="hidden" name="r" value="{{ redo_token }}"><button class="btn small ghost">↷ Rétablir</button></form>{% endif %}
     </div>{% endif %}
@@ -92,7 +92,7 @@
 {% else %}
 <div class="page-scroll">
 <main class="main" style="margin:0 auto">
-  {% if msg %}<div class="flash" role="status"><span>{{ msg }}</span>
+  {% if msg %}<div class="flash{{ ' err' if msg_err }}" role="{{ 'alert' if msg_err else 'status' }}">{% if msg_err %}<span class="flash-ico" aria-hidden="true">⚠️</span>{% endif %}<span>{{ msg }}</span>
       {% if undo_token %}<form method="post" action="/annuler" class="inline"><input type="hidden" name="d" value="{{ undo_token }}"><button class="btn small ghost" title="Défaire : {{ undo_label }}">↶ Défaire</button></form>{% endif %}
       {% if redo_token %}<form method="post" action="/retablir" class="inline"><input type="hidden" name="r" value="{{ redo_token }}"><button class="btn small ghost">↷ Rétablir</button></form>{% endif %}
     </div>{% endif %}

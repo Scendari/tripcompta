@@ -55,7 +55,7 @@ def test_every_screen_and_main_flows(server, page):
     page.fill("#a-name", "Paul")
     page.fill("#a-phone", "06 12 34 56 78")
     page.check('#add-form input[name="r_perso:DP"]')                  # « DP » : étiquette de ce voyage
-    page.click("#add-form button:has-text('Ajouter')")
+    page.click("#add-form button:text-is('Ajouter')")
     expect_flash(page, "Paul ajouté")
     # proposition : l'ajouter aussi aux dépenses de tout le monde (rien de coché) ; « Tout cocher », puis Ajouter
     pw.expect(page.locator("h1")).to_have_text("L'ajouter aussi à ces dépenses ?")
@@ -66,7 +66,7 @@ def test_every_screen_and_main_flows(server, page):
     page.click("summary:has-text('Ajouter un participant')")         # refermé après l'ajout : on le rouvre
     page.fill("#a-name", "Zoé")
     page.check("#add-form input[name=r_accompagnant]")
-    page.click("#add-form button:has-text('Ajouter')")
+    page.click("#add-form button:text-is('Ajouter')")
     expect_flash(page, "Zoé ajouté (accompagnant)")
     page.click("text=Pas maintenant")
     shot(page, "03_participants")
