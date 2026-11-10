@@ -33,7 +33,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: requirements*.txt
+          cache-dependency-path: |
+            requirements*.txt
+            constraints.txt
       - name: L'étiquette correspond à la version du code
         run: |
           python - <<'PY'
@@ -80,9 +82,6 @@ jobs:
           - os: windows-latest
             asset: TripCompta-windows-setup.exe
             exe: dist/TripCompta/TripCompta.exe
-          - os: ubuntu-22.04
-            asset: TripCompta-linux.tar.gz
-            exe: dist/TripCompta/TripCompta
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -90,7 +89,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: requirements*.txt
+          cache-dependency-path: |
+            requirements*.txt
+            constraints.txt
       # Mac Intel : le Python de GitHub y est lié à l'OpenSSL de Homebrew, fabriqué pour macOS 15 (l'app ne s'ouvrirait
       # pas sur un Mac Intel en macOS 13 ou 14). Celui de python.org embarque son propre OpenSSL (macOS 11 et plus).
       - name: "Python de python.org (Mac Intel)"
@@ -106,7 +107,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pyinstaller pytest httpx
       - name: "Sa propre fenêtre (Mac, Windows) : pywebview, et sous Windows pythonnet + WebView2"
-        if: runner.os != 'Linux'
         shell: bash
         run: |
           python -c "import webview; from compta import fenetre; assert fenetre.available(); print('pywebview', webview.__name__, 'OK')"
@@ -145,7 +145,6 @@ jobs:
           V="${GITHUB_REF_NAME#v}"
           python build_tools/smoke.py "${{ matrix.exe }}" "$V"
       - name: "La vraie fenêtre (Mac : WebKit ; Windows : WebView2 + .NET), en mode discret"
-        if: runner.os != 'Linux'
         shell: bash
         run: |
           V="$(python -c 'from compta import __version__; print(__version__)')-dev"
@@ -166,9 +165,6 @@ jobs:
           python build_tools/installeur_windows.py $V
           python build_tools/essai_installeur.py dist/TripCompta-windows-setup.exe $V
           Copy-Item dist/TripCompta-windows-setup.exe "${{ matrix.asset }}"
-      - name: Emballer (Linux)
-        if: runner.os == 'Linux'
-        run: tar -czf "${{ matrix.asset }}" -C dist "TripCompta"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
@@ -191,7 +187,7 @@ jobs:
         run: |
           sha256sum TripCompta-* > SHA256SUMS.txt
           cat SHA256SUMS.txt
-          test "$(ls TripCompta-* | wc -l)" -eq 4      # Mac ×2, Windows (installeur), Linux
+          test "$(ls TripCompta-* | wc -l)" -eq 3      # Mac ×2, Windows (installeur)
       - name: Créer la Release
         env:
           GH_TOKEN: ${{ github.token }}

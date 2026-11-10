@@ -1,4 +1,4 @@
-# Fabrique l'application sur les trois systèmes et vérifie qu'elle démarre (y compris la protection par mot de
+# Fabrique l'application pour Mac (Apple Silicon, Intel) et Windows et vérifie qu'elle démarre (y compris la protection par mot de
 # passe : chiffrement, redémarrage, déverrouillage), SANS rien publier. Les versions publiées : release.yml.
 name: Fabrication
 
@@ -9,6 +9,7 @@ on:
       - "build_tools/**"
       - ".github/workflows/fabrication.yml"
       - "requirements*.txt"
+      - "constraints.txt"
       - "compta/crypto.py"
       - "compta/coffre.py"
       - "compta/dossier.py"
@@ -37,8 +38,6 @@ jobs:
             exe: dist/TripCompta.app/Contents/MacOS/TripCompta
           - os: windows-latest
             exe: dist/TripCompta/TripCompta.exe
-          - os: ubuntu-22.04
-            exe: dist/TripCompta/TripCompta
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -46,7 +45,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: requirements*.txt
+          cache-dependency-path: |
+            requirements*.txt
+            constraints.txt
       # Mac Intel : le Python de GitHub y est lié à l'OpenSSL de Homebrew, fabriqué pour macOS 15 (l'app ne s'ouvrirait
       # pas sur un Mac Intel en macOS 13 ou 14). Celui de python.org embarque son propre OpenSSL (macOS 11 et plus).
       - name: "Python de python.org (Mac Intel)"
@@ -62,7 +63,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pyinstaller
       - name: "Sa propre fenêtre (Mac, Windows) : pywebview, et sous Windows pythonnet + WebView2"
-        if: runner.os != 'Linux'
         shell: bash
         run: |
           python -c "import webview; from compta import fenetre; assert fenetre.available(); print('pywebview', webview.__name__, 'OK')"
@@ -81,7 +81,6 @@ jobs:
           V="$(python -c 'from compta import __version__; print(__version__)')-dev"
           python build_tools/smoke.py "${{ matrix.exe }}" "$V"
       - name: "La vraie fenêtre (Mac : WebKit ; Windows : WebView2 + .NET), en mode discret"
-        if: runner.os != 'Linux'
         shell: bash
         run: |
           V="$(python -c 'from compta import __version__; print(__version__)')-dev"
