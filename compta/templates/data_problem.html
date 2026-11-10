@@ -24,5 +24,6 @@
   {% if retry %}<form method="post" action="/reessayer"><button class="btn">Réessayer</button></form>
   {% else %}<p>Ensuite, ferme puis relance Trip Compta.</p>{% endif %}
   <p class="small muted">Dossier des données : <span class="break">{{ folder }}</span></p>
+  <p class="small">Besoin d'aide ? <a href="/reglages/diagnostic.txt" download>Exporte un diagnostic</a> (un fichier texte, sans nom ni montant) et envoie-le à la personne qui t'aide.</p>
 </div>
 {% endblock %}

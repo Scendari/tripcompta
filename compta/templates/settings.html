@@ -65,7 +65,7 @@
         {% if available %} · <span class="ok-text">🎁 {{ available.version }} disponible</span>
         {% elif info.dev %} · version de développement
         {% elif checked %} · à jour (vérifié le {{ checked }}){% endif %}</span>
-      <span class="setting-hint">Nouveautés, vérification des mises à jour.</span>
+      <span class="setting-hint">Nouveautés, vérification des mises à jour, diagnostic à exporter en cas de problème.</span>
     </span>
     <span class="setting-go">{{ 'Installer' if available else 'Voir' }} ›</span>
   </a>

@@ -18,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from . import db as D
+from . import diagnostic as DIAG
 from . import engine as E
 from . import fichiers
 from . import journal
@@ -197,6 +198,13 @@ def _bare_app(updater) -> tuple[FastAPI, str]:
     def ping():
         return {"app": "tripcompta", "boot": boot, "version": updater.version}
 
+    app.state.problem = None              # (dossier, explication) : donné par l'écran qui explique le problème
+
+    @app.get("/reglages/diagnostic.txt")
+    def diagnostic_file():
+        folder, why = app.state.problem or (D.default_data_dir(), None)
+        return _diagnostic_response(DIAG.build(version=updater.label, folder=folder, problem=why))
+
     @app.post("/quitter", response_class=HTMLResponse)
     def quit_app():
         import threading
@@ -205,6 +213,11 @@ def _bare_app(updater) -> tuple[FastAPI, str]:
                             "<body style='font-family:system-ui;text-align:center;padding:4rem'>"
                             "<h1>Trip Compta est arrêté.</h1><p>Tu peux fermer cet onglet.</p></body>")
     return app, boot
+
+
+def _diagnostic_response(text: str) -> Response:
+    return Response(text, media_type="text/plain; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{DIAG.file_name()}"'})
 
 
 def _bare_page(request, updater, name, code=200, **ctx):
@@ -219,6 +232,8 @@ def data_problem_app(err: Exception, updater, restart=None) -> FastAPI:
     app, _ = _bare_app(updater)
     app.state.restart = restart
     damaged = isinstance(err, DamagedDatabaseError)
+    app.state.problem = (Path(err.path).parent, "le fichier des voyages est abîmé, sans sauvegarde lisible" if damaged
+                         else "le fichier des voyages est là, mais illisible pour l'instant (pas téléchargé ?)")
 
     @app.post("/reessayer", response_class=HTMLResponse)
     def retry(request: Request):
@@ -243,6 +258,7 @@ def newer_data_app(err: NewerDatabaseError, updater) -> FastAPI:
     from . import updater as U
     from . import version as V
     app, _ = _bare_app(updater)
+    app.state.problem = (err.path, f"voyages enregistrés par Trip Compta {err.stored}, plus récente que celle-ci")
 
     checked = []
 
@@ -470,7 +486,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         return None
 
     LOCKED_OK = ("/static", "/ping", "/deverrouiller", "/quitter", "/maj/", "/reglages/a-propos", "/favicon",
-                 "/fenetre/")
+                 "/fenetre/", "/reglages/diagnostic.txt")
 
     @app.middleware("http")
     async def daily_backup(request, call_next):
@@ -747,6 +763,19 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     @app.get("/reglages/a-propos", response_class=HTMLResponse)
     def about_page(request: Request):
         return _about(request)
+
+    @app.get("/reglages/diagnostic.txt")
+    def diagnostic_file():
+        """« Exporter un diagnostic » : état de l'application et des fichiers, sans nom ni montant."""
+        locked = bool(vault_box is not None and vault_box.locked)
+        extra = [f"vérification automatique des mises à jour : {'oui' if upd.auto else 'non'}",
+                 f"mise à jour disponible : {(upd.available() or {}).get('version') or 'non'}",
+                 "sauvegarde du jour : " + ("ÉCHEC le " + app.state.backup_failed if app.state.backup_failed else "faite")]
+        if app.state.misplaced:
+            extra.append(f"application ouverte hors du dossier Applications : {app.state.misplaced}")
+        journal.log.info("diagnostic exporté")
+        return _diagnostic_response(DIAG.build(version=upd.label, folder=db.home, db=db, source=data_source,
+                                               protected=vault_box is not None, locked=locked, extra=extra))
 
     @app.post("/reglages/verifier-maj")
     def check_now(request: Request):
