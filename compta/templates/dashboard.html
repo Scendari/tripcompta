@@ -23,7 +23,14 @@
 <section class="trip-info" aria-labelledby="h-trip">
   <div class="row section-head">
     <h2 id="h-trip">Le voyage <span class="muted" style="font-weight:500">· {{ trip.name }}</span></h2>
-    <button type="button" class="btn small ghost" data-toggle-row="#trip-edit" aria-expanded="false" aria-controls="trip-edit">✎ Modifier le voyage</button>
+    <span class="row trip-actions" style="gap:.4rem">
+      {% if not trip.closed_on %}<button type="button" class="btn small ghost" data-toggle-row="#trip-edit" aria-expanded="false" aria-controls="trip-edit">✎ Modifier le voyage</button>{% endif %}
+      <a class="btn small ghost" href="/v/{{ trip.id }}/dupliquer" title="Préparer un nouveau voyage à partir de celui-ci (le même l'an prochain, par exemple)">⧉ Dupliquer</a>
+      {% if not trip.closed_on and not trip.is_demo %}
+      <form method="post" action="/v/{{ trip.id }}/cloturer" class="inline" data-closed-ok data-confirm="Clôturer « {{ trip.name }} » ?{% if r.to_collect or r.to_refund %} Attention : tout n'est pas réglé ({% if r.to_collect %}reste à recevoir {{ r.to_collect|money }}{% endif %}{% if r.to_collect and r.to_refund %}, {% endif %}{% if r.to_refund %}reste à rembourser {{ r.to_refund|money }}{% endif %}).{% endif %} Ses comptes seront figés : plus de modification possible, mais tu pourras toujours le consulter, l'exporter, et le rouvrir.">
+        <button class="btn small ghost" title="Le voyage est fini et réglé : figer ses comptes">🔒 Clôturer</button></form>
+      {% endif %}
+    </span>
   </div>
   {% set o = trip.participants|selectattr('role_list', 'contains', 'organisateur')|list %}
   {% set co = trip.participants|selectattr('role_list', 'contains', 'co-organisateur')|list %}

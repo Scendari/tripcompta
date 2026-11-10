@@ -9,6 +9,7 @@ from pathlib import Path
 
 from . import models as M
 from . import engine as E
+from . import services as S
 from .ops import (GROUPS, FixedShare, OpsError, do_add_expense, do_add_movement, do_add_participants, do_adjust,
                   do_create_subaccount, do_fix_share,
                   do_create_trip, do_add_subexpense, do_delete_expense, do_delete_movement, do_update_expense,
@@ -138,6 +139,8 @@ def run_import(s, data, t: M.Trip | None, expected_id=None, require_id: bool = T
     """t = None : crée un nouveau voyage. Sinon, applique les changements au voyage t.
     expected_id : si donné, le JSON doit porter le même « voyage_id » (garde-fou contre un mauvais collage)."""
     data = parse(data)
+    if S.is_closed(t):
+        raise ImportErrors([S.CLOSED_MSG])
     groups = data.get("groupes") or {}
     if not isinstance(groups, dict) or not all(isinstance(v, (list, str)) for v in groups.values()):
         raise ImportErrors(["« groupes » doit être de la forme {\"covoit\": [\"Luc\", \"Marie\"], …}."])

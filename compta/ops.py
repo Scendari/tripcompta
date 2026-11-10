@@ -244,6 +244,7 @@ def trip_detail(t: M.Trip, mode=E.ACTUAL) -> dict:
     out = trip_summary(t, mode)
     out["note"] = t.note or ""
     out["comment_payer"] = S.pay_info(t)
+    out["cloture_le"] = t.closed_on.isoformat() if t.closed_on else None     # voyage clôturé : plus de modification
     out["points_a_verifier"] = [n["texte"] for n in S.ai_notes(t)]
     out["asso"] = S.trip_asso_name(t)
     out["groupes"] = {g["name"]: [p.name for p in g["members"]] for g in S.trip_groups(t)}
@@ -826,6 +827,8 @@ class Ops:
         snapped = False
         try:
             t = get_trip(s, trip_id) if trip_id is not None else None
+            if S.is_closed(t):
+                raise OpsError(S.CLOSED_MSG)
             before = balances(t) if t else {}
             if not simulation:
                 self.db.snapshot(label)

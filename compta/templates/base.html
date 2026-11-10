@@ -91,7 +91,12 @@
       <a href="/">← Tous les voyages</a>
     </nav>
   </aside>
-  <main class="main {% block mainclass %}{% endblock %}">
+  <main class="main {% block mainclass %}{% endblock %}"{% if trip.closed_on %} data-closed="1"{% endif %}>
+    {% if trip.closed_on %}<div class="closed-banner" role="note" id="voyage-cloture"><span>🔒 <b>Voyage clôturé le {{ trip.closed_on|date }}.</b> Ses comptes sont figés : tu peux tout consulter et exporter, mais plus rien modifier.</span>
+      <span class="row" style="gap:.4rem">
+        <a class="btn small ghost" href="/v/{{ trip.id }}/dupliquer">⧉ Dupliquer</a>
+        <form method="post" action="/v/{{ trip.id }}/rouvrir" class="inline" data-closed-ok><button class="btn small ghost">Rouvrir le voyage</button></form>
+      </span></div>{% endif %}
     {% if msg %}<div class="flash{{ ' err' if msg_err }}" role="{{ 'alert' if msg_err else 'status' }}">{% if msg_err %}<span class="flash-ico" aria-hidden="true">⚠️</span>{% endif %}<span>{{ msg }}</span>
       {% if undo_token %}<form method="post" action="/annuler" class="inline"><input type="hidden" name="d" value="{{ undo_token }}"><button class="btn small ghost" title="Défaire : {{ undo_label }}">↶ Défaire</button></form>{% endif %}
       {% if redo_token %}<form method="post" action="/retablir" class="inline"><input type="hidden" name="r" value="{{ redo_token }}"><button class="btn small ghost">↷ Rétablir</button></form>{% endif %}

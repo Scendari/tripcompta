@@ -78,10 +78,9 @@ document.querySelectorAll('.home-panel [data-toggle-row]').forEach(function (b) 
 });
 homeButtons();
 </script>
-<div class="trip-grid">
-  {% for t, r in cards %}
+{% macro trip_card(t, r) %}
   <a class="card trip-card" href="/v/{{ t.id }}">
-    <h3>{{ t.name }}{% if t.is_demo %} <span class="pill grey demo-pill">Exemple</span>{% endif %}</h3>
+    <h3>{{ t.name }}{% if t.is_demo %} <span class="pill grey demo-pill">Exemple</span>{% endif %}{% if t.closed_on %} <span class="pill grey closed-pill">🔒 Clôturé</span>{% endif %}</h3>
     <div class="muted small">
       {% if t.start %}{{ t.start|date }}{% if t.end %} → {{ t.end|date }}{% endif %} · {% endif %}{{ t.participants|length }} participant{{ 's' if t.participants|length > 1 }}{% if t.place %} · {{ t.place }}{% endif %}
     </div>
@@ -96,8 +95,24 @@ homeButtons();
     </div>
     <div class="muted small" style="margin-top:.5rem">Coût : {{ r.total_cost|money }}</div>
   </a>
-  {% endfor %}
+{% endmacro %}
+{% set open_cards = cards|rejectattr('0.closed_on')|list %}
+{% set closed_cards = cards|selectattr('0.closed_on')|list %}
+{% if open_cards %}
+<div class="trip-grid">
+  {% for t, r in open_cards %}{{ trip_card(t, r) }}{% endfor %}
 </div>
+{% elif closed_cards %}
+<p class="muted">Aucun voyage en cours. « + Nouveau voyage » en crée un ; tes voyages clôturés sont juste dessous.</p>
+{% endif %}
+{% if closed_cards %}
+<details class="closed-trips" id="clotures"{{ ' open' if not open_cards }}>
+  <summary>🔒 Voyages clôturés ({{ closed_cards|length }})</summary>
+  <div class="trip-grid">
+    {% for t, r in closed_cards %}{{ trip_card(t, r) }}{% endfor %}
+  </div>
+</details>
+{% endif %}
 {% else %}
 <div class="home-first">
   <div class="page-head"><div class="grow">

@@ -630,6 +630,27 @@
   function showWindowOnly() { document.querySelectorAll("[data-window-only]").forEach((n) => { n.hidden = !inWindow(); }); }
   showWindowOnly();
   window.addEventListener("pywebviewready", showWindowOnly);
+  // Voyage clôturé : les formulaires qui modifient sont éteints (le serveur les refuse de toute façon)
+  const closed = document.querySelector("main[data-closed]");
+  if (closed) {
+    closed.querySelectorAll('form[method="post" i]:not([data-closed-ok])').forEach((f) => {
+      if (/apercu$/.test(f.getAttribute("action") || "")) return;
+      f.querySelectorAll("button, input, select, textarea").forEach((el) => {
+        el.disabled = true;
+        if (el.tagName === "BUTTON") el.title = "Voyage clôturé : rouvre-le pour le modifier";
+      });
+    });
+    // … et les boutons qui ne font qu'ouvrir un de ces formulaires (« ✓ Reçu », « Modifier »…)
+    const off = 'form[method="post" i]:not([data-closed-ok])';
+    closed.querySelectorAll("[data-toggle-row]").forEach((b) => {
+      let t = null;
+      try { t = document.querySelector(b.dataset.toggleRow); } catch (e) { /* sélecteur inattendu : on laisse */ }
+      if (t && (t.matches(off) || t.querySelector(off) || t.closest(off))) {
+        b.disabled = true;
+        b.title = "Voyage clôturé : rouvre-le pour le modifier";
+      }
+    });
+  }
   // Ctrl/Cmd + Z, hors d'un champ de saisie (où il annule la frappe) : les dernières modifications, pour défaire
   document.addEventListener("keydown", (e) => {
     if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== "z") return;

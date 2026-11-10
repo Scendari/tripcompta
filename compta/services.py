@@ -1149,6 +1149,39 @@ def whatsapp_number(phone: str) -> str:
     return digits
 
 
+CLOSED_MSG = "Ce voyage est clôturé : il ne peut plus être modifié. Rouvre-le d'abord (page « Où j'en suis »)."
+
+
+def is_closed(trip: M.Trip) -> bool:
+    """Voyage clôturé : ses comptes sont figés (plus aucune modification tant qu'il n'est pas rouvert)."""
+    return trip is not None and trip.closed_on is not None
+
+
+def close_trip(trip: M.Trip, today: dt.date | None = None) -> None:
+    trip.closed_on = today or dt.date.today()
+
+
+def reopen_trip(trip: M.Trip) -> None:
+    trip.closed_on = None
+
+
+def next_trip_name(name: str, existing=()) -> str:
+    """Nom proposé pour la copie d'un voyage : l'année du nom avance d'un an (« Hendaye 2026 » → « Hendaye 2027 ») ;
+    sans année, « … (copie) ». Jamais un nom déjà pris."""
+    import re
+    years = list(re.finditer(r"(?<!\d)(20\d\d)(?!\d)", name))
+    if years:
+        m = years[-1]
+        new = name[:m.start()] + str(int(m.group(1)) + 1) + name[m.end():]
+    else:
+        new = f"{name} (copie)"
+    taken = {E.sort_key(x) for x in existing}
+    base, n = new, 2
+    while E.sort_key(new) in taken:
+        new, n = f"{base} ({n})", n + 1
+    return new[:200]
+
+
 AI_NOTES_MAX = 40
 
 

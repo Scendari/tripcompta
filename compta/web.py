@@ -451,6 +451,21 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
                     s_.commit()
         return response
 
+    CLOSED_OK = re.compile(r"^/v/\d+/(rouvrir|dupliquer|supprimer|exemple/\w+|[\w/-]*apercu)$")
+
+    @app.middleware("http")
+    async def closed_trip_guard(request, call_next):
+        """Voyage clôturé : plus aucune modification depuis l'écran (sauf le rouvrir, le dupliquer, le supprimer)."""
+        if request.method == "POST":
+            m = re.match(r"^/v/(\d+)/", request.url.path)
+            if m and not CLOSED_OK.match(request.url.path) and not (vault_box is not None and vault_box.locked):
+                with db.Session() as s_:
+                    t_ = s_.get(M.Trip, int(m.group(1)))
+                    closed = S.is_closed(t_)
+                if closed:
+                    return refuse(f"/v/{m.group(1)}", S.CLOSED_MSG)
+        return await call_next(request)
+
     @app.middleware("http")
     async def remember_snapshot(request, call_next):
         # (dernière action défaisable avant la requête, heure de début au format des sauvegardes d'annulation)
@@ -1801,6 +1816,62 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         t.end = S.parse_date(f.get("end"))
         s.commit()
         return back(f"/v/{tid}", "Voyage modifié")
+
+    # ------------------------------------------------------------------ clôturer, rouvrir, dupliquer
+    @app.post("/v/{tid}/cloturer")
+    def trip_close(tid: int, s: Session = Depends(get_s)):
+        t = trip_or_404(s, tid)
+        db.snapshot(f"clôture du voyage « {t.name} »")
+        S.close_trip(t)
+        s.commit()
+        return back(f"/v/{tid}", "Voyage clôturé : ses comptes sont figés. Tu peux toujours le consulter, "
+                                 "l'exporter, et le rouvrir si besoin.")
+
+    @app.post("/v/{tid}/rouvrir")
+    def trip_reopen(tid: int, s: Session = Depends(get_s)):
+        t = trip_or_404(s, tid)
+        if not S.is_closed(t):
+            return back(f"/v/{tid}", "Ce voyage est déjà ouvert")
+        db.snapshot(f"réouverture du voyage « {t.name} »")
+        S.reopen_trip(t)
+        s.commit()
+        return back(f"/v/{tid}", "Voyage rouvert : tu peux de nouveau le modifier")
+
+    @app.get("/v/{tid}/dupliquer", response_class=HTMLResponse)
+    def trip_duplicate_page(tid: int, request: Request, s: Session = Depends(get_s)):
+        t = trip_or_404(s, tid)
+        wd = {w.participant_id for w in t.withdrawals}
+        return render(request, "duplicate.html", trip=t, r=S.compute_trip(t),
+                      proposed=S.next_trip_name(t.name, [x.name for x in s.query(M.Trip).all()]),
+                      n_people=len(t.participants), n_withdrawn=len(wd), n_expenses=len(t.expenses))
+
+    @app.post("/v/{tid}/dupliquer")
+    async def trip_duplicate(tid: int, request: Request, s: Session = Depends(get_s)):
+        t = trip_or_404(s, tid)
+        f = await request.form()
+        name = (f.get("name") or "").strip()[:200]
+        if not name:
+            return refuse(f"/v/{tid}/dupliquer", "Donne un nom au nouveau voyage", "name")
+        if any(E.sort_key(x.name) == E.sort_key(name) for x in s.query(M.Trip).all()):
+            return refuse(f"/v/{tid}/dupliquer", f"Un voyage s'appelle déjà « {name} » : choisis un autre nom", "name")
+        start, end = S.parse_date(f.get("start")), S.parse_date(f.get("end"))
+        if start and end and end < start:
+            return refuse(f"/v/{tid}/dupliquer", "La date de fin est avant la date de début", "end")
+        people, expenses = bool(f.get("participants")), bool(f.get("depenses"))
+        db.snapshot(f"voyage « {name} » créé à partir de « {t.name} »")
+        new = TR.duplicate_trip(s, t, name, start, end, with_people=people, with_expenses=expenses)
+        s.commit()
+        S.store_draws(new)
+        s.commit()
+        parts = []
+        if people:
+            n = len(new.participants)
+            parts.append(f"{n} participant{'s' if n > 1 else ''}")
+        if expenses:
+            n = len(new.expenses)
+            parts.append(f"{n} dépense{'s' if n > 1 else ''} reprise{'s' if n > 1 else ''} comme montant{'s' if n > 1 else ''} prévu{'s' if n > 1 else ''}")
+        return back(f"/v/{new.id}", f"Voyage « {new.name} » créé à partir de « {t.name} »"
+                    + (" : " + ", ".join(parts) if parts else "") + ". Rien n'a changé dans l'ancien voyage.")
 
     @app.post("/v/{tid}/supprimer")
     def delete_trip(tid: int, s: Session = Depends(get_s)):

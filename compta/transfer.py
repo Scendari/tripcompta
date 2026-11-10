@@ -154,6 +154,45 @@ def _new(model, row: dict, **override):
     return model(**kw)
 
 
+def duplicate_trip(s, t: M.Trip, name: str, start=None, end=None, with_people: bool = True,
+                   with_expenses: bool = True) -> M.Trip:
+    """Un nouveau voyage préparé à partir de `t` (le voyage de l'an passé) : réglages, catégories, et si on le
+    demande les participants (avec familles, étiquettes et groupes) et les dépenses, reprises comme MONTANTS PRÉVUS
+    (le dernier montant connu devient l'estimation ; rien n'est payé). Ne sont jamais repris : l'argent reçu et
+    rendu, les justificatifs, les désistements, les remises et suppléments, les comptes « Entre nous »."""
+    v = trip_data(t)
+    tv = v["voyage"]
+    tv.update(name=name, start=start.isoformat() if start else None, end=end.isoformat() if end else None,
+              is_demo=False, ai_notes="", closed_on=None)
+    if not with_people:
+        v["participants"], v["familles"] = [], []
+        tv["cashier_id"] = None
+    if with_expenses:
+        best = {e.id: e.best_known() for e in t.expenses}
+        pending = {e.id for e in t.expenses if e.pending}
+        for row in v["depenses"]:
+            row.update(planned=None if row["id"] in pending else best[row["id"]], actual=None, date=None,
+                       tickets="", refund=None, refund_to_id=None, cents_who="", cents_mode=row.get("cents_mode") or "")
+            if not with_people:
+                row["payer_id"] = None
+        for row in v["parts"]:
+            row["fixed"] = row.get("fixed")          # les montants fixés restent des estimations, comme le reste
+        if not with_people:
+            v["parts"] = []
+    else:
+        v["depenses"], v["parts"] = [], []
+    for key in ("paiements", "ajustements", "desistements", "mouvements", "justificatifs", "liens_justificatifs",
+                "entre_nous", "entre_nous_depenses", "entre_nous_virements"):
+        v[key] = []
+    empty = zipfile.ZipFile(io.BytesIO(), "w")
+    try:
+        new = import_trip(s, v, empty, Path("."))
+    finally:
+        empty.close()
+    s.flush()
+    return new
+
+
 def _ids(csv: str, m: dict) -> str:
     return ",".join(str(m[int(x)]) for x in (csv or "").split(",") if x.strip().isdigit() and int(x) in m)
 

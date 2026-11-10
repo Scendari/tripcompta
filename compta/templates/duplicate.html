@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div class="grow">
+  <h1>⧉ Dupliquer ce voyage</h1>
+  <p class="muted">Pour préparer un nouveau voyage à partir de « {{ trip.name }} » : le même l'an prochain, par exemple. L'ancien voyage ne change pas.</p>
+</div><a class="btn ghost small" href="/v/{{ trip.id }}">← Retour</a></div>
+
+<form method="post" action="/v/{{ trip.id }}/dupliquer" class="card" style="max-width:720px" data-closed-ok data-dirty>
+  <div class="form-grid">
+    <div class="field wide"><label for="d-name">Nom du nouveau voyage</label>
+      <input id="d-name" type="text" name="name" required maxlength="200" value="{{ proposed }}" data-focus></div>
+    <div class="field"><label for="d-start">Du <span class="hint">(facultatif)</span></label><input id="d-start" type="date" name="start" data-no-today></div>
+    <div class="field"><label for="d-end">Au <span class="hint">(facultatif)</span></label><input id="d-end" type="date" name="end" data-no-today></div>
+  </div>
+  <fieldset class="home-ask" style="margin-top:.8rem">
+    <legend>Que reprendre ?</legend>
+    <label class="home-check"><input type="checkbox" name="participants" value="1" {{ 'checked' if n_people }} {{ 'disabled' if not n_people }}>
+      <span><b>Les participants</b> ({{ n_people }}{% if n_withdrawn %}, dont {{ n_withdrawn }} qui s'étai{{ 'en' if n_withdrawn > 1 }}t désisté{{ 's' if n_withdrawn > 1 }}{% endif %}), avec leurs familles et leurs étiquettes. Tu pourras en retirer et en ajouter ensuite.</span></label>
+    <label class="home-check"><input type="checkbox" name="depenses" value="1" {{ 'checked' if n_expenses }} {{ 'disabled' if not n_expenses }}>
+      <span><b>Les dépenses</b> ({{ n_expenses }}), comme <b>montants prévus</b> : ce qui a été payé cette fois-ci devient l'estimation de la prochaine. Rien n'est marqué payé.</span></label>
+  </fieldset>
+  <p class="hint" style="margin:.7rem 0">Toujours repris : les catégories, qui tient la caisse, « Comment payer ». Jamais repris : l'argent reçu et rendu, les justificatifs, les désistements, les remises et suppléments, les comptes « Entre nous ».</p>
+  <div class="row" style="gap:.5rem"><button class="btn">Créer le nouveau voyage</button>
+    <a class="btn ghost" href="/v/{{ trip.id }}">Annuler</a></div>
+</form>
+{% endblock %}
