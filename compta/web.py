@@ -25,6 +25,7 @@ from . import fichiers
 from . import journal
 from . import models as M
 from . import services as S
+from . import writes as W
 from .db import (Database, DamagedDatabaseError, DataUnavailableError, NewerDatabaseError, human_when,
                  stored_version)
 
@@ -748,11 +749,13 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
         return v
 
     @app.exception_handler(FormError)
-    async def form_error(request: Request, exc: FormError):
+    async def form_error(request: Request, exc: Exception):
         ref = request.headers.get("referer") or "/"
         u = urlparse(ref)
         path = u.path + (("?" + re.sub(r"&?(msg|e)=[^&]*", "", u.query).lstrip("&")) if u.query else "")
         return refuse(path.rstrip("?"), str(exc), getattr(exc, "field", None))
+
+    app.state.form_refusal = form_error        # une écriture refusée (writes.WriteError) depuis un formulaire
 
     def names(trip):
         return {p.id: p.name for p in trip.participants}
@@ -1833,17 +1836,12 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
         if f.get("caisse") == "personne" and not holder:
             return refuse("/?nouveau=1", "Écris le nom de la personne qui tient la caisse", "cashier_name")
         db.snapshot(f"création du voyage « {name} »")
-        t = M.Trip(name=name, place=f.get("place", "").strip(), organizer=f.get("organizer", "").strip(),
-                   start=S.parse_date(f.get("start")), end=S.parse_date(f.get("end")))
-        S.start_trip(s, t, diving=bool(f.get("plongee")))
-        s.add(t)
-        s.flush()
+        t = W.create_trip(s, name, place=f.get("place", ""), organizer=f.get("organizer", ""),
+                          start=S.parse_date(f.get("start")), end=S.parse_date(f.get("end")),
+                          diving=bool(f.get("plongee")))
         who = ""
         if f.get("caisse") == "personne":           # pas d'association : une personne du voyage tient la caisse
-            p = M.Participant(trip_id=t.id, name=holder, roles="")
-            s.add(p)
-            s.flush()
-            S.set_roles(t, p, [S.DIVER] if S.is_diving(t) else [])
+            p = W.add_participant(s, t, holder, roles=[S.DIVER] if S.is_diving(t) else [])
             t.cashier_id = p.id
             who = f" {holder} tient la caisse."
         elif "asso_name" in f and str(f.get("asso_name") or "").strip():
@@ -2181,13 +2179,11 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
             return refuse(f"/v/{tid}/participants?ajout=1#ajout", "Coche au moins une personne")
         db.snapshot(f"reprise de {len(people)} participant(s) d'autres voyages")
         before = S.label_members(t)
-        added = [M.Participant(name=x["name"], phone=x["phone"], email=x["email"], companion=x["companion"])
-                 for x in people]
-        t.participants.extend(added)
-        s.flush()
-        for p in added:
-            dflt = S.COMPANION if p.companion else S.DIVER
-            S.set_roles(t, p, [dflt] if dflt in S.trip_roles(t) else [])
+        added = []
+        for x in people:
+            dflt = S.COMPANION if x["companion"] else S.DIVER
+            added.append(W.add_participant(s, t, x["name"], roles=[dflt] if dflt in S.trip_roles(t) else [],
+                                           companion=x["companion"], phone=x["phone"], email=x["email"]))
         s.commit()
         msg = f"{added[0].name} ajouté" if len(added) == 1 else f"{len(added)} participants ajoutés"
         return _then_join(t, before, f"/v/{tid}/participants", msg)
@@ -2218,20 +2214,15 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
         db.snapshot(f"ajout de {len(new)} participant(s)")
         before = S.label_members(t)
         kp = S.known_person(t, new[0]) if len(new) == 1 else None   # déjà venu sur un autre voyage ?
-        added = [M.Participant(name=n, companion=companion) for n in new]
-        t.participants.extend(added)
-        s.flush()
-        for p in added:
-            S.set_roles(t, p, roles_in)
-            if family:
-                S.set_family(s, t, p, family)
-        if len(added) == 1 and "name" in f:      # formulaire « un participant » : toutes ses infos
-            p = added[0]
-            p.phone, p.email, p.note = (f.get(k, "").strip() for k in ("phone", "email", "note"))
+        details = {}
+        if len(new) == 1 and "name" in f:        # formulaire « un participant » : toutes ses infos
+            details = {k: f.get(k, "").strip() for k in ("phone", "email", "note")}
             if kp:                               # déjà venu sur un autre voyage : ses contacts s'il n'en a pas saisi
-                p.phone, p.email = p.phone or kp["phone"], p.email or kp["email"]
-            if f.getlist("groups"):
-                S.set_person_groups(t, p.id, f.getlist("groups"))
+                details["phone"], details["email"] = details["phone"] or kp["phone"], details["email"] or kp["email"]
+        added = [W.add_participant(s, t, n, roles=roles_in, companion=companion, family=family, **details)
+                 for n in new]
+        if details and f.getlist("groups"):
+            S.set_person_groups(t, added[0].id, f.getlist("groups"))
         s.commit()
         if len(added) == 1:
             msg = f"{added[0].name} ajouté{' (accompagnant)' if companion else ''}"
@@ -2242,19 +2233,15 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
         if family:
             msg += f" dans la famille {S.find_family(t, family).name}"
         if "join_form" in f or f.get("join_all"):   # ancien envoi (scripts) : les dépenses à rejoindre sont données
-            mine = {p.id for p in added}
             if "join_form" in f:
-                pairs = [(pid, e) for e in t.expenses if f.get(f"join_{e.id}") for pid in mine]
+                joined = [e for e in t.expenses if f.get(f"join_{e.id}")]
+                for e in joined:
+                    for p in added:
+                        W.join_expense(e, p.id)
             else:
-                exps = {e.id: e for e in t.expenses}
-                sug = S.join_suggestions(t, before)
-                S.flag_checks(t, sug)
-                pairs = [(x["pid"], exps[x["eid"]]) for x in sug if x["pid"] in mine and x["kind"] == "groupes"]
-            for pid, e in pairs:
-                if pid not in {x.participant_id for x in e.shares}:
-                    e.shares.append(M.ExpenseShare(participant_id=pid, weight=1.0))
+                joined = W.join_group_expenses(t, added, before)
             s.commit()
-            n = len({e.id for _, e in pairs})
+            n = len({e.id for e in joined})
             if n:
                 msg += f", inclus dans {n} dépense(s) de groupe"
             return back(f"/v/{tid}/participants#pe{added[0].id}" if len(added) == 1 else f"/v/{tid}/participants", msg)
@@ -2350,7 +2337,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
             return back(nxt, "Aucune dépense changée")
         db.snapshot("ajout aux dépenses")
         for pid, e in wanted:
-            e.shares.append(M.ExpenseShare(participant_id=pid, weight=1.0))
+            W.join_expense(e, pid)
         s.commit()
         names = list(dict.fromkeys(people[pid].name for pid, _ in wanted))
         n = len({e.id for _, e in wanted})
@@ -2588,17 +2575,6 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
     def weights_ok(t, f):
         return bool(_parse_weights(t, f))
 
-    def _category_id(s, t, name):
-        name = clean_cat_name(name) or "Divers"
-        for c in t.categories:
-            if E.sort_key(c.name) == E.sort_key(name):
-                return c.id
-        c = M.Category(name=name, audience="", position=len(t.categories))
-        t.categories.append(c)
-        S.add_to_library(s, name)
-        s.flush()
-        return c.id
-
     # ------------------------------------------------------------------ catégories
     def cat_or_404(t, cid):
         c = next((c for c in t.categories if c.id == cid), None)
@@ -2805,7 +2781,26 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
             if total_ and sum(c for _, c in payments) > total_:
                 return refuse(ref, f"Les payeurs totalisent {E.fmt(sum(c for _, c in payments))}, "
                                    f"plus que le montant ({E.fmt(total_)})")
-        same_exp = None
+        cat = f.get("category")
+        if cat == "__new__":
+            cat = f.get("category_new")
+        sub = f.get("subcategory") or ""
+        if sub == "__new__":
+            sub = f.get("subcategory_new") or ""
+        refund = (amount(f, "refund") if f.get("has_refund") else None) or None
+        if refund and refund > ((actual if actual is not None else planned) or 0):
+            raise FormError("Le montant remboursé dépasse le montant de la dépense", "refund")
+        who_ = f.get("refund_to") or "asso"
+        payer = f.get("payer") or "asso"
+        values = dict(label=label, category=cat, subcategory=sub,
+                      kind="recette" if f.get("kind") == "recette" else "depense", planned=planned, actual=actual,
+                      tickets=tickets, date=S.parse_date(f.get("date")),
+                      payer_id=None if (payer == "asso" or payments) else whole(payer, -1), payments=payments,
+                      weights=weights, fixed=fixed, refund=refund,
+                      refund_to_id=None if (who_ == "asso" or not refund) else whole(who_, -1),
+                      note=f.get("note", ""), pending=bool(f.get("pending")), reviewed=True)
+        W.check_expense(t, **values)             # avant la copie « Défaire » : refusé, rien n'est écrit
+        same_exp, e = None, None
         if eid:
             e = s.get(M.Expense, eid)
             if not e or e.trip_id != tid:
@@ -2814,49 +2809,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
         else:
             same_exp = S.duplicate_expense(t, label, actual if actual is not None else planned)
             db.snapshot(f"ajout de la dépense « {label} »")
-            e = M.Expense(trip_id=tid, label=label)
-            s.add(e)
-        e.label = label
-        cat = f.get("category")
-        if cat == "__new__":
-            cat = f.get("category_new")
-        e.category_id = _category_id(s, t, cat)
-        sub = f.get("subcategory") or ""
-        if sub == "__new__":
-            sub = f.get("subcategory_new") or ""
-        e.subcategory = clean_cat_name(sub)
-        if e.subcategory:
-            s.flush()
-            cname = next((c.name for c in t.categories if c.id == e.category_id), None)
-            if cname:
-                S.add_subcategory(s, cname, e.subcategory)
-        e.planned, e.actual = planned, actual
-        e.set_tickets(tickets)
-        e.date = S.parse_date(f.get("date")) or next((d_ for _, d_ in tickets if d_), None)
-        e.kind = "recette" if f.get("kind") == "recette" else "depense"
-        refund = amount(f, "refund") if f.get("has_refund") else None
-        if refund:
-            if refund > ((actual if actual is not None else planned) or 0):
-                raise FormError("Le montant remboursé dépasse le montant de la dépense", "refund")
-            who_ = f.get("refund_to") or "asso"
-            e.refund = refund
-            e.refund_to_id = None if who_ == "asso" else int(who_)
-        else:
-            e.refund, e.refund_to_id = None, None
-        payer = f.get("payer") or "asso"
-        e.payer_id = None if (payer == "asso" or payments) else int(payer)
-        e.note = f.get("note", "").strip()
-        s.flush()
-        for x in list(e.payments):
-            e.payments.remove(x)
-        if len(payments) == 1 and payments[0][1] == e.best_known():
-            e.payer_id = payments[0][0]
-        elif payments:
-            for pid_, c in payments:
-                e.payments.append(M.ExpensePayment(payer_id=pid_, amount=c))
-        s.query(M.ExpenseShare).filter_by(expense_id=e.id).delete()
-        for pid, w in weights.items():
-            s.add(M.ExpenseShare(expense_id=e.id, participant_id=pid, weight=w, fixed=fixed.get(pid)))
+        e = W.save_expense(s, t, e, **values)     # le même chemin que l'IA : mêmes règles, mêmes lignes
         if "cents_mode" in f:          # centimes d'arrondi : le choix et le tirage vus à l'écran
             e.cents_mode = f.get("cents_mode") if f.get("cents_mode") in (E.ROUND_PARTICIPANTS, E.ROUND_ASSO) else ""
             e.cents_who = ",".join(str(x) for x in S.cents_ids(f.get("cents_who")))
@@ -2874,10 +2827,6 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
                     not_joined.append(Path(up.filename).name)
                     continue
                 s.add(M.ReceiptLink(receipt_id=rec.id, expense_id=e.id))
-        e.checks.clear()                         # « à vérifier » : la dépense vient d'être revue
-        s.flush()
-        s.refresh(e)
-        S.normalize_shares(e)                    # un montant tapé égal à la répartition : pas de cadenas
         s.commit()
         if not_joined:
             return back(f"/v/{tid}/depenses/{e.id}/modifier", f"« {label} » enregistrée, mais " + _refused_files(not_joined),
@@ -2903,16 +2852,15 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
 
     @app.post("/v/{tid}/depenses/{eid}/supprimer")
     async def delete_expense(tid: int, eid: int, request: Request, s: Session = Depends(get_s)):
-        trip_or_404(s, tid)
+        t = trip_or_404(s, tid)
         e = s.get(M.Expense, eid)
         if not e or e.trip_id != tid:
             raise HTTPException(404, "Dépense introuvable")
         db.snapshot(f"suppression de la dépense « {e.label} »")
-        s.query(M.Adjustment).filter_by(expense_id=eid).delete()
-        s.delete(e)
+        label = W.delete_expense(s, t, e)
         s.commit()
         nxt = (await request.form()).get("next") or ""
-        return back(nxt if nxt.startswith(f"/v/{tid}/") else f"/v/{tid}/depenses", f"« {e.label} » supprimée")
+        return back(nxt if nxt.startswith(f"/v/{tid}/") else f"/v/{tid}/depenses", f"« {label} » supprimée")
 
     # ------------------------------------------------------------------ répartition
     @app.get("/v/{tid}/comptes")
@@ -3010,14 +2958,9 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
         who = names(t)[pid]
         kind = "Supplément" if f.get("kind") == "increase" else "Remise"
         db.snapshot(f"{kind.lower()} pour {who}")
-        if a is None:
-            a = M.Adjustment(trip_id=tid, expense_id=None, fixed=False)
-            s.add(a)
-        a.participant_id = pid
-        a.value = (1 if kind == "Supplément" else -1) * abs(val)
-        a.compensation = {"asso": E.ASSO, "person": E.PERSON}.get(by, E.OTHERS)
-        a.compensator_id = comp if by == "person" else None
-        a.reason = (f.get("reason") or "").strip()
+        W.save_discount(s, t, pid, (1 if kind == "Supplément" else -1) * abs(val),
+                        {"asso": E.ASSO, "person": E.PERSON}.get(by, E.OTHERS), comp if by == "person" else None,
+                        f.get("reason"), adjustment=a)
         s.commit()
         return back(here, f"{kind} de {E.fmt(abs(val))} pour {who} enregistré" + ("e" if kind == "Remise" else ""))
 
@@ -3224,22 +3167,12 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
         if not p or p.trip_id != tid:
             return refuse(f"/v/{tid}/desistement", "Choisis une personne")
         cur = next((x for x in t.withdrawals if x.participant_id == p.id), None)
-        db.snapshot(f"{'modification du ' if cur else ''}désistement de {p.name}")
-        if cur is None:
-            cur = M.Withdrawal(trip_id=tid, participant_id=p.id)
-            s.add(cur)
-            S.flag_withdrawal(t, p.id, w.kept, w.absorber)   # montants fixés 🔒 dans ses dépenses : « à vérifier »
-        cur.date = S.parse_date(w.date)
-        cur.absorber = w.absorber
-        cur.kept = ",".join(str(x) for x in sorted(w.kept))
-        cur.note = (f.get("note") or "").strip()
-        edited = cur.id is not None
         refund = amount(f, "refund")
-        if refund and refund > 0:
-            s.add(M.Movement(trip_id=tid, participant_id=p.id, kind="remboursement", amount=refund,
-                             date=S.parse_date(w.date), note="Remboursement désistement"))
+        db.snapshot(f"{'modification du ' if cur else ''}désistement de {p.name}")
+        _, new = W.save_withdrawal(s, t, p.id, date=S.parse_date(w.date), absorber=w.absorber, kept=w.kept,
+                                   note=f.get("note") or "", refund=refund or None)
         s.commit()
-        return back(f"/v/{tid}/p/{p.id}", f"Désistement de {p.name} {'modifié' if edited else 'enregistré'}")
+        return back(f"/v/{tid}/p/{p.id}", f"Désistement de {p.name} {'enregistré' if new else 'modifié'}")
 
     @app.post("/v/{tid}/desistement/{pid}/annuler")
     async def withdraw_cancel(tid: int, pid: int, request: Request, s: Session = Depends(get_s)):
@@ -3317,8 +3250,8 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
         date = S.parse_date(f.get("date"))
         same = S.duplicate_movement(t, pid, kind, amt, date)
         db.snapshot(f"{kind} de {E.fmt(amt)} ({who})")
-        s.add(M.Movement(trip_id=tid, participant_id=pid, kind=kind, amount=amt, date=date,   # pas de date d'office
-                         note=(f.get("note") or "").strip(), method=S.pay_method(f.get("method")) or ""))
+        W.add_movement(t, pid, kind, amt, date=date, note=f.get("note"),     # pas de date d'office
+                       method=S.pay_method(f.get("method")) or "")
         s.commit()
         dest = f.get("next") or f"/v/{tid}/argent"
         if not dest.startswith("/"):
@@ -3349,7 +3282,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
         received = kind == "versement"
         db.snapshot(f"{len(todo)} {kind}s notés d'un coup ({E.fmt(total)})" if len(todo) > 1 else
                     f"{kind} de {E.fmt(total)} ({todo[0][0].name})")
-        S.settle_batch(t, r, kind, [acc.referent for acc, _ in todo], date=S.parse_date(f.get("date")),
+        W.settle_batch(t, r, kind, [acc.referent for acc, _ in todo], date=S.parse_date(f.get("date")),
                        method=S.pay_method(f.get("method")) or "", note=(f.get("note") or "").strip())
         s.commit()
         who = ", ".join(f"{acc.name} {E.fmt(c)}" for acc, c in todo[:6]) + ("…" if len(todo) > 6 else "")
@@ -3417,12 +3350,12 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
 
     @app.post("/v/{tid}/argent/{mid}/supprimer")
     def money_delete(tid: int, mid: int, request: Request, s: Session = Depends(get_s)):
-        trip_or_404(s, tid)
+        t = trip_or_404(s, tid)
         m = s.get(M.Movement, mid)
         if not m or m.trip_id != tid:
             raise HTTPException(404, "Mouvement introuvable")
         db.snapshot(f"suppression d'un {m.kind} de {m.participant.name}")
-        s.delete(m)
+        W.delete_movement(s, t, m)
         s.commit()
         ref = urlparse(request.headers.get("referer") or f"/v/{tid}/argent").path
         return back(ref, "Mouvement supprimé")

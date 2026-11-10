@@ -18,11 +18,11 @@ from . import engine as E
 from . import fichiers
 from . import models as M
 from . import services as S
+from . import writes as W
 from .db import Database
 
 
-class OpsError(ValueError):
-    pass
+OpsError = W.WriteError      # une seule sorte de refus, que l'écriture vienne d'un formulaire ou de l'IA
 
 
 # ---------------------------------------------------------------- utilitaires
@@ -113,15 +113,7 @@ def expense_of(t: M.Trip, ref) -> M.Expense:
     raise OpsError(f"Dépense introuvable : « {ref} ». Dépenses du voyage : {known}")
 
 
-def category_id(s, t: M.Trip, name) -> int:
-    name = (name or "").strip() or "Divers"
-    for c in t.categories:
-        if E.sort_key(c.name) == E.sort_key(name):
-            return c.id
-    c = M.Category(name=name, audience="", position=len(t.categories))
-    t.categories.append(c)
-    s.flush()
-    return c.id
+category_id = W.category_id
 
 
 # Groupes nommés le temps d'un import (« covoit » : [...]) : utilisables dans « pour », « sauf » et « parts ».
@@ -207,21 +199,6 @@ def payers_of(t: M.Trip, paye_par) -> tuple:
             raise OpsError(f"Le montant payé par {who} doit être positif.")
         out.append((pid, cents))
     return None, out
-
-
-def _set_payments(e: M.Expense, payments):
-    for x in list(e.payments):
-        e.payments.remove(x)
-    for pid, cents in payments or []:
-        e.payments.append(M.ExpensePayment(payer_id=pid, amount=cents))
-
-
-def _check_payments(e: M.Expense):
-    if e.payments and not e.pending:
-        total = sum(x.amount for x in e.payments)
-        if total > e.best_known():
-            raise OpsError(f"Les payeurs de « {e.label} » totalisent {E.fmt(total)}, plus que son montant "
-                           f"({E.fmt(e.best_known())}).")
 
 
 # ---------------------------------------------------------------- lecture
@@ -346,12 +323,8 @@ def _is_asso(ref, t: M.Trip | None = None) -> bool:
 def do_create_trip(s, nom, debut=None, fin=None, lieu="", organisateur="") -> M.Trip:
     if not (nom or "").strip():
         raise OpsError("Quel est le nom du voyage ?")
-    t = M.Trip(name=nom.strip(), place=lieu or "", organizer=organisateur or "",
-               start=date_of(debut, "date de début"), end=date_of(fin, "date de fin"))
-    t.categories = S.new_trip_categories(s)
-    s.add(t)
-    s.flush()
-    return t
+    return W.create_trip(s, nom, place=lieu, organizer=organisateur, start=date_of(debut, "date de début"),
+                         end=date_of(fin, "date de fin"))
 
 
 def _truthy(v) -> bool:
@@ -367,7 +340,7 @@ def do_add_participants(s, t, noms, inclure_dans_depenses_communes=True, famille
     added, skipped = [], []
     for n in noms:
         info = n if isinstance(n, dict) else {"nom": n}
-        name = str(info.get("nom") or "").strip()
+        name = " ".join(str(info.get("nom") or "").split())
         if not name:
             continue
         if E.sort_key(name) in existing:
@@ -378,14 +351,6 @@ def do_add_participants(s, t, noms, inclure_dans_depenses_communes=True, famille
             comp = _truthy(info.get("accompagnant", accompagnant) or False)
         else:
             comp = kp["companion"]
-        p = M.Participant(name=name, phone=str(info.get("telephone") or (kp or {}).get("phone") or ""),
-                          email=str(info.get("email") or (kp or {}).get("email") or ""),
-                          note=str(info.get("note") or ""), companion=comp)
-        t.participants.append(p)
-        s.flush()
-        fam = info.get("famille", famille)
-        if fam:
-            S.set_family(s, t, p, str(fam))
         try:
             rs = S.parse_roles(info.get("roles") or [], t)
         except ValueError as e:
@@ -396,17 +361,14 @@ def do_add_participants(s, t, noms, inclure_dans_depenses_communes=True, famille
             dflt = S.COMPANION if comp else S.DIVER
             if dflt in S.trip_roles(t):
                 rs.append(dflt)
-        S.set_roles(t, p, rs)
+        p = W.add_participant(s, t, name, roles=rs, companion=comp,
+                              phone=info.get("telephone") or (kp or {}).get("phone") or "",
+                              email=info.get("email") or (kp or {}).get("email") or "",
+                              note=info.get("note") or "", family=info.get("famille", famille))
         existing.add(E.sort_key(name))
         added.append(p)
     if inclure_dans_depenses_communes and added:
-        mine = {p.id for p in added}
-        exps = {e.id: e for e in t.expenses}
-        sug = S.join_suggestions(t, before)
-        S.flag_checks(t, sug)                    # parts personnalisées : « à vérifier » dans l'application
-        for x in sug:                            # seulement les dépenses partagées exactement entre des groupes
-            if x["pid"] in mine and x["kind"] == "groupes":
-                exps[x["eid"]].shares.append(M.ExpenseShare(participant_id=x["pid"], weight=1.0))
+        W.join_group_expenses(t, added, before)  # dépenses de groupe rejointes ; parts personnalisées : « à vérifier »
         s.flush()
     return added, skipped
 
@@ -454,125 +416,95 @@ def do_add_expense(s, t, libelle, categorie=None, montant_prevu=None, montant_re
     planned = euros(montant_prevu, "montant prévu", allow_none=True)
     tickets = tickets_of(montant_reel)
     actual = sum(c for c, _ in tickets) if tickets else euros(montant_reel, "montant réel", allow_none=True)
-    if planned is None and actual is None and not a_venir:
-        raise OpsError(f"Quel est le montant de « {libelle} » ? (prévu et/ou réel ; s'il n'est pas encore connu, "
-                       f"mets \"a_venir\": true)")
-    if (planned or 0) < 0 or (actual or 0) < 0:
-        raise OpsError("Un montant doit être positif. Pour de l'argent reçu (remboursement d'un fournisseur, "
-                       "subvention…), utilise « type »: « recette ».")
     payer, payments = payers_of(t, paye_par)
-    w = weights_of(t, pour, parts, sauf)
     refund, refund_to = _refund_of(t, rembourse, rembourse_a)
-    if refund and refund > ((actual if actual is not None else planned) or 0):
-        raise OpsError(f"Le remboursement ({E.fmt(refund)}) dépasse le montant de « {libelle} ».")
-    e = M.Expense(label=libelle.strip(), category_id=category_id(s, t, categorie), kind=kind,
-                  planned=planned, actual=actual, date=date_of(date), payer_id=payer, note=note or "",
-                  refund=refund, refund_to_id=refund_to, subcategory=str(sous_categorie or "").strip()[:100])
-    if tickets:
-        e.set_tickets(tickets)
-        e.date = e.date or next((d for _, d in tickets if d), None)
-    t.expenses.append(e)
-    s.flush()
-    for pid, wv in w.items():
-        e.shares.append(M.ExpenseShare(participant_id=pid, weight=wv))
-    s.flush()
-    S.normalize_shares(e)                        # pas de « parts » : montants fixés 🔒 (voir services)
-    _set_payments(e, payments)
-    _check_payments(e)
-    s.flush()
-    return e
+    values = dict(label=libelle, category=categorie, subcategory=sous_categorie, kind=kind, planned=planned,
+                  actual=actual, tickets=tickets or [], date=date_of(date), payer_id=payer, payments=payments or [],
+                  refund=refund, refund_to_id=refund_to, note=note, pending=bool(a_venir))
+    W.check_expense(t, **values)                 # le montant d'abord : c'est la question la plus utile à poser
+    return W.save_expense(s, t, None, weights=weights_of(t, pour, parts, sauf), **values)
 
 
 def do_update_expense(s, t, depense, libelle=None, categorie=None, montant_prevu=None, montant_reel=None,
                       date=None, paye_par=None, pour=None, parts=None, note=None, sauf=None, rembourse=None,
                       rembourse_a=None, sous_categorie=None) -> tuple:
-    """Modifie une dépense existante ; renvoie (dépense, [changements lisibles])."""
+    """Modifie une dépense existante ; renvoie (dépense, [changements lisibles]). Ce qui n'est pas donné ne change
+    pas ; le tout est réécrit par le même chemin que le formulaire (writes.save_expense)."""
     e = expense_of(t, depense)
     changes = []
     names = {p.id: p.name for p in t.participants}
+    label = e.label
     if libelle and libelle.strip() != e.label:
         changes.append(f"nom « {e.label} » → « {libelle.strip()} »")
-        e.label = libelle.strip()
+        label = libelle.strip()
+    category = W.KEEP
     if categorie:
         cid = category_id(s, t, categorie)
         if cid != e.category_id:
-            changes.append(f"catégorie → {next(c.name for c in t.categories if c.id == cid)}")
-            e.category_id = cid
+            category = next(c.name for c in t.categories if c.id == cid)
+            changes.append(f"catégorie → {category}")
     tickets = tickets_of(montant_reel)
+    new_tickets = None                           # None : les tickets déjà notés ne bougent pas
     if montant_reel is not None:
-        before_t = [c for c in (x["cents"] for x in e.ticket_list)]
-        e.set_tickets(tickets or [])
+        before_t = [x["cents"] for x in e.ticket_list]
+        new_tickets = tickets or []
         if tickets and [c for c, _ in tickets] != before_t:
             changes.append("tickets : " + " + ".join(E.fmt(c) for c, _ in tickets))
         if tickets:
             montant_reel = to_euros(sum(c for c, _ in tickets))
-    for field, value, label in (("planned", montant_prevu, "prévu"), ("actual", montant_reel, "réel")):
+    amounts = {"planned": e.planned, "actual": e.actual}
+    for field, value, what in (("planned", montant_prevu, "prévu"), ("actual", montant_reel, "réel")):
         if value is None:
             continue
-        new = euros(value, f"montant {label}", allow_none=True)
+        new = euros(value, f"montant {what}", allow_none=True)
         if new is not None and new < 0:
             raise OpsError("Un montant de dépense doit être positif.")
-        old = getattr(e, field)
+        old = amounts[field]
         if new != old:
-            changes.append(f"{label} {E.fmt(old) if old is not None else '—'} → {E.fmt(new) if new is not None else '—'}")
-            setattr(e, field, new)
-    if e.planned is None and e.actual is None and not (montant_prevu is None and montant_reel is None):
-        raise OpsError(f"« {e.label} » n'aurait plus aucun montant (ni prévu ni réel).")
-    if date:
-        e.date = date_of(date)
+            changes.append(f"{what} {E.fmt(old) if old is not None else '—'} → {E.fmt(new) if new is not None else '—'}")
+            amounts[field] = new
+    if amounts["planned"] is None and amounts["actual"] is None and not (montant_prevu is None and montant_reel is None):
+        raise OpsError(f"« {label} » n'aurait plus aucun montant (ni prévu ni réel).")
+    before_payer, payer_at = S.payer_label(e, names), len(changes)
     if paye_par is not None:
-        before = S.payer_label(e, names)
         payer, payments = payers_of(t, paye_par)
-        e.payer_id = payer
-        _set_payments(e, payments)
-        s.flush()
-        after = S.payer_label(e, names)
-        if after != before:
-            changes.append(f"payé par {before} → {after}".replace("l'asso", "l’asso"))
+    else:
+        payer, payments = e.payer_id, [(x.payer_id, x.amount) for x in e.payments]
+    weights = None                               # None : « pour qui » (et les montants fixés) ne bougent pas
     if pour is not None or parts is not None or sauf is not None:
         w = weights_of(t, pour if (pour is not None or parts is not None) else "tous", parts, sauf)
-        old = {s_.participant_id: s_.weight for s_ in e.shares}
-        if w != old:
+        if w != {x.participant_id: x.weight for x in e.shares}:
             changes.append("pour qui : " + ", ".join(names[pid] + (f" ×{E.fmt_weight(E.to_weight(x))}" if x != 1 else "")
                                                   for pid, x in w.items()))
-            for sh in list(e.shares):
-                e.shares.remove(sh)
-            s.flush()
-            for pid, wv in w.items():
-                e.shares.append(M.ExpenseShare(participant_id=pid, weight=wv))
+            weights = w
+    new_note = e.note
     if note is not None and note != e.note:
-        e.note = note
+        new_note = note
         changes.append("note modifiée")
-    if sous_categorie is not None and str(sous_categorie).strip() != (e.subcategory or ""):
-        e.subcategory = str(sous_categorie).strip()[:100]
-        changes.append(f"sous-catégorie → {e.subcategory or 'aucune'}")
+    sub = e.subcategory or ""
+    if sous_categorie is not None and str(sous_categorie).strip() != sub:
+        sub = str(sous_categorie).strip()[:100]
+        changes.append(f"sous-catégorie → {sub or 'aucune'}")
+    refund, refund_to = e.refund, e.refund_to_id
     if rembourse is not None:
-        refund, refund_to = _refund_of(t, rembourse, rembourse_a)
-        if (refund, refund_to) != (e.refund, e.refund_to_id):
+        got = _refund_of(t, rembourse, rembourse_a)
+        if got != (e.refund, e.refund_to_id):
+            refund, refund_to = got
             who = next((p.name for p in t.participants if p.id == refund_to), "l’asso")
             changes.append(f"remboursé {E.fmt(refund)} (reçu par {who})" if refund else "plus de remboursement")
-            e.refund, e.refund_to_id = refund, refund_to
-    if e.refund and e.refund > e.best_known():
-        raise OpsError(f"Le remboursement ({E.fmt(e.refund)}) dépasse le montant de « {e.label} ».")
-    _check_payments(e)
-    s.flush()
-    s.refresh(e)
-    if S.normalize_shares(e):                    # des parts (IA) : montants fixés 🔒, une fois le montant connu
-        s.flush()
+    W.save_expense(s, t, e, label=label, category=category, subcategory=sub, kind=e.kind,
+                   planned=amounts["planned"], actual=amounts["actual"], tickets=new_tickets,
+                   date=date_of(date) if date else e.date, payer_id=payer, payments=payments or [], weights=weights,
+                   refund=refund, refund_to_id=refund_to, note=new_note, pending=True)
+    if paye_par is not None:
+        after = S.payer_label(e, names)
+        if after != before_payer:
+            changes.insert(payer_at, f"payé par {before_payer} → {after}".replace("l'asso", "l’asso"))
     return e, changes
 
 
 def do_delete_expense(s, t, depense) -> str:
-    e = expense_of(t, depense)
-    label = e.label
-    for a in [a for a in t.adjustments if a.expense_id == e.id]:
-        t.adjustments.remove(a)
-    for w in t.withdrawals:
-        if e.id in w.kept_ids:
-            w.kept = ",".join(str(x) for x in w.kept_ids if x != e.id)
-    t.expenses.remove(e)          # delete-orphan : la dépense, ses parts et ses liens justificatifs partent avec
-    s.flush()
-    return label
+    return W.delete_expense(s, t, expense_of(t, depense))
 
 
 def do_update_participant(s, t, participant, nouveau_nom=None, telephone=None, email=None, note=None,
@@ -627,9 +559,7 @@ def do_delete_movement(s, t, participant, montant, type="versement", date=None) 
     if len(match) > 1:
         raise OpsError(f"{len(match)} {type}s de {E.fmt(amt)} pour {p.name} : précise la date.")
     m = match[0]
-    t.movements.remove(m)
-    s.delete(m)
-    s.flush()
+    W.delete_movement(s, t, m)
     return m
 
 
@@ -655,19 +585,16 @@ def do_update_trip(s, t, nom=None, lieu=None, debut=None, fin=None, organisateur
 
 
 def do_add_movement(s, t, participant, montant, type="versement", date=None, note="", moyen=None) -> M.Movement:
-    if type not in ("versement", "remboursement"):
+    if type not in W.MOVES:
         raise OpsError("Le type doit être « versement » (participant → asso) ou « remboursement » (asso → participant).")
     amt = euros(montant)
     if amt <= 0:
         raise OpsError("Le montant doit être positif.")
-    method = S.pay_method(moyen)
-    if method is None:
+    if S.pay_method(moyen) is None:
         raise OpsError(f"Moyen de paiement inconnu : « {moyen} ». Choix possibles : "
                        + ", ".join(label.lower() for _, label in S.PAY_METHODS) + " (ou rien).")
-    p = person(t, participant)
-    m = M.Movement(participant_id=p.id, kind=type, amount=amt, date=date_of(date) or dt.date.today(),
-                   note=note or "", method=method)
-    t.movements.append(m)
+    m = W.add_movement(t, person(t, participant).id, type, amt, date=date_of(date) or dt.date.today(), note=note,
+                       method=moyen)
     s.flush()
     return m
 
@@ -742,11 +669,7 @@ def do_adjust(s, t, participant, montant, type="reduction", sur="total", compens
         cid = person(t, compensateur, "personne qui compense").id
         if cid == p.id:
             raise OpsError("La personne qui compense doit être différente.")
-    a = M.Adjustment(participant_id=p.id, expense_id=e.id if e else None, value=value,
-                     fixed=fixed, compensation=comp, compensator_id=cid, reason=motif or "")
-    t.adjustments.append(a)
-    s.flush()
-    return a
+    return W.save_discount(s, t, p.id, value, comp, cid, motif, fixed=fixed)
 
 
 def do_withdraw(s, t, participant, pris_en_charge_par="groupe", parts_conservees=(), date=None,
@@ -762,13 +685,8 @@ def do_withdraw(s, t, participant, pris_en_charge_par="groupe", parts_conservees
     refund = euros(remboursement, "remboursement", allow_none=True)
     if refund is not None and refund < 0:
         raise OpsError("Le remboursement doit être positif.")
-    w = M.Withdrawal(participant_id=p.id, date=d, absorber=absorber, kept=",".join(map(str, kept)))
-    t.withdrawals.append(w)
-    S.flag_withdrawal(t, p.id, kept, absorber)   # montants fixés 🔒 dans ses dépenses : « à vérifier »
-    if refund:
-        t.movements.append(M.Movement(participant_id=p.id, kind="remboursement", amount=refund,
-                                      date=date_of(date_remboursement) or d, note="Remboursement désistement"))
-    s.flush()
+    w, _ = W.save_withdrawal(s, t, p.id, date=d, absorber=absorber, kept=kept, refund=refund,
+                             refund_date=date_of(date_remboursement))
     return w
 
 

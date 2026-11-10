@@ -138,6 +138,9 @@ def install_api(app: FastAPI):
 
     @app.exception_handler(OpsError)
     async def ops_error(request: Request, exc: OpsError):
+        refusal = getattr(request.app.state, "form_refusal", None)
+        if refusal and not request.url.path.startswith("/api/"):     # un formulaire : retour à la page, en clair
+            return await refusal(request, exc)
         body = {"erreur": str(exc)}
         if getattr(exc, "errors", None):
             body["erreurs"] = exc.errors

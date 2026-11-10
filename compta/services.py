@@ -1247,19 +1247,6 @@ def settle_amounts(result: E.Result, kind: str, referents) -> list:
     return out
 
 
-def settle_batch(trip: M.Trip, result: E.Result, kind: str, referents, date=None, method: str = "",
-                 note: str = "") -> list:
-    """« Cocher plusieurs lignes, puis Reçu » : un versement (ou un remboursement) par compte coché, du montant
-    qu'il reste exactement à régler."""
-    made = []
-    for acc, cents in settle_amounts(result, kind, referents):
-        m = M.Movement(trip_id=trip.id, participant_id=acc.referent, kind=kind, amount=cents, date=date,
-                       method=method or "", note=note or "")
-        trip.movements.append(m)
-        made.append(m)
-    return made
-
-
 AI_NOTES_MAX = 40
 
 

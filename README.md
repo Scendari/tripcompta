@@ -260,8 +260,10 @@ compta/
   models.py       modèle SQLAlchemy / SQLite
   db.py           dossier de données, sauvegardes, « Défaire » / « Rétablir »
   services.py     pont base ↔ moteur, alertes
-  web.py          application FastAPI (pages Jinja2)
-  ops.py          opérations métier pour l'IA (noms, euros, simulation, erreurs-questions)
+  writes.py       le seul endroit qui crée et modifie les lignes d'un voyage (voyage, participants, dépenses,
+                  versements, remises, désistements) : les formulaires et l'IA passent tous les deux par lui
+  web.py          application FastAPI (pages Jinja2) : lit les formulaires, puis appelle writes.py
+  ops.py          opérations pour l'IA (noms, euros, simulation, erreurs-questions) : lit, puis appelle writes.py
   api.py          API JSON  (/api, doc /api/docs)
   importer.py     import d'un voyage complet (JSON du guide pour l'IA), modèle et guide dans static/ia/
   mcp_server.py   serveur MCP (stdio)
@@ -274,6 +276,8 @@ tests/
   test_amounts.py    démo recalculée à la main, 550 voyages aléatoires (invariants), PDF = appli
   test_scenarios.py  scénarios d'organisateur complets (budget -> régularisation, erreurs de saisie…)
   test_web.py        routes et parcours web
+  test_un_seul_chemin.py  le même scénario à l'écran et par l'IA : mêmes lignes, mêmes comptes (à la main)
+  test_jeton.py      jeton de session : rien n'est lisible ni modifiable sans lui
   test_ai.py         couche IA, API JSON, serveur MCP en vrai sous-processus
   test_import.py     import par l'IA : montants à la main, erreurs groupées, aperçu web,
                      brouillon enregistré à la volée (plantage simulé), copier-coller navigateur
