@@ -18,6 +18,14 @@
   <p class="hint" style="margin:.4rem 0 0"><b>Autre…</b> (quand ton navigateur le permet) ouvre le partage de l'ordinateur avec le PDF déjà joint. Sans numéro ou sans e-mail, tu choisis à qui envoyer : ajoute-les dans la fiche de chaque participant.</p>
 </div>
 
+<form method="post" action="/v/{{ trip.id }}/envoyer/comment-payer" class="card pay-info" id="comment-payer">
+  <label for="pay-info"><b>Comment payer ?</b></label>
+  <p class="hint" style="margin:.15rem 0 .45rem">Écris ici comment te régler : un RIB pour un virement, à quel nom faire le chèque, un lien de paiement (HelloAsso, Lydia…), ou une consigne (« attends le message du trésorier »). Ce texte est ajouté au message et au PDF de ceux qui doivent encore de l'argent{% if owing %} ({{ owing }} en ce moment){% endif %}.</p>
+  <textarea id="pay-info" name="pay_info" rows="{{ [3, pay_info.count('\n') + 2]|max }}" maxlength="{{ pay_max }}"
+            placeholder="ex. Par virement : IBAN FR76 … au nom du club (écris ton nom dans le libellé).&#10;Ou par chèque à l'ordre du club, à donner à Camille.">{{ pay_info }}</textarea>
+  <div class="row" style="justify-content:flex-end;margin-top:.45rem"><button class="btn small">Enregistrer</button></div>
+</form>
+
 <div class="send-list">
 {% for x in rows %}{% set a = x.acc %}
   <div class="card send-row" data-send-row id="a{{ a.key }}">
@@ -34,8 +42,12 @@
         {{ share_menu(x, 'share-msg-' ~ a.key) }}
       </div>
     </div>
-    <details style="margin-top:.4rem"><summary class="small muted">Voir le message</summary>
-      <pre class="msg" id="msg-{{ a.key }}">{{ x.msg }}</pre></details>
+    <details style="margin-top:.4rem"><summary class="small muted">Voir ou retoucher le message</summary>
+      <label class="sr-only" for="msg-{{ a.key }}">Message pour {{ a.name }}</label>
+      <textarea class="msg" id="msg-{{ a.key }}" data-msg-edit data-num="{{ x.num or '' }}" data-mail="{{ x.ref.email or '' }}" data-subject="{{ x.subject }}"
+                rows="{{ x.msg.count('\n') + 2 }}">{{ x.msg }}</textarea>
+      <p class="hint" style="margin:.25rem 0 0">Tu peux changer ce texte avant de l'envoyer. Ta retouche vaut pour cet envoi : elle n'est pas gardée si tu quittes la page.
+        <button type="button" class="linklike" data-msg-reset hidden>Remettre le message d'origine</button></p></details>
     <span class="sent-mark small">✓ préparé</span>
   </div>
 {% endfor %}

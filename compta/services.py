@@ -1086,6 +1086,29 @@ def whatsapp_number(phone: str) -> str:
     return digits
 
 
+PAY_INFO_MAX = 1500
+
+
+def pay_info(trip: M.Trip) -> str:
+    """« Comment payer » : le texte libre de l'organisateur (RIB, chèque, lien HelloAsso, consigne…), sans lignes
+    vides en trop. Il n'est repris que pour ceux qui doivent encore de l'argent."""
+    lines = [" ".join(l.split()) for l in (trip.pay_info or "").replace("\r", "").split("\n")]
+    out = []
+    for l in lines:
+        if l or (out and out[-1]):
+            out.append(l)
+    return "\n".join(out).strip()
+
+
+def set_pay_info(trip: M.Trip, text: str) -> None:
+    trip.pay_info = str(text or "").replace("\r", "").strip()[:PAY_INFO_MAX]
+
+
+def owes_money(acc) -> bool:
+    """Ce compte doit encore de l'argent à la caisse (donc les consignes « Comment payer » le concernent)."""
+    return acc.balance > 0 and not acc.holds_cash
+
+
 def account_message(trip: M.Trip, result: E.Result, acc) -> str:
     """Message prêt à envoyer à une personne (ou à la personne qui paie pour sa famille)."""
     who = result.people[acc.referent]
@@ -1106,6 +1129,9 @@ def account_message(trip: M.Trip, result: E.Result, acc) -> str:
         lines.append("➜ Tu tiens la caisse : ton compte se règle avec elle, rien à verser.")
     elif b > 0:
         lines.append(f"➜ Il {'vous' if acc.is_family else 'te'} reste {E.fmt(b)} à verser à {caisse}.")
+        how = pay_info(trip)
+        if how:
+            lines += ["", "Comment payer :", how, ""]
     elif b < 0:
         lines.append(f"➜ {caisse[:1].upper() + caisse[1:]} {'vous' if acc.is_family else 'te'} doit {E.fmt(-b)}.")
     else:

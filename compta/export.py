@@ -548,6 +548,11 @@ def account_pdf(trip: M.Trip, acc_key: str, mode: str = E.ACTUAL) -> tuple:
     else:
         verdict = "Tout est réglé ✓"
     pdf.table_(["", "Montant"], rows, [130, 50], ["LEFT", "RIGHT"], total=[verdict, _m(abs(b))])
+    how = S.pay_info(trip)
+    if how and S.owes_money(acc):                          # consignes de l'organisateur : RIB, chèque, lien…
+        pdf.h2("Comment payer")
+        for line in how.split("\n"):
+            pdf.para(line or " ", 10)
 
     # ---- détail par membre, par catégorie et sous-catégorie
     for m in acc.members:

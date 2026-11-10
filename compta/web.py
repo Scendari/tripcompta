@@ -3365,7 +3365,22 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     def send_page(tid: int, request: Request, s: Session = Depends(get_s)):
         t = trip_or_404(s, tid)
         r = S.compute_trip(t, mode_of(request))
-        return render(request, "send.html", trip=t, r=r, rows=_send_rows(t, r))
+        return render(request, "send.html", trip=t, r=r, rows=_send_rows(t, r), pay_info=t.pay_info or "",
+                      pay_max=S.PAY_INFO_MAX, owing=sum(1 for a in r.accounts if S.owes_money(a)))
+
+    @app.post("/v/{tid}/envoyer/comment-payer")
+    async def send_pay_info(tid: int, request: Request, s: Session = Depends(get_s)):
+        t = trip_or_404(s, tid)
+        text = str((await request.form()).get("pay_info") or "")
+        if len(text.strip()) > S.PAY_INFO_MAX:
+            return refuse(f"/v/{tid}/envoyer", f"Ce texte est trop long : {S.PAY_INFO_MAX} caractères au plus")
+        if text.replace("\r", "").strip() == (t.pay_info or ""):
+            return back(f"/v/{tid}/envoyer", "Rien à changer")
+        db.snapshot("« Comment payer »")
+        S.set_pay_info(t, text)
+        s.commit()
+        return back(f"/v/{tid}/envoyer", "C'est noté : « Comment payer » est ajouté au message et au PDF de ceux qui "
+                    "doivent encore de l'argent" if t.pay_info else "« Comment payer » est effacé")
 
     @app.get("/v/{tid}/compte/{key}.pdf")
     def account_pdf_route(tid: int, key: str, request: Request, s: Session = Depends(get_s)):

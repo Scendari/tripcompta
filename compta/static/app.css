@@ -372,6 +372,9 @@ td .src-tag { padding: 0 .25rem; }
 /* Envoyer les comptes */
 .send-list { display: grid; gap: .7rem; margin-top: 1rem; }
 .send-row .msg { white-space: pre-wrap; font-family: inherit; font-size: .88rem; background: var(--bg-2); padding: .6rem .8rem; border-radius: 8px; margin: .4rem 0 0; }
+.send-row textarea.msg { display: block; width: 100%; resize: vertical; line-height: 1.45; }
+.pay-info textarea { display: block; width: 100%; resize: vertical; }
+.linklike { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
 .send-row .sent-mark { display: none; color: var(--ok); }
 .send-row.sent .sent-mark { display: inline-block; margin-top: .3rem; }
 .send-actions { flex-wrap: wrap; }

@@ -334,6 +334,30 @@
     else none.checked = !others.some((c) => c.checked);
   });
 
+  // Message retouché avant l'envoi : <textarea data-msg-edit> — WhatsApp, e-mail, « Copier » et « Autre… » suivent
+  const applyMsg = (ta) => {
+    const row = ta.closest("[data-send-row]");
+    if (!row) return;
+    const text = ta.value.trim(), enc = encodeURIComponent(text);
+    const wa = row.querySelector('.share-menu a[href^="https://wa.me/"]');
+    if (wa) wa.href = "https://wa.me/" + (ta.dataset.num || "") + "?text=" + enc;
+    const mail = row.querySelector('.share-menu a[href^="mailto:"]');
+    if (mail) mail.href = "mailto:" + encodeURIComponent(ta.dataset.mail || "").replace(/%40/g, "@") +
+      "?subject=" + encodeURIComponent(ta.dataset.subject || "") + "&body=" + enc;
+    const tpl = row.querySelector("[data-share] template");
+    if (tpl) tpl.content.textContent = text;
+    const reset = row.querySelector("[data-msg-reset]");
+    if (reset) reset.hidden = ta.value === ta.defaultValue;
+  };
+  document.addEventListener("input", (ev) => { if (ev.target.matches("[data-msg-edit]")) applyMsg(ev.target); });
+  document.addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-msg-reset]");
+    if (!b) return;
+    const ta = b.closest("[data-send-row]").querySelector("[data-msg-edit]");
+    ta.value = ta.defaultValue;
+    applyMsg(ta);
+  });
+
   // Copier un texte : <button data-copy="#id"> (élément ou <template>)
   const textOf = (el) => (el.content ? el.content.textContent : el.textContent).trim();
   document.addEventListener("click", async (ev) => {
