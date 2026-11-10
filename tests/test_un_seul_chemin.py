@@ -429,7 +429,9 @@ def test_nobody_creates_rows_on_the_side():
     """Les lignes d'un voyage ne sont créées que dans writes.py (le voyage d'exemple, lui, est une donnée toute
     faite). Un nouveau formulaire ou un nouvel outil pour l'IA passe par ce module."""
     made = re.compile(r"M\.(Trip|Participant|Expense|ExpenseShare|ExpensePayment|Movement|Adjustment|Withdrawal)\(")
-    for name in ("web.py", "ops.py", "api.py", "importer.py", "mcp_server.py"):
+    pages = sorted(f"pages/{p.name}" for p in (ROOT / "compta" / "pages").glob("*.py"))
+    assert len(pages) > 10                                    # les formulaires sont là (voir test_pages.py)
+    for name in ["web.py", "ops.py", "api.py", "importer.py", "mcp_server.py"] + pages:
         src = (ROOT / "compta" / name).read_text(encoding="utf-8")
         assert not made.search(src), f"{name} crée des lignes sans passer par writes.py : {made.findall(src)}"
     src = (ROOT / "compta" / "writes.py").read_text(encoding="utf-8")

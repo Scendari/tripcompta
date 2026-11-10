@@ -263,7 +263,11 @@ compta/
   services.py     pont base ↔ moteur, alertes
   writes.py       le seul endroit qui crée et modifie les lignes d'un voyage (voyage, participants, dépenses,
                   versements, remises, désistements) : les formulaires et l'IA passent tous les deux par lui
-  web.py          application FastAPI (pages Jinja2) : lit les formulaires, puis appelle writes.py
+  web.py          application FastAPI (pages Jinja2) : démarrage, dossier des voyages, garde-fous, erreurs,
+                  ce que toutes les pages ont en commun (`render`, `back`, `refuse`…)
+  pages/          les pages, un module par domaine (voyages, participants, depenses, repartition, argent,
+                  justificatifs, entre_nous, envoyer, ia, reglages, protection…) : chacun lit ses formulaires,
+                  puis appelle writes.py ; web.py les installe dans l'ordre (pages/__init__.py)
   ops.py          opérations pour l'IA (noms, euros, simulation, erreurs-questions) : lit, puis appelle writes.py
   api.py          API JSON  (/api, doc /api/docs)
   importer.py     import d'un voyage complet (JSON du guide pour l'IA), modèle et guide dans static/ia/
@@ -279,6 +283,7 @@ tests/
   test_web.py        routes et parcours web
   test_un_seul_chemin.py  le même scénario à l'écran et par l'IA : mêmes lignes, mêmes comptes (à la main)
   test_dates_paiement.py  dates de paiement : à jour / en retard / soldé à la main, relances, dates d'une personne
+  test_pages.py      les pages rangées par domaine : rien d'oublié, aucune adresse cachée par une autre
   test_jeton.py      jeton de session : rien n'est lisible ni modifiable sans lui
   test_ai.py         couche IA, API JSON, serveur MCP en vrai sous-processus
   test_import.py     import par l'IA : montants à la main, erreurs groupées, aperçu web,

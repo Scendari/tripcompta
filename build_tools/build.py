@@ -106,6 +106,7 @@ def main():
         "--collect-all", "pypdfium2_raw",
         "--collect-submodules", "keyring.backends",      # trousseau du système (protection par mot de passe)
         "--copy-metadata", "keyring",
+        "--collect-submodules", "compta.pages",          # les pages de l'application (web.py les installe)
         "--hidden-import", "compta.mcp_server",
         "--hidden-import", "compta.fenetre",
         "--hidden-import", "compta._build",
