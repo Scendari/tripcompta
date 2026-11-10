@@ -1,76 +1,48 @@
 # Trip Compta
 
-Application locale pour l'organisateur d'un voyage associatif : participants, dépenses, qui a payé quoi,
-avances, montants fixés et remises, désistements, justificatifs, comptes « entre nous », et un bilan PDF lisible
-par un trésorier qui n'est pas comptable. Une IA (Claude) peut aussi remplir l'application à partir d'un fichier.
+Application pour l'organisateur d'un voyage associatif (club, asso, groupe d'amis avec une caisse commune) :
+participants, dépenses, qui a payé quoi, avances, montants fixés et remises, désistements, justificatifs, dates de
+paiement et relances, comptes « entre nous », et un bilan PDF lisible par un trésorier qui n'est pas comptable.
+Une IA (Claude, ChatGPT, Le Chat…) peut aussi préparer les saisies à partir d'un texte.
 
-Tout fonctionne **sur ton ordinateur**, dans ton navigateur. Rien n'est envoyé sur Internet (sauf, une fois par
-jour, la question « y a-t-il une nouvelle version ? », désactivable).
+Tout fonctionne **sur ton ordinateur** (Mac ou Windows), dans la fenêtre de l'application. Rien n'est envoyé sur
+Internet (sauf, une fois par jour, la question « y a-t-il une nouvelle version ? », désactivable).
 
-> **👉 Installer Trip Compta (application toute prête, sans Python, qui se met à jour toute seule) :
-> voir [INSTALLER.md](INSTALLER.md).** La suite concerne le lancement depuis le code source.
+> **👉 Installer Trip Compta (application toute prête, qui se met à jour toute seule), changer d'ordinateur,
+> désinstaller : voir [INSTALLER.md](INSTALLER.md)**, ou la page
+> [Télécharger](https://tripcompta.plongee.bio/telecharger) du site.
+> Premiers pas : **❓ Aide** dans l'application, et le [guide en ligne](https://tripcompta.plongee.bio/guide).
 
----
-
-## Lancer depuis le code source (développement)
-
-Pour utiliser Trip Compta, installe plutôt l'application toute prête (voir [INSTALLER.md](INSTALLER.md)).
-Depuis le code source (Python 3.12 ou plus récent), l'application s'ouvre dans le navigateur :
-
-```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt          # Windows : .venv\Scripts\pip install -r requirements.txt
-.venv/bin/python run.py                             # Windows : .venv\Scripts\python run.py
-```
-
-Options de `run.py` :
-
-| Option | Effet |
-|---|---|
-| `--demo` | ajoute les voyages de démonstration (plongée Port-Cros, 12 participants ; week-end Banyuls avec familles et accompagnants) |
-| `--port 9000` | change le port (par défaut 8765, ou le suivant s'il est pris) |
-| `--no-browser` | n'ouvre pas le navigateur |
-| `--data-dir DOSSIER` | range les données ailleurs |
-| `--mcp` | démarre le serveur MCP pour une IA (voir plus bas) |
-
-### Version « sans Python » (exécutable autonome)
-
-```bash
-pip install -r requirements-dev.txt
-python build_tools/build.py
-```
-
-**Sa propre fenêtre** : l'application fabriquée (Mac, Windows) s'ouvre dans sa fenêtre (pywebview : WebKit sur Mac,
-WebView2 sous Windows), avec Cmd/Ctrl+N (nouvelle fenêtre), Cmd/Ctrl+F (rechercher) et « Fichier → Ouvrir dans le
-navigateur » ; fermer la dernière fenêtre ou Cmd+Q l'arrête proprement. Depuis le code source, sous Linux, ou avec
-`--navigateur` : dans le navigateur (`python run.py --fenetre` pour essayer la fenêtre depuis le code source).
-
-Sur **Mac**, cela produit `dist.noindex/TripCompta.app` (dossier que Spotlight et le Launchpad ignorent) ; sur Windows ou Linux, la même commande lancée **sur ce
-système** produit `dist/TripCompta/` (PyInstaller ne fabrique que pour le système où il tourne). Une application
-fabriquée ainsi est une **version de développement** (« 1.0.0-dev (commit) ») : elle ne se met jamais à jour
-toute seule. Les versions publiées sont fabriquées par GitHub (voir « Publier une version »).
+Dans ce fichier : [où sont mes données](#où-sont-mes-données-) · [ce que fait l'application](#ce-que-fait-lapplication) ·
+[l'IA](#faire-remplir-lapplication-par-une-ia) · [pour les développeurs](#pour-les-développeurs)
+(lancer depuis le code source, fabriquer l'application, tests, publier une version).
 
 ---
 
 ## Où sont mes données ?
 
-Dans le dossier **`Documents/TripCompta`** :
+Dans le dossier **`Documents/TripCompta`** (ou celui que tu as choisi : **⚙️ Réglages → Où sont mes voyages**) :
 
 - `compta.db` : la base (tous les voyages) ;
 - `justificatifs/` : les photos et PDF importés ;
-- `sauvegardes/` : une copie automatique par jour (les 10 dernières) ;
-- `.annuler/` et `.retablir/` : l'historique des boutons **↶ Défaire** et **↷ Rétablir** (30 dernières actions) ;
+- `.annuler/` et `.retablir/` : l'historique de **↶ Défaire** et **↷ Rétablir** (30 dernières modifications) ;
 - `brouillons_ia/` : les textes que tu remplis sur la page 🤖 IA de chaque voyage (enregistrés à la volée).
 
-Une base créée avec une version plus ancienne est mise à niveau toute seule à l'ouverture.
+**Sauvegardes** : chaque jour où Trip Compta est ouvert, une copie de tous les voyages, justificatifs compris, est
+mise de côté **sur l'ordinateur, à part de ce dossier** (dans le dossier des réglages de Trip Compta ; les 10
+dernières sont gardées). **⚙️ Réglages → Sauvegardes** les liste et permet de revenir à l'une d'elles. Elles ne
+quittent pas l'ordinateur : pour une copie à ranger ailleurs ou pour changer d'ordinateur, **📦 Exporter le
+voyage** (un fichier avec tout dedans, à réimporter par **Mes voyages → Importer un voyage**).
 
-**Sauvegarder = copier ce dossier** (clé USB, Dropbox, iCloud…).
+Une base dont la structure est plus ancienne est complétée toute seule à l'ouverture (tables et colonnes qui
+manquent) ; une base ouverte par une version plus récente est refusée par une version plus ancienne, sans être
+modifiée.
 
 ### Mettre ses voyages dans Google Drive, Dropbox, OneDrive ou iCloud (à tes risques)
 
-Aucun serveur et aucune synchronisation propre à Trip Compta : il lit et écrit **directement** son dossier. Ce dossier
-peut être dans ton cloud, qui le recopie sur tes autres ordinateurs : c'est possible, **à tes risques, un seul
-ordinateur à la fois**.
+Aucun serveur et aucune synchronisation propre à Trip Compta : il lit et écrit **directement** son dossier, et ne
+s'occupe pas du cloud. Ce dossier peut être dans ton cloud, qui le recopie sur tes autres ordinateurs : c'est
+possible, **à tes risques, un seul ordinateur à la fois**.
 
 1. Installe l'application de ton cloud pour ordinateur (Dropbox, Google Drive pour ordinateur, OneDrive, iCloud,
    kDrive, Proton Drive…), s'il n'y est pas déjà.
@@ -99,7 +71,7 @@ ordinateur à la fois**.
 
 ### Protéger ses voyages par un mot de passe (facultatif)
 
-Même page, **🔒 Protéger mes voyages…** : la base et les justificatifs du dossier sont **chiffrés** (AES-256-GCM ;
+**⚙️ Réglages → Mot de passe** : la base et les justificatifs du dossier sont **chiffrés** (AES-256-GCM ;
 clé des voyages enfermée par le mot de passe et par une clé de secours, via scrypt). Sans le mot de passe ni la
 clé de secours, personne ne peut les lire, même le service de cloud. Utile si le dossier est partagé, si
 l'ordinateur est partagé (club), ou pour les données personnelles des adhérents.
@@ -126,25 +98,33 @@ l'ordinateur est partagé (club), ou pour les données personnelles des adhéren
 
 | Écran | À quoi ça sert |
 |---|---|
-| 🏠 **Où j'en suis** | coût, déjà reçu, reste à recevoir, reste à rembourser, alertes en clair, les 4 actions courantes |
-| 👥 **Participants** | ajout rapide (un nom par ligne), plongeurs ou **accompagnants**, **familles**, **rôles** (organisateur, co-organisateurs, DP), fiche de chacun |
-| Fiche participant | « ce qu'il doit / ce qu'il a déjà donné / reste » ; clic sur une ligne = le calcul expliqué |
-| 🏷️ **Catégories** | à gauche les catégories disponibles (communes à tous les voyages, on peut en créer et supprimer celles qu'on a créées), à droite celles du voyage ; un clic pour passer de l'une à l'autre |
-| 🧾 **Dépenses** | par catégorie, prévu / réel (ou « montant pas encore connu »), payé par l'asso, avancé par un participant ou **par plusieurs** (montant de chacun), pour qui (parts) ; **argent reçu** (remboursement d'un fournisseur, subvention) |
-| 👥 **Participants › Comptes** | débit (ce que chacun doit) / crédit (ce qu'il a donné) et solde, par personne ou famille ; « Détail des comptes » pour le compte de chacun |
-| ▦ **Qui paie quoi** | tableau participants × dépenses ; clic sur une case = ajuster ce montant |
-| 💶 **Argent reçu et rendu** | versements, remboursements, « qui doit quoi à qui » avec bouton « C'est fait » |
-| 🔒 **Montant fixé** (dans la dépense) | tape un montant pour une personne : il est fixé, le reste se répartit tout seul entre les autres, même si la dépense change |
-| 🎟️ **Remise ou supplément** (fiche du participant) | sur tout son voyage, compensé par l'asso ou par les autres |
-| 🚪 **Désistement** | parts non remboursables conservées, le reste repris par le groupe ou l'asso, remboursement |
+| **Mes voyages** | la liste des voyages ; **+ Nouveau voyage**, **Importer un voyage** ; un voyage fini se **clôture** (ses comptes sont figés, on peut le rouvrir) et se **duplique** pour préparer le suivant |
+| 🏠 **Où j'en suis** | « Pour démarrer » (les étapes d'un voyage tout neuf), puis les comptes : coût, déjà versé, reste à recevoir, reste à rembourser ; « À regarder » : les alertes en clair |
+| 👥 **Participants** | ajout de plusieurs personnes d'un coup (un nom par ligne), reprise du groupe d'un autre voyage, **familles**, **rôles** (organisateur, co-organisateurs…), **groupes** (covoiturage, chambre…), le compte de chacun |
+| 🧾 **Dépenses** | par catégorie, prévu / réel (ou « montant pas encore connu »), payé par l'asso, avancé par un participant ou **par plusieurs** (montant de chacun), pour qui (parts) ; **argent reçu** (remboursement d'un fournisseur, subvention) ; chercher, filtrer, trier |
+| 💶 **Argent reçu et rendu** | ce qu'il reste à recevoir de chacun et à rendre à chacun, avec **✓ Reçu** / **✓ Remboursé** (plusieurs d'un coup si besoin), moyen de paiement, chèques à déposer ; **dates de paiement** et carte « 🔔 À relancer aujourd'hui » |
 | 📎 **Justificatifs** | photos/PDF numérotés J01, J02…, liables à plusieurs dépenses |
+| 🏷️ **Catégories** | en haut les catégories du voyage (avec leurs sous-catégories), en dessous les catégories disponibles, communes à tous les voyages : un clic pour en ajouter une au voyage |
+| 🧮 **Qui paie quoi** | tableau participants × dépenses ; clic sur une case = la dépense, pour ajuster ce montant |
+| 📊 **En images** | le voyage en graphiques |
+| 🏛️ **L'asso** (ou la caisse) | le compte de l'asso pour le voyage ; qui tient la caisse ; qui paie les centimes qui restent |
+| 🔒 **Montant fixé** (dans la dépense) | tape un montant pour une personne : il est fixé, le reste se répartit tout seul entre les autres, même si la dépense change |
+| 🎟️ **Remise ou supplément** (compte du participant) | sur tout son voyage, compensé par l'asso ou par les autres |
+| 🚪 **Désistement** | parts non remboursables conservées, le reste repris par le groupe ou l'asso, remboursement ; aperçu avant de valider |
 | 🤝 **Entre nous** | petits comptes entre participants, hors asso (type Tricount), PDF à partager |
-| 📄 **Exporter** | bilan PDF pour le trésorier + ZIP des justificatifs renommés |
-| 🤖 **IA** (dans chaque voyage) | modèle « démarrer » ou « mettre à jour », message pour n'importe quelle IA (avec l'état du voyage), aperçu avant → après, enregistrement |
+| 🤖 **IA** | modèle « démarrer » ou « mettre à jour », message pour n'importe quelle IA (avec l'état du voyage), aperçu avant → après, enregistrement |
+| 📤 **Envoyer les comptes** | pour chaque personne ou famille : son compte en PDF et un message prêt (WhatsApp, e-mail, copier) |
+| 📄 **Exporter le bilan** | bilan PDF pour le trésorier, ZIP des justificatifs renommés, tableur (.xlsx), texte du mail au trésorier |
+| 📦 **Exporter le voyage** | un fichier avec tout le voyage et ses justificatifs, pour un autre ordinateur ou un autre organisateur |
 
-En haut : thème clair/sombre, **⏻ Arrêter** (tout à droite). Les calculs prennent toujours le **montant réel s'il est saisi, sinon le prévu** ; une dépense comptée sur son prévu est signalée (≈, en couleur) et un rappel indique combien il en reste.
+En haut de la fenêtre : **↶ Défaire** (les dernières modifications, pour revenir en arrière), **❓ Aide** (premiers
+pas, les mots de Trip Compta, astuces), **⚙️ Réglages** (dossier des voyages, mot de passe, sauvegardes, voyage
+d'exemple, version et mises à jour), **AA** (agrandir le texte), thème clair / sombre, **⏻ Arrêter**.
+Les calculs prennent toujours le **montant réel s'il est saisi, sinon le prévu** ; une dépense comptée sur son
+prévu est signalée (≈, en couleur) et un rappel indique combien il en reste.
 Après chaque action, le message de confirmation propose **↶ Défaire** (pour cette action seulement) ; après un
-« Défaire », il propose **↷ Rétablir**.
+« Défaire », il propose **↷ Rétablir**. Un refus (montant invalide, nom déjà pris…) s'affiche en rouge, et ce qui
+était saisi dans le formulaire est gardé.
 
 ### Règles de calcul
 
@@ -152,8 +132,8 @@ Après chaque action, le message de confirmation propose **↶ Défaire** (pour 
   toutes les dépenses de la catégorie, dans tous les voyages ; la liste des dépenses les regroupe avec un sous-total.
 - « Pour qui ? » : **à parts égales** entre les personnes cochées, ou **montants différents** (un montant par
   personne, le total doit faire le montant de la dépense — contrôlé en direct).
-- **Rôles** : Plongeur, Accompagnant (l'un ou l'autre), Organisateur, Co-organisateur, DP — tous des pastilles, « Aucun » possible. **« Pour qui ? »** d'une dépense : pastilles Rôles / Familles / Groupes qui cochent ou décochent leurs membres (+ Tout le monde / Personne) ; la dépense garde la liste des personnes cochées. (Les anciennes données reçoivent le rôle Plongeur automatiquement, une fois.)
-- **Participants en 3 onglets** : **Liste** (ajout en haut, tableau nom · groupes · situation, « Modifier » déplie la ligne : coordonnées, famille, plongeur/acc., rôles, groupes) · **Organisation** (équipe/rôles, familles : créer, membres, qui paie, supprimer ; groupes) · **Comptes** (le compte de chacun, filtre à pastilles mémorisé ; l'ancienne fiche `/p/…` y renvoie, filtrée).
+- **Rôles** : Organisateur, Co-organisateur, et les étiquettes que tu crées pour le voyage (« Moniteur », « DP »…), reprises au voyage suivant ; ce sont des pastilles qui aident à cocher vite les bonnes personnes. **Voyage de plongée** (case à cocher à la création, ou « Ajouter les réglages de plongée » dans Organisation) : les rôles Plongeur et Accompagnant et les catégories de plongée s'ajoutent. **« Pour qui ? »** d'une dépense : pastilles Rôles / Familles / Groupes qui cochent ou décochent leurs membres (+ Tout le monde / Personne) ; la dépense garde la liste des personnes cochées.
+- **Participants en 3 onglets** : **Liste** (ajout en haut, tableau nom · groupes · situation, « Modifier » déplie la ligne : coordonnées, famille, plongeur/acc., rôles, groupes) · **Organisation** (équipe/rôles, familles : créer, membres, qui paie, supprimer ; groupes) · **Comptes** (le compte de chacun, filtre à pastilles mémorisé).
 - **Groupes de personnes** (covoiturage, voiture, chambre…) : créés sur la page Participants ; chacun devient un bouton dans « Pour qui ? » qui coche exactement ses membres ; une dépense répartie sur un groupe affiche son nom. IA : `"groupes"` est enregistré dans le voyage et réutilisable ensuite.
 - **Plusieurs tickets sur une dépense** (deux pleins d'essence…) : « + Plusieurs tickets ? » sous le montant réel (montant + date par ticket, total calculé), ou « 80,12 + 69,10 » tapé dans le montant. Liste des dépenses : 🧾2 et le détail au survol ; PDF : « tickets : … ». IA : `"reel": ["80,12", "69,10"]`.
 - **📲 Envoyer les comptes** : pour chaque personne ou famille, un PDF « Son compte » (en bref + détail par catégorie, sous-catégorie et dépense, avec le calcul) et un message WhatsApp prêt (wa.me, au numéro de la fiche). Un clic télécharge le PDF et ouvre WhatsApp ; il reste à glisser le PDF dans la conversation. ZIP de tous les PDF. Aussi sur la fiche de chaque participant.
@@ -169,20 +149,21 @@ Après chaque action, le message de confirmation propose **↶ Défaire** (pour 
   de ses lignes ; 1 522,29 € de transport à 11 donnent bien 138,39 € chacun.
 - Un **montant fixé** 🔒 dans une dépense ne bouge plus, même si le montant de la dépense change : le reste est
   toujours réparti entre les autres personnes cochées. Une remise (fiche du participant) est compensée par l'asso
-  ou par les autres : le total reste juste. (Les anciens « ajustements » sont convertis automatiquement.)
+  ou par les autres : le total reste juste.
 - Une réduction plus grande que la part de la personne déclenche une alerte.
 - Reste à payer = sa part − ses versements − ses avances + ce que l'asso lui a remboursé.
 - Contrôle permanent : parts des participants + prises en charge asso = coût du voyage, au centime.
 - **Famille** : chaque membre a sa part, mais la famille règle ses comptes **ensemble** (un seul « reste »,
   une personne qui paie pour la famille). Les versements de la famille sont enregistrés à son nom.
-- **Accompagnant** : vient au voyage mais ne plonge pas. Dans « Pour qui ? », les boutons « Plongeurs seulement » /
-  « Accompagnants seulement ».
-- **Rôles** : un organisateur (un seul), des co-organisateurs, un ou plusieurs DP (directeurs de plongée), choisis
+- **Accompagnant** (voyage de plongée) : vient au voyage mais ne plonge pas. Dans « Pour qui ? », les pastilles
+  « Plongeurs » / « Accompagnants » cochent les uns ou les autres.
+- **Équipe** : un organisateur (un seul) et des co-organisateurs, choisis
   parmi les participants (cumul possible). Ils apparaissent en badge dans les listes, en tête du tableau de bord et
   du bilan PDF ; l'organisateur puis les co-organisateurs sont proposés en premier dans « Qui a payé ? ».
   S'il ne vient pas au voyage, l'organisateur reste un simple nom (« Modifier le voyage »).
-- **Catégories** : par défaut Logement, Transport / Covoit, Plongée, Location matériel, Repas, Activités
-  accompagnants, Divers. Retirer une catégorie utilisée range ses dépenses dans « Divers ».
+- **Catégories** : par défaut Logement, Transport / Covoit, Repas, Activités, Divers ; un voyage de plongée y
+  ajoute Plongée, Location matériel, Activités accompagnants. Retirer une catégorie utilisée range ses dépenses
+  dans « Divers ».
 - Tant que le montant réel d'une dépense n'est pas saisi, le prévu est utilisé.
 - **Plusieurs payeurs** : chacun est crédité de ce qu'il a avancé ; ce qui n'est attribué à personne est compté
   pour l'asso.
@@ -205,7 +186,7 @@ voyage (nom, dates), puis on ouvre **🤖 IA** dans le menu du voyage. Deux ongl
   corrections, suppressions, désistements).
 
 1. **Remplis le modèle** en texte simple, directement sur la page. Écris comme tu parles. Chaque frappe est
-   enregistrée à la volée (navigateur, puis `Documents/TripCompta/brouillons_ia/`), un brouillon par voyage et
+   enregistrée à la volée (dans la page, puis `Documents/TripCompta/brouillons_ia/`), un brouillon par voyage et
    par onglet ; « Remettre le modèle au propre » garde l'ancien brouillon, récupérable d'un clic.
 2. **Copie le message pour l'IA** (un bouton) : il contient le numéro du voyage, le mode d'emploi pour l'IA
    ([`compta/static/ia/guide_ia.md`](compta/static/ia/guide_ia.md)), **l'état actuel du voyage** et ton texte.
@@ -217,8 +198,9 @@ voyage (nom, dates), puis on ouvre **🤖 IA** dans le menu du voyage. Deux ongl
 Garde-fou : la réponse de l'IA doit porter le numéro du voyage (`"voyage_id"`) ; collée dans un autre voyage,
 elle est refusée. Les erreurs (prénom inconnu, dépense introuvable…) sont listées d'un coup et copiables pour l'IA.
 
-Modèles vides : [`modele_initialisation.txt`](compta/static/ia/modele_initialisation.txt),
-[`modele_ajustement.txt`](compta/static/ia/modele_ajustement.txt).
+Ce que tu colles dans une IA part chez le service de cette IA : la page le rappelle, et rien n'est envoyé sans toi.
+Le modèle de départ : [`modele_initialisation.txt`](compta/static/ia/modele_initialisation.txt) ; pour « mettre à
+jour », la page part d'une feuille blanche où tu écris ce qui a changé.
 
 ### Pour aller plus loin : Claude Desktop, Claude Code, VS Code (facultatif)
 
@@ -243,17 +225,67 @@ La configuration exacte est dans la partie repliée en bas de la page **🤖 IA*
 
 ### API JSON
 
-Les mêmes opérations sont disponibles en HTTP quand l'application tourne (dont `POST /api/import` pour le JSON du guide) :
-documentation interactive sur <http://127.0.0.1:8765/api/docs>.
+Les mêmes opérations sont disponibles en HTTP quand l'application tourne (dont `POST /api/import` pour le JSON du
+guide ; documentation : `/api/docs`). Un programme doit se présenter avec le **jeton** de la session, dans l'en-tête
+`Authorization: Bearer …` : il est affiché en bas de la page **🤖 IA** du voyage, avec l'adresse exacte, change à
+chaque lancement de Trip Compta et n'est valable que sur cet ordinateur. Sans lui, rien n'est lisible ni modifiable
+(seul `/ping` répond).
 
 ```bash
-curl -X POST http://127.0.0.1:8765/api/voyages/1/depenses -H 'Content-Type: application/json' \
+curl -X POST http://127.0.0.1:8765/api/voyages/1/depenses \
+     -H 'Authorization: Bearer LE_JETON_AFFICHE_SUR_LA_PAGE_IA' -H 'Content-Type: application/json' \
      -d '{"libelle":"Péage","montant_reel":"64,80","paye_par":"Luc","pour":["Luc","Marie"],"simulation":true}'
 ```
 
 ---
 
 ## Pour les développeurs
+
+### Lancer depuis le code source
+
+Pour utiliser Trip Compta, installe plutôt l'application toute prête (voir [INSTALLER.md](INSTALLER.md)).
+Depuis le code source (Python 3.12 ou plus récent ; les versions publiées sont fabriquées avec Python 3.14),
+l'application s'ouvre dans le navigateur :
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt          # Windows : .venv\Scripts\pip install -r requirements.txt
+.venv/bin/python run.py                             # Windows : .venv\Scripts\python run.py
+```
+
+Options de `run.py` :
+
+| Option | Effet |
+|---|---|
+| `--demo` | ajoute les voyages de démonstration (plongée Port-Cros, 12 participants ; week-end Banyuls avec familles et accompagnants) |
+| `--port 9000` | change le port (par défaut 8765, ou le suivant s'il est pris) |
+| `--no-browser` | n'ouvre pas le navigateur |
+| `--data-dir DOSSIER` | range les données ailleurs |
+| `--fenetre` | ouvre l'application dans sa propre fenêtre, même depuis le code source |
+| `--navigateur` | ouvre l'application fabriquée dans le navigateur plutôt que dans sa fenêtre |
+| `--mcp` | démarre le serveur MCP pour une IA (voir plus haut) |
+
+Le navigateur est ouvert avec le jeton de la session dans l'adresse (retiré aussitôt) : un onglet ouvert à la
+main, sans lui, reçoit une page qui l'explique.
+
+### Fabriquer l'application (exécutable autonome)
+
+```bash
+pip install -r requirements-dev.txt
+python build_tools/build.py
+```
+
+**Sa propre fenêtre** : l'application fabriquée (Mac, Windows) s'ouvre dans sa fenêtre (pywebview : WebKit sur Mac,
+WebView2 sous Windows), avec Cmd/Ctrl+N (nouvelle fenêtre) et Cmd/Ctrl+F (rechercher dans la page) ; fermer la
+dernière fenêtre ou Cmd+Q l'arrête proprement.
+
+Sur **Mac**, cela produit `dist.noindex/TripCompta.app` (dossier que Spotlight et le Launchpad ignorent) ; sur
+Windows, la même commande lancée **sur Windows** produit `dist/TripCompta/` (PyInstaller ne fabrique que pour le
+système où il tourne). Une application fabriquée ainsi est une **version de développement**
+(« 1.5.0-dev (commit) ») : elle ne se met jamais à jour toute seule. Les versions publiées (Mac et Windows ; pas
+de version Linux publiée) sont fabriquées par GitHub (voir « Publier une version »).
+
+### Le code
 
 ```
 compta/
@@ -272,10 +304,21 @@ compta/
   api.py          API JSON  (/api, doc /api/docs)
   importer.py     import d'un voyage complet (JSON du guide pour l'IA), modèle et guide dans static/ia/
   mcp_server.py   serveur MCP (stdio)
-  export.py       bilan PDF, ZIP des justificatifs, PDF « Entre nous »
-  demo.py         voyage de démonstration
+  export.py       bilan PDF, comptes personnels en PDF, ZIP des justificatifs, PDF « Entre nous »
+  tableur.py      le tableur (.xlsx) du bilan
+  transfer.py     exporter / importer un voyage (fichier .zip), dupliquer un voyage
+  fichiers.py     justificatifs : types de fichiers acceptés, noms sûrs
+  paths.py        où sont les données et les réglages de l'ordinateur
+  dossier.py      le dossier des voyages : dernier ordinateur qui a écrit, copies en conflit
+  coffre.py crypto.py   voyages protégés par un mot de passe (chiffrement, copie de travail)
+  updater.py signature.py version.py   mises à jour : vérification, signature, installation
+  fenetre.py      la fenêtre de l'application (pywebview)
+  journal.py diagnostic.py   journal de l'application, diagnostic à exporter (sans nom ni montant)
+  demo.py         voyages de démonstration (--demo) ; exemple/ : le voyage d'exemple de l'application
   templates/ static/
-run.py            lanceur (navigateur, --demo, --mcp)
+run.py            lanceur (fenêtre ou navigateur, une seule application à la fois, --demo, --mcp)
+build_tools/      fabrication de l'application (PyInstaller, installeur Windows, signature des empreintes)
+docs/             PUBLIER.md (publier une version, clé de signature), SIGNATURE.md
 tests/
   test_engine.py     règles de calcul, cas par cas
   test_amounts.py    démo recalculée à la main, 550 voyages aléatoires (invariants), PDF = appli
@@ -284,19 +327,21 @@ tests/
   test_un_seul_chemin.py  le même scénario à l'écran et par l'IA : mêmes lignes, mêmes comptes (à la main)
   test_dates_paiement.py  dates de paiement : à jour / en retard / soldé à la main, relances, dates d'une personne
   test_pages.py      les pages rangées par domaine : rien d'oublié, aucune adresse cachée par une autre
+  test_guides.py     INSTALLER.md et README.md disent vrai : boutons cités, fichiers, dossiers, liens
   test_jeton.py      jeton de session : rien n'est lisible ni modifiable sans lui
   test_ai.py         couche IA, API JSON, serveur MCP en vrai sous-processus
   test_import.py     import par l'IA : montants à la main, erreurs groupées, aperçu web,
                      brouillon enregistré à la volée (plantage simulé), copier-coller navigateur
-  test_roles.py      rôles organisateur / co-organisateur / DP : écrans, PDF, IA, migration
+  test_roles.py      rôles organisateur / co-organisateur / DP : écrans, PDF, IA
   test_payers_income.py plusieurs payeurs, recettes, montant à venir, « tous sauf », groupes, note du voyage
-  test_categories.py catégories : deux colonnes, bibliothèque commune, retrait vers « Divers », migration
+  test_categories.py catégories : celles du voyage, bibliothèque commune, retrait vers « Divers »
   test_subcategories.py sous-catégories (regroupement, proposées partout, IA, PDF)
   test_split.py      « Pour qui ? » à parts égales / montants différents
   test_ledger.py     tableau des comptes (débit / crédit), vérifié à la main
-  test_families.py   familles et accompagnants : montants à la main, écrans, PDF, IA, migration d'une ancienne base
+  test_families.py   familles et accompagnants : montants à la main, écrans, PDF, IA
   test_e2e.py        bout en bout dans Chromium (chaque écran, PDF, ZIP)
   test_ux.py         ergonomie : mobile, contrastes, étiquettes, clavier, jargon, parcours débutant
+  …                  et une cinquantaine d'autres fichiers, un par sujet (sauvegardes, protection, mises à jour…)
 ```
 
 ```bash
@@ -331,7 +376,7 @@ l'installeur sous Windows (`build_tools/windows/TripCompta.iss`) : ils remplacen
 et remettent l'ancienne si la nouvelle ne démarre pas. Une base ouverte par une version plus récente
 (X.Y.Z supérieur) est refusée par une version plus ancienne, sans être modifiée.
 
-Pile : Python 3.10+, FastAPI, Jinja2, SQLAlchemy/SQLite, fpdf2 (police DejaVu embarquée), SDK MCP, PyInstaller.
+Pile : Python 3.12+, FastAPI, Jinja2, SQLAlchemy/SQLite, fpdf2 (police DejaVu embarquée), SDK MCP, PyInstaller.
 Pas de framework JavaScript : un petit `static/app.js` pour les aperçus en direct.
 
 ---

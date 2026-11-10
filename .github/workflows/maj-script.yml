@@ -1,4 +1,5 @@
-# Teste le script de mise à jour (remplacer.sh / remplacer.ps1) sur les trois systèmes, à chaque modification.
+# Teste le script de mise à jour (remplacer.sh : Mac, et Linux pour le script seul) à chaque modification. Sous Windows,
+# la mise à jour est faite par l'installeur (essayé dans release.yml) : ces essais-là s'y passent d'eux-mêmes.
 name: Script de mise à jour
 
 on:
