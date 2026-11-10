@@ -2,8 +2,8 @@
 
     python build_tools/build.py
 
-À lancer sur Mac pour obtenir l'app Mac, sur Windows pour le .exe Windows, sur Linux pour Linux (PyInstaller ne
-fait pas de compilation croisée : c'est GitHub Actions qui fabrique les quatre versions, voir
+À lancer sur Mac pour obtenir l'app Mac, sur Windows pour le .exe Windows (PyInstaller ne fait pas de
+compilation croisée : c'est GitHub Actions qui fabrique les trois versions, voir
 .github/workflows/release.yml). Résultat dans dist/.
 
 La version est inscrite dans l'application (compta/_build.py, effacé après) :
@@ -46,6 +46,36 @@ def version_info() -> tuple[str, str, bool]:
     if m.group(1) != __version__:
         sys.exit(f"L'étiquette {tag} ne correspond pas à la version du code ({__version__}, dans compta/__init__.py).")
     return v, commit, False
+
+
+def windows_version_numbers(version: str) -> tuple:
+    """« 1.5.0 », « 1.5.0-beta2 », « 1.5.0-dev » → (1, 5, 0, 0) : les quatre nombres qu'attend Windows."""
+    nums = [int(x) for x in re.findall(r"\d+", version.split("-")[0])][:3]
+    return tuple(nums + [0] * (4 - len(nums)))
+
+
+def windows_version_file(version: str) -> str:
+    """Le fichier de ressources de version que PyInstaller inscrit dans TripCompta.exe (--version-file)."""
+    n = windows_version_numbers(version)
+    return f"""# UTF-8 — écrit par build_tools/build.py
+VSVersionInfo(
+  ffi=FixedFileInfo(filevers={n}, prodvers={n}, mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0,
+                    date=(0, 0)),
+  kids=[
+    StringFileInfo([StringTable('040C04B0', [
+      StringStruct('CompanyName', 'Trip Compta'),
+      StringStruct('FileDescription', 'Trip Compta'),
+      StringStruct('FileVersion', '{version}'),
+      StringStruct('InternalName', 'TripCompta'),
+      StringStruct('OriginalFilename', 'TripCompta.exe'),
+      StringStruct('ProductName', 'Trip Compta'),
+      StringStruct('ProductVersion', '{version}'),
+      StringStruct('LegalCopyright', 'Logiciel libre et gratuit (licence MIT)'),
+    ])]),
+    VarFileInfo([VarStruct('Translation', [0x040C, 1200])])
+  ]
+)
+"""
 
 
 def main():
@@ -91,8 +121,14 @@ def main():
         # Trip Compta s'ouvre dans sa propre fenêtre (pywebview + WebView2) : plus de console noire
         args += ["--windowed", "--icon", str(icons / "TripCompta.ico"),
                  "--collect-submodules", "webview.platforms", "--hidden-import", "clr"]
+        # nom, description et numéro de version dans « Propriétés → Détails » du programme (et dans les
+        # fenêtres de Windows qui demandent « Voulez-vous exécuter ce fichier ? »)
+        info = ROOT / "build" / "version_windows.txt"
+        info.parent.mkdir(exist_ok=True)
+        info.write_text(windows_version_file(version), encoding="utf-8")
+        args += ["--version-file", str(info)]
     else:
-        args += ["--console"]   # Linux : une fenêtre affiche l'adresse ; la fermer arrête l'application
+        args += ["--console"]   # autre système (non publié) : une fenêtre affiche l'adresse
     try:
         PyInstaller.__main__.run(args)
     finally:

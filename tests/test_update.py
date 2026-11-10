@@ -22,7 +22,7 @@ RELEASE = dict(tag_name="v1.1.0", body="- Nouveau : le mail au trésorier\n- Cor
                published_at="2026-11-02T10:00:00Z",
                assets=[{"name": n, "browser_download_url": f"https://exemple.invalid/{n}"} for n in
                        ("TripCompta-mac-arm64.zip", "TripCompta-mac-intel.zip",
-                        "TripCompta-windows-setup.exe", "TripCompta-linux.tar.gz", "SHA256SUMS.txt")])
+                        "TripCompta-windows-setup.exe", "TripCompta-essai.tar.gz", "SHA256SUMS.txt")])
 
 
 @pytest.fixture(autouse=True)
@@ -84,8 +84,8 @@ def test_asset_for_each_computer():
     assert U.asset_name("darwin", "arm64") == "TripCompta-mac-arm64.zip"
     assert U.asset_name("darwin", "x86_64") == "TripCompta-mac-intel.zip"
     assert U.asset_name("win32", "AMD64") == "TripCompta-windows-setup.exe"      # l'installeur
-    assert U.asset_name("linux", "x86_64") == "TripCompta-linux.tar.gz"
-    assert U.asset_name("linux", "aarch64") is None            # pas fabriqué
+    assert U.asset_name("linux", "x86_64") is None             # plus de version Linux
+    assert U.asset_name("linux", "aarch64") is None
     assert U.asset_name("win32", "ARM64") is None
     assert U.asset_name("freebsd14", "amd64") is None
 
@@ -303,9 +303,9 @@ def archive_bytes(name: str, folder: str) -> bytes:
 
 @pytest.fixture
 def install_env(tmp_path, monkeypatch):
-    name = U.asset_name() or "TripCompta-linux.tar.gz"
+    name = U.asset_name() or "TripCompta-essai.tar.gz"          # hors Mac : une archive d'essai, même mécanique
     if name.endswith(".exe"):                                   # Windows : l'installeur, voir test_install_windows
-        name = "TripCompta-linux.tar.gz"
+        name = "TripCompta-essai.tar.gz"
     monkeypatch.setattr(U, "asset_name", lambda *a, **k: name)
     folder = "TripCompta.app" if name.startswith("TripCompta-mac") else "TripCompta"
     content = archive_bytes(name if not name.startswith("TripCompta-mac") else "x.zip", folder)
@@ -617,3 +617,65 @@ def test_relaunched_after_update_reads_options(monkeypatch, tmp_path):
         run_mod.main()
     assert seen["argv"] == ["--navigateur", "--port", "8791", "--no-browser"]
     assert os.environ.get("TRIPCOMPTA_RESTARTED") == "1"
+
+
+@pytest.mark.parametrize("exe,where", [
+    ("/Applications/TripCompta.app/Contents/MacOS/TripCompta", None),
+    ("/Users/zoe/Applications/TripCompta.app/Contents/MacOS/TripCompta", None),
+    ("/Applications/Outils/TripCompta.app/Contents/MacOS/TripCompta", None),
+    ("/Users/zoe/Downloads/TripCompta.app/Contents/MacOS/TripCompta", "Téléchargements"),
+    ("/Users/zoe/Desktop/TripCompta.app/Contents/MacOS/TripCompta", "le Bureau"),
+    ("/private/var/folders/x/T/AppTranslocation/ABC/d/TripCompta.app/Contents/MacOS/TripCompta",
+     "le dossier où tu l'as téléchargée"),
+    ("/Volumes/TripCompta/TripCompta.app/Contents/MacOS/TripCompta", "une image disque ou un disque externe"),
+    ("/opt/x/TripCompta.app/Contents/MacOS/TripCompta", "« /opt/x »"),
+])
+def test_mac_app_outside_applications_is_noticed(exe, where):
+    assert U.misplaced_app(exe, "darwin", True, home="/Users/zoe") == where
+
+
+def test_misplaced_never_on_windows_or_from_source():
+    assert U.misplaced_app("C:/Users/zoe/Downloads/TripCompta/TripCompta.exe", "win32", True) is None
+    assert U.misplaced_app("/Users/zoe/Downloads/TripCompta.app/Contents/MacOS/TripCompta", "darwin", False) is None
+
+
+def test_windows_version_resource():
+    """Le programme Windows porte son nom et son numéro de version (Propriétés → Détails) : le fichier écrit pour
+    PyInstaller est lisible par son propre lecteur, avec les bons nombres."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("build_tc", Path(__file__).resolve().parents[1] / "build_tools" / "build.py")
+    try:
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    except ImportError:
+        pytest.skip("PyInstaller absent")
+    assert mod.windows_version_numbers("1.5.0") == (1, 5, 0, 0)
+    assert mod.windows_version_numbers("2.10.3-beta2") == (2, 10, 3, 0)
+    assert mod.windows_version_numbers("1.5.0-dev") == (1, 5, 0, 0)
+    text = mod.windows_version_file("1.5.0-beta2")
+
+    class Node:                                                 # mêmes noms que ceux lus par PyInstaller
+        def __init__(self, *args, **kw):
+            self.args, self.kw = args, kw
+    names = ("VSVersionInfo", "FixedFileInfo", "StringFileInfo", "StringTable", "StringStruct", "VarFileInfo",
+             "VarStruct")
+    info = eval(text, {n: type(n, (Node,), {}) for n in names})
+    assert info.kw["ffi"].kw["filevers"] == (1, 5, 0, 0) == info.kw["ffi"].kw["prodvers"]
+    table = info.kw["kids"][0].args[0][0]
+    assert table.args[0] == "040C04B0"                          # français, Unicode
+    strings = {s.args[0]: s.args[1] for s in table.args[1]}
+    assert strings["ProductName"] == "Trip Compta" and strings["FileVersion"] == "1.5.0-beta2"
+    assert strings["OriginalFilename"] == "TripCompta.exe"
+
+
+def test_home_page_says_to_move_the_app_into_applications(tmp_path):
+    app = create_app(tmp_path / "d", updater=make(version="1.0.0"))
+    c = TestClient(app)
+    assert 'id="hors-applications"' not in c.get("/").text
+    app.state.misplaced = "Téléchargements"
+    page = c.get("/").text
+    assert 'id="hors-applications"' in page and "ouverte depuis Téléchargements" in page
+    assert "Glisse Trip Compta dans le dossier Applications" in page
+    from compta.ops import Ops
+    tid = Ops(app.state.db).create_trip("x")["voyage_id"]
+    assert 'id="hors-applications"' not in c.get(f"/v/{tid}").text      # seulement sur l'accueil

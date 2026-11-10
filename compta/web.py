@@ -393,6 +393,8 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
     app.state.port = None                 # donnés par run.py (pour relancer après une mise à jour)
     app.state.argv = []
     app.state.update_notice = None if upd.dev else upd.startup_notice()
+    # Mac : application ouverte hors du dossier Applications (Téléchargements…) : on le dit sur l'accueil
+    app.state.misplaced = None if upd.dev else U.misplaced_app()
     # jour où la copie de secours quotidienne a échoué (bandeau sur les pages, jusqu'à la prochaine copie réussie)
     app.state.backup_failed = backup_failed[0] if backup_failed else None
     if journal.setup():
@@ -543,6 +545,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         ctx["request"] = request
         ctx.setdefault("dossier", folder_status())
         ctx.setdefault("backup_failed", bool(app.state.backup_failed))
+        ctx.setdefault("misplaced", app.state.misplaced)
         if vault_box is not None and vault_box.notice and not ctx.get("msg"):
             ctx["msg"], vault_box.notice = vault_box.notice, None
         ctx.setdefault("app_version", upd.label)

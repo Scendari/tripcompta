@@ -1,13 +1,13 @@
 """Mises à jour : savoir s'il y a une nouvelle version, puis l'installer en un clic.
 
 Les versions publiées sont les « Releases » GitHub du dépôt public. Chacune contient un fichier par système
-(TripCompta-mac-arm64.zip, TripCompta-mac-intel.zip, TripCompta-windows-setup.exe, TripCompta-linux.tar.gz) et
+(TripCompta-mac-arm64.zip, TripCompta-mac-intel.zip, TripCompta-windows-setup.exe) et
 SHA256SUMS.txt (l'empreinte de chaque fichier, pour vérifier que le téléchargement est intact).
 
 - La vérification se fait au plus une fois par jour, en arrière-plan ; hors ligne ou en cas d'erreur : rien.
 - Une version de développement ne se met jamais à jour toute seule.
 - L'installation : sauvegarde de la base, téléchargement, contrôle de l'empreinte, puis
-  - Mac, Linux : un petit script (remplacer.sh) attend que l'application soit fermée, la remplace, la relance et
+  - Mac : un petit script (remplacer.sh) attend que l'application soit fermée, la remplace, la relance et
     vérifie qu'elle répond ; sinon il remet l'ancienne ;
   - Windows : l'installeur, en silencieux (build_tools/windows/TripCompta.iss), attend que l'application soit
     fermée, installe, relance ; s'il échoue, il remet tout en place et relance l'ancienne.
@@ -56,9 +56,38 @@ def asset_name(system: str | None = None, machine: str | None = None) -> str | N
         return "TripCompta-mac-arm64.zip" if machine in ("arm64", "aarch64") else "TripCompta-mac-intel.zip"
     if system == "win32":
         return "TripCompta-windows-setup.exe" if machine in ("amd64", "x86_64", "") else None
-    if system.startswith("linux"):
-        return "TripCompta-linux.tar.gz" if machine in ("x86_64", "amd64") else None
-    return None
+    return None                                   # pas de version toute prête pour les autres systèmes (Linux…)
+
+
+APPLICATIONS = ("/Applications", "~/Applications")
+
+
+def misplaced_app(executable: str | None = None, system: str | None = None, frozen: bool | None = None,
+                  home: str | None = None) -> str | None:
+    """Mac : l'application tourne-t-elle hors du dossier Applications ? Renvoie où elle est, en mots simples
+    (« Téléchargements », « le Bureau »…), ou None si tout va bien (ou si la question ne se pose pas : Windows,
+    code source). Hors d'Applications, macOS peut l'isoler et la mise à jour en un clic ne marche pas."""
+    system = system or sys.platform
+    if system != "darwin":
+        return None
+    loc = install_location(executable, system, frozen)
+    if loc is None:
+        return None
+    where = loc[0].parent.as_posix()
+    home = (home or str(Path.home())).rstrip("/")
+    for a in APPLICATIONS:
+        a = a.replace("~", home)
+        if where == a or where.startswith(a + "/"):
+            return None
+    if "/AppTranslocation/" in where:
+        return "le dossier où tu l'as téléchargée"
+    names = {"Downloads": "Téléchargements", "Desktop": "le Bureau", "Documents": "Documents"}
+    for folder, label in names.items():
+        if where == f"{home}/{folder}" or where.startswith(f"{home}/{folder}/"):
+            return label
+    if where.startswith("/Volumes/"):
+        return "une image disque ou un disque externe"
+    return f"« {where} »"
 
 
 def release_info(data: dict) -> dict:
@@ -443,7 +472,7 @@ def launch_installer(installer: Path, work: Path, current: Path, pid: int | None
 
 def launch_script(target: Path, new: Path, exe_rel: str, port: int, version: str, work: Path, app_args: list[str],
                   pid: int | None = None):
-    """Mac, Linux : lance le script de remplacement, détaché : il survit à la fermeture de l'application."""
+    """Mac : lance le script de remplacement, détaché : il survit à la fermeture de l'application."""
     pid = pid or os.getpid()
     log = open(work / "script.log", "ab")
     script = work / "remplacer.sh"
