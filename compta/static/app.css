@@ -161,6 +161,9 @@ form.inline { display: inline; }
 .alerts li.warn { background: var(--amber-bg); border-color: var(--amber); }
 .alerts li.info { background: var(--blue-bg); border-color: var(--ocean); }
 .alerts li.error { background: var(--err-bg); border-color: var(--coral); }
+.ai-notes li { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.ai-notes li form { margin: 0; }
+.ai-privacy { background: var(--amber-bg); border-left: 4px solid var(--amber); border-radius: 9px; padding: .55rem .85rem; font-size: .9rem; margin: .5rem 0 .7rem; }
 .alerts a { color: inherit; text-decoration: underline; }
 .warn-text { color: var(--coral); }
 

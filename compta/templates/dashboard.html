@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import ai_notes_list %}
 {% from "_macros.html" import status, mode_note, role_pills with context %}
 {% block content %}
 <div class="page-head"><div class="grow"><h1>Où j'en suis ?</h1>{{ mode_note(mode) }}</div></div>
@@ -112,10 +113,16 @@
   </div>
 </div>
 
-{% if alerts %}
+{% if alerts or ai_notes %}
 <h2 class="sec-sep">À regarder</h2>
+{% if alerts %}
 <ul class="alerts">
   {% for a in alerts %}<li class="{{ a.level }}">{% if a.link %}<a href="{{ a.link }}">{{ a.text }}</a>{% else %}{{ a.text }}{% endif %}</li>{% endfor %}
 </ul>
+{% endif %}
+{% if ai_notes %}
+<p class="muted small" style="margin:.8rem 0 .35rem">Points que l'IA n'a pas pu trancher. Vérifie-les, corrige si besoin, puis clique sur « C'est vérifié ».</p>
+{{ ai_notes_list(ai_notes, trip.id, 'accueil') }}
+{% endif %}
 {% endif %}
 {% endblock %}

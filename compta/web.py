@@ -1465,7 +1465,8 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         saved = dt.datetime.fromtimestamp(dfile.stat().st_mtime) if draft is not None else None
         return render(request, "ai.html", trip=t, ia_mode=mode, INIT=INIT, UPDATE=UPDATE, modele=blank,
                       guide=importer.guide(), state=trip_state_for_ai(t), draft=draft, draft_saved=saved,
-                      has_prev=dprev.exists(), cur=f"/v/{t.id}/ia", **mcp_conf(request), **ctx)
+                      has_prev=dprev.exists(), cur=f"/v/{t.id}/ia", ai_notes=S.ai_notes(t),
+                      **mcp_conf(request), **ctx)
 
     @app.get("/ia")
     def ai_global():
@@ -1563,7 +1564,22 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
         except OpsError as e:
             errors = getattr(e, "errors", None) or [str(e)]
             return ai_render(request, s, t, mode, texte=texte, errors=errors, focus="apercu")
-        return back(f"/v/{tid}", res["message"] + "")
+        n = len(res.get("a_verifier") or [])
+        more = (f" {n} point{'s' if n > 1 else ''} à vérifier {'sont gardés' if n > 1 else 'est gardé'} "
+                "plus bas, dans « À regarder ».") if n else ""
+        return back(f"/v/{tid}", res["message"] + more)
+
+    @app.post("/v/{tid}/ia/point-verifie")
+    async def ai_note_done(tid: int, request: Request, s: Session = Depends(get_s)):
+        t = trip_or_404(s, tid)
+        f = await request.form()
+        dest = f"/v/{tid}/ia" if f.get("retour") == "ia" else f"/v/{tid}"
+        if not any(n["texte"] == str(f.get("texte") or "").strip() for n in S.ai_notes(t)):
+            return back(dest, "Ce point était déjà retiré")
+        db.snapshot("point de l'IA vérifié")
+        S.drop_ai_note(t, f.get("texte"))
+        s.commit()
+        return back(dest, "Point vérifié : il est retiré de la liste")
 
     # ------------------------------------------------------------------ voyages
     @app.get("/", response_class=HTMLResponse)
@@ -1686,6 +1702,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None) -> FastAP
             cn = e.category.name if e.category else "Divers"
             cat_totals[cn] = cat_totals.get(cn, 0) + r.expense_totals.get(e.id, 0)
         return render(request, "dashboard.html", trip=t, r=r, alerts=S.alerts(t, r), msum=S.money_summary(t, r),
+                      ai_notes=S.ai_notes(t),
                       asso_paid=asso_paid, cat_totals=cat_totals,
                       adv_total=sum(a["amount"] for a in S.advances(t) if not a["income"]),
                       withdrawn={w.participant_id for w in t.withdrawals})

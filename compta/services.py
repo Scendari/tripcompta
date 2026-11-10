@@ -1066,6 +1066,57 @@ def whatsapp_number(phone: str) -> str:
     return digits
 
 
+AI_NOTES_MAX = 40
+
+
+def ai_notes(trip: M.Trip) -> list:
+    """Points « à vérifier » laissés par l'IA et pas encore réglés : [{"texte": …, "le": date ou None}]."""
+    try:
+        raw = json.loads(trip.ai_notes) if trip.ai_notes else []
+    except ValueError:
+        raw = []
+    out = []
+    for x in raw if isinstance(raw, list) else []:
+        if isinstance(x, dict) and str(x.get("texte") or "").strip():
+            try:
+                when = dt.date.fromisoformat(str(x.get("le")))
+            except ValueError:
+                when = None
+            out.append(dict(texte=str(x["texte"]).strip(), le=when))
+    return out
+
+
+def _save_ai_notes(trip: M.Trip, notes: list) -> None:
+    trip.ai_notes = json.dumps([dict(texte=n["texte"], le=n["le"].isoformat() if n["le"] else None)
+                                for n in notes[-AI_NOTES_MAX:]], ensure_ascii=False) if notes else ""
+
+
+def add_ai_notes(trip: M.Trip, texts, today: dt.date | None = None) -> int:
+    """Garde les points « à vérifier » d'une réponse d'IA (sans doublon). Renvoie combien ont été ajoutés."""
+    notes = ai_notes(trip)
+    seen = {E.sort_key(n["texte"]) for n in notes}
+    added = 0
+    for t_ in texts or []:
+        txt = " ".join(str(t_ or "").split())[:500]
+        if txt and E.sort_key(txt) not in seen:
+            seen.add(E.sort_key(txt))
+            notes.append(dict(texte=txt, le=today or dt.date.today()))
+            added += 1
+    if added:
+        _save_ai_notes(trip, notes)
+    return added
+
+
+def drop_ai_note(trip: M.Trip, text: str) -> bool:
+    """« C'est vérifié » : retire ce point (désigné par son texte). False s'il n'y est plus."""
+    notes = ai_notes(trip)
+    keep = [n for n in notes if n["texte"] != str(text or "").strip()]
+    if len(keep) == len(notes):
+        return False
+    _save_ai_notes(trip, keep)
+    return True
+
+
 PAY_INFO_MAX = 1500
 
 

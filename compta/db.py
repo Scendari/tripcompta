@@ -267,14 +267,13 @@ class Database:
         Rien de propre à une ancienne version ici : la base est simplement alignée sur les modèles (models.py)."""
         Base.metadata.create_all(self.engine)
         with self.engine.begin() as c:
-            if int(c.exec_driver_sql("PRAGMA user_version").scalar() or 0) == self.schema:
-                return
             for table in Base.metadata.sorted_tables:
                 have = {r[1] for r in c.exec_driver_sql(f'PRAGMA table_info("{table.name}")')}
                 for col in table.columns:
                     if col.name not in have:
                         c.exec_driver_sql(f'ALTER TABLE "{table.name}" ADD COLUMN {_column_ddl(col, self.engine)}')
-            c.exec_driver_sql(f"PRAGMA user_version = {int(self.schema)}")
+            if int(c.exec_driver_sql("PRAGMA user_version").scalar() or 0) != self.schema:   # sinon : ne rien écrire
+                c.exec_driver_sql(f"PRAGMA user_version = {int(self.schema)}")
 
     # ---------------------------------------------------------- sauvegardes
     def _recover(self) -> dict:

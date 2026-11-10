@@ -390,6 +390,7 @@ def _run_import(s, data, t, expected_id, require_id) -> dict:
     if errors:
         raise ImportErrors(errors)
 
+    S.add_ai_notes(t, notes)                   # gardés après l'enregistrement, jusqu'à « C'est vérifié »
     s.flush()
     s.expire_all()
     t = s.get(M.Trip, t.id)

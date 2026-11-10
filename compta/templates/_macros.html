@@ -48,3 +48,11 @@
   <template id="{{ uid }}">{{ x.msg }}</template>
 </div>
 {%- endmacro %}
+
+{% macro ai_notes_list(notes, tid, retour) %}
+<ul class="alerts ai-notes" id="points-ia">
+  {% for n in notes %}<li class="warn"><span class="grow">🤖 {{ n.texte }}{% if n.le %} <span class="muted small">(noté le {{ n.le.strftime('%d/%m/%Y') }})</span>{% endif %}</span>
+    <form method="post" action="/v/{{ tid }}/ia/point-verifie"><input type="hidden" name="texte" value="{{ n.texte }}"><input type="hidden" name="retour" value="{{ retour }}">
+      <button class="btn small ghost" title="Retirer ce point de la liste">✓ C'est vérifié</button></form></li>{% endfor %}
+</ul>
+{% endmacro %}

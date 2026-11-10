@@ -244,6 +244,7 @@ def trip_detail(t: M.Trip, mode=E.ACTUAL) -> dict:
     out = trip_summary(t, mode)
     out["note"] = t.note or ""
     out["comment_payer"] = S.pay_info(t)
+    out["points_a_verifier"] = [n["texte"] for n in S.ai_notes(t)]
     out["asso"] = S.trip_asso_name(t)
     out["groupes"] = {g["name"]: [p.name for p in g["members"]] for g in S.trip_groups(t)}
     out["caisse"] = S.cashier(t).name if S.cashier(t) else "asso"

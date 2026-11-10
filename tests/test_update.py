@@ -221,11 +221,14 @@ def test_sqlite_settings_are_explicit(tmp_path):
 def test_missing_columns_are_added_from_the_models(tmp_path):
     """Une base dont la structure est plus ancienne est alignée sur les modèles : les colonnes absentes sont
     ajoutées avec leur valeur par défaut, les données restent, et le numéro de structure est écrit."""
+    from compta import models as M
     d = tmp_path / "ancienne"
-    Database(d)
+    first = Database(d)
+    with first.Session() as s:
+        s.add(M.Trip(name="Avant", pay_info="x"))
+        s.commit()
+    first.engine.dispose()
     con = sqlite3.connect(d / "compta.db")
-    con.execute("INSERT INTO trips (name, place, organizer, note, asso_name, is_demo, groups, roles_conf, rounding, "
-                "pay_info, created) VALUES ('Avant', '', '', '', '', 0, '', '', 'participants', 'x', '2026-01-01')")
     con.execute("ALTER TABLE trips DROP COLUMN pay_info")
     con.execute("PRAGMA user_version = 1")
     con.commit()
@@ -233,7 +236,6 @@ def test_missing_columns_are_added_from_the_models(tmp_path):
     db = Database(d)
     assert stored_schema(db.path) == SCHEMA
     with db.Session() as s:
-        from compta import models as M
         t = s.query(M.Trip).one()
         assert (t.name, t.pay_info, t.rounding) == ("Avant", "", "participants")
 

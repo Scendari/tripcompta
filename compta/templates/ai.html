@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import ai_notes_list %}
 {% macro eur(x) %}{{ ((x or 0) * 100)|round|int|money }}{% endmacro %}
 {% block content %}
 <div class="page-head"><div class="grow">
@@ -13,6 +14,13 @@
 <p class="hint" style="margin-top:.3rem">{% if ia_mode == INIT %}Pour un voyage encore vide : participants, rôles, familles, dépenses prévues, premiers versements…{% else %}Pour dire ce qui a changé : nouvelles dépenses, montants réels, versements reçus, corrections, désistements… L'IA reçoit l'état actuel du voyage.{% endif %}</p>
 
 <div style="max-width:960px">
+{% if ai_notes %}
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="margin-bottom:.3rem">Points à vérifier, laissés par l'IA</h3>
+  <p class="hint" style="margin:0 0 .5rem">Ils sont déjà enregistrés tels quels. Vérifie-les, corrige si besoin, puis clique sur « C'est vérifié ».</p>
+  {{ ai_notes_list(ai_notes, trip.id, 'ia') }}
+</div>
+{% endif %}
 <fieldset class="step">
   <legend><span class="n">1</span> {{ 'Remplis le modèle' if ia_mode == INIT else "Décris la mise à jour" }}</legend>
   {% if ia_mode == INIT %}
@@ -47,6 +55,7 @@
 <fieldset class="step">
   <legend><span class="n">2</span> Donne-le à l'IA</legend>
   <p class="hint" style="margin-top:0">Le bouton copie <b>un seul message</b> : le numéro du voyage, le mode d'emploi de l'application pour l'IA{% if ia_mode == UPDATE %}, l'état actuel du voyage{% endif %} et ton texte. Ouvre ton IA, colle le message (et joins tes fichiers si tu en as).</p>
+  <p class="ai-privacy" id="ia-confidentialite" role="note"><b>⚠️ Bon à savoir avant de copier :</b> ce message contient les noms des participants{% if ia_mode == UPDATE %}, ce que chacun a payé et ce qu'il doit encore{% endif %}, avec tout ce que tu as écrit. En le collant dans une IA, tu envoies ces informations à l'entreprise qui la fait fonctionner, en dehors de ton ordinateur. Trip Compta, lui, n'envoie rien : c'est toi qui choisis de coller, ou non. Tu peux remplacer les noms par des prénoms ou des initiales, ou tout saisir à la main sans IA.</p>
   <div class="row">
     <button type="button" class="btn" id="copy-msg">Copier le message pour l'IA</button>
     <button type="button" class="btn ghost" id="dl-msg">Télécharger le message</button>
@@ -88,6 +97,7 @@
     {% if res.a_verifier or res.avertissements %}
     <h4>Points à vérifier</h4>
     <ul class="alerts">{% for x in res.a_verifier %}<li class="warn">{{ x }}</li>{% endfor %}{% for x in res.avertissements %}<li class="warn">{{ x }}</li>{% endfor %}</ul>
+    {% if res.a_verifier %}<p class="hint" style="margin-top:.3rem">Ces points resteront affichés dans « Où j'en suis » après l'enregistrement, tant que tu n'as pas cliqué sur « C'est vérifié ».</p>{% endif %}
     {% endif %}
 
     {% if res.changements %}
