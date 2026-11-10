@@ -259,6 +259,13 @@
     }
   });
 
+  // Relance : pas de PDF à joindre, la ligne est simplement notée « préparé » — <a data-sent>, <button data-sent>
+  document.addEventListener("click", (ev) => {
+    const a = ev.target.closest("[data-sent]");
+    const row = a && a.closest("[data-send-row]");
+    if (row) row.classList.add("sent");
+  });
+
   // Aperçu des fichiers choisis (photos et PDF) avant l'envoi, avec un × pour en retirer un
   document.querySelectorAll("input[type=file][data-file-preview]").forEach((inp) => {
     // Chaque nouveau choix S'AJOUTE aux fichiers déjà choisis (le navigateur, lui, remplacerait la sélection)

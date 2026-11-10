@@ -803,8 +803,16 @@ def alerts(trip: M.Trip, result: E.Result) -> list[dict]:
             out.append(dict(level="warn",
                             text=f"« {e.label} » : le réel dépasse le prévu de {E.fmt(e.actual - e.planned)}",
                             link=f"/v/{tid}/depenses#e{e.id}"))
+    late = late_accounts(trip, result)
+    if late:
+        who = ", ".join(a.name for a, _ in late[:4]) + ("…" if len(late) > 4 else "")
+        out.append(dict(level="warn", link=f"/v/{tid}/argent#relances",
+                        text=f"{len(late)} paiement{'s' if len(late) > 1 else ''} en retard "
+                             f"({E.fmt(sum(p['late'] for _, p in late))}) : {who}. Le message de relance est prêt."))
+    behind = {a.key for a, _ in late}
     for a in result.accounts:
-        if a.share > 0 and a.paid == 0 and a.advanced == 0 and not a.withdrawn and not a.holds_cash:
+        if a.share > 0 and a.paid == 0 and a.advanced == 0 and not a.withdrawn and not a.holds_cash \
+                and a.key not in behind:
             out.append(dict(level="warn", text=f"{a.name} n'a encore rien versé.",
                             link=f"/v/{tid}/p/{a.referent}"))
     for w in result.warnings:
@@ -1341,6 +1349,11 @@ def account_message(trip: M.Trip, result: E.Result, acc) -> str:
         lines.append("➜ Tu tiens la caisse : ton compte se règle avec elle, rien à verser.")
     elif b > 0:
         lines.append(f"➜ Il {'vous' if acc.is_family else 'te'} reste {E.fmt(b)} à verser à {caisse}.")
+        plan = pay_plan(trip, result, acc)
+        for x in (plan or {}).get("lines", []):                # les dates de paiement, quand il y en a
+            if x["missing"] > 0:
+                lines.append(f"   • {E.fmt(x['missing'])} au plus tard le {x['date']:%d/%m/%Y}"
+                             + (f" ({x['nom']})" if x["nom"] else "") + (" — date dépassée" if x["late"] else ""))
         how = pay_info(trip)
         if how:
             lines += ["", "Comment payer :", how, ""]
@@ -1349,6 +1362,161 @@ def account_message(trip: M.Trip, result: E.Result, acc) -> str:
     else:
         lines.append("➜ Tout est réglé ✓")
     lines.append("Le détail par catégorie est dans le PDF joint.")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------- dates de paiement, qui est en retard, relances
+PAY_STEPS_MAX = 8
+PAY_STEP_NAME_MAX = 40
+SETTLED, ON_TIME, LATE = "solde", "a_jour", "en_retard"
+PAY_STATE_LABELS = {SETTLED: "soldé", ON_TIME: "à jour", LATE: "en retard"}
+
+
+def _pay_steps(raw) -> list:
+    out = []
+    for x in raw if isinstance(raw, list) else []:
+        try:
+            d = dt.date.fromisoformat(str(x.get("date")))
+            amount = x.get("montant")
+            amount = int(amount) if amount not in (None, "") else None
+        except (ValueError, TypeError, AttributeError):
+            continue
+        out.append(dict(nom=str(x.get("nom") or "")[:PAY_STEP_NAME_MAX], date=d,
+                        montant=amount if amount and amount > 0 else None))
+    return sorted(out, key=lambda x: x["date"])[:PAY_STEPS_MAX]
+
+
+def pay_dates(trip: M.Trip) -> dict:
+    """Les dates de paiement du voyage : {"etapes": [...], "comptes": {id participant: [...]}}.
+    Une étape : {"nom", "date", "montant"} ; montant en centimes, None = « tout ce qui reste ».
+    « etapes » vaut pour tout le monde (montant PAR PERSONNE) ; « comptes » : des dates différentes pour quelqu'un
+    (montant pour tout son compte, sa famille comprise)."""
+    try:
+        raw = json.loads(trip.pay_dates) if trip.pay_dates else {}
+    except ValueError:
+        raw = {}
+    if not isinstance(raw, dict):
+        raw = {}
+    ids = {p.id for p in trip.participants}
+    own = {}
+    for k, v in (raw.get("comptes") or {}).items() if isinstance(raw.get("comptes"), dict) else []:
+        steps = _pay_steps(v)
+        if str(k).isdigit() and int(k) in ids and steps:
+            own[int(k)] = steps
+    return dict(etapes=_pay_steps(raw.get("etapes")), comptes=own)
+
+
+def dump_pay_dates(data: dict) -> str:
+    def rows(steps):
+        return [dict(nom=x["nom"], date=x["date"].isoformat(), montant=x["montant"]) for x in steps]
+    out = {}
+    if data.get("etapes"):
+        out["etapes"] = rows(data["etapes"])
+    own = {str(k): rows(v) for k, v in (data.get("comptes") or {}).items() if v}
+    if own:
+        out["comptes"] = own
+    return json.dumps(out, ensure_ascii=False) if out else ""
+
+
+def has_pay_dates(trip: M.Trip) -> bool:
+    d = pay_dates(trip)
+    return bool(d["etapes"] or d["comptes"])
+
+
+def account_steps(trip: M.Trip, acc, dates: dict | None = None) -> tuple:
+    """Les dates qui valent pour ce compte, montants pour tout le compte : (étapes, True si ce sont les siennes).
+    Celles du voyage sont « par personne » : une famille de trois doit trois fois l'acompte."""
+    dates = dates if dates is not None else pay_dates(trip)
+    for pid in [acc.referent] + [m.id for m in acc.members]:
+        if pid in dates["comptes"]:
+            return [dict(x) for x in dates["comptes"][pid]], True
+    n = sum(1 for m in acc.members if not m.withdrawn) or len(acc.members)
+    return [dict(x, montant=x["montant"] * n if x["montant"] is not None else None) for x in dates["etapes"]], False
+
+
+def pay_plan(trip: M.Trip, result: E.Result, acc, today: dt.date | None = None, dates: dict | None = None):
+    """Où en est un compte par rapport aux dates de paiement. None : pas de dates pour lui, ou il tient la caisse.
+
+    Ce qui compte comme payé : ses versements, plus les dépenses qu'il a avancées pour le groupe, moins ce qu'on
+    lui a rendu. Chaque date demande d'avoir payé, au total, la somme des montants jusqu'à elle (jamais plus que
+    sa part). Une date est dépassée le lendemain : « au plus tard le 1er mars » laisse toute la journée du 1er.
+    -> {"state": soldé | à jour | en retard, "late": centimes en retard, "since": première date dépassée,
+        "days": jours de retard, "next": prochaine ligne à payer, "lines": le détail date par date}"""
+    steps, own = account_steps(trip, acc, dates)
+    if not steps or acc.holds_cash:
+        return None
+    today = today or dt.date.today()
+    total = max(acc.share, 0)
+    done = acc.share - acc.balance
+    lines, cum = [], 0
+    for x in steps:
+        before = cum
+        cum = total if x["montant"] is None else min(total, cum + x["montant"])
+        due = cum - before
+        paid = min(max(done - before, 0), due)
+        lines.append(dict(nom=x["nom"], date=x["date"], due=due, paid=paid, missing=due - paid, whole=x["montant"] is None,
+                          late=due - paid > 0 and x["date"] < today))
+    late = [x for x in lines if x["late"]]
+    state = SETTLED if acc.balance <= 0 else LATE if late else ON_TIME
+    return dict(state=state, label=PAY_STATE_LABELS[state], own=own, lines=lines, rest=max(acc.balance, 0),
+                late=sum(x["missing"] for x in late), since=late[0]["date"] if late else None,
+                days=(today - late[0]["date"]).days if late else 0,
+                next=next((x for x in lines if x["missing"] > 0 and not x["late"]), None))
+
+
+def pay_plans(trip: M.Trip, result: E.Result, today: dt.date | None = None) -> dict:
+    """{clé du compte: son plan} pour les comptes qui ont des dates de paiement ({} quand il n'y en a aucune)."""
+    dates = pay_dates(trip)
+    if not (dates["etapes"] or dates["comptes"]):
+        return {}
+    out = {}
+    for a in result.accounts:
+        plan = pay_plan(trip, result, a, today, dates)
+        if plan is not None:
+            out[a.key] = plan
+    return out
+
+
+def late_accounts(trip: M.Trip, result: E.Result, today: dt.date | None = None) -> list:
+    """À relancer : [(compte, plan)] des comptes en retard, le plus ancien retard d'abord."""
+    plans = pay_plans(trip, result, today)
+    rows = [(a, plans[a.key]) for a in result.accounts if a.key in plans and plans[a.key]["state"] == LATE]
+    return sorted(rows, key=lambda x: (x[1]["since"], x[0].sort_name))
+
+
+def pay_dates_summary(steps, per_person: bool = True) -> list:
+    """Les dates dites en clair, une par ligne : « Acompte : 100,00 € par personne, au plus tard le 01/03/2027 »."""
+    out = []
+    for x in steps:
+        what = "tout ce qui reste" if x["montant"] is None else \
+            E.fmt(x["montant"]) + (" par personne" if per_person else "")
+        out.append(f"{x['nom'] + ' : ' if x['nom'] else ''}{what}, au plus tard le {x['date']:%d/%m/%Y}")
+    return out
+
+
+def reminder_message(trip: M.Trip, result: E.Result, acc, plan: dict) -> str:
+    """Message de relance prêt à envoyer à un compte en retard."""
+    first = result.people[acc.referent].name.split()[0]
+    you = "vous" if acc.is_family else "te"
+    late = [x for x in plan["lines"] if x["late"]]
+    lines = [f"Bonjour {first}, un petit rappel pour le voyage « {trip.name} »."]
+    if len(late) == 1:
+        x = late[0]
+        lines.append(f"➜ Il {you} reste {E.fmt(plan['late'])} à verser à {caisse_label(trip)} : c'était à régler pour le "
+                     f"{x['date']:%d/%m/%Y}" + (f" ({x['nom']})." if x["nom"] else "."))
+    else:
+        lines.append(f"➜ Il {you} reste {E.fmt(plan['late'])} à verser à {caisse_label(trip)}, dates dépassées :")
+        lines += [f"   • {E.fmt(x['missing'])} pour le {x['date']:%d/%m/%Y}" + (f" ({x['nom']})" if x["nom"] else "")
+                  for x in late]
+    for x in plan["lines"]:
+        if x["missing"] > 0 and not x["late"]:
+            lines.append(f"Ensuite : {E.fmt(x['missing'])} au plus tard le {x['date']:%d/%m/%Y}"
+                         + (f" ({x['nom']})." if x["nom"] else "."))
+    how = pay_info(trip)
+    if how:
+        lines += ["", "Comment payer :", how]
+    lines += ["", f"Si {'vous avez' if acc.is_family else 'tu as'} payé entre-temps, ne "
+                  f"{'tenez' if acc.is_family else 'tiens'} pas compte de ce message. Merci !"]
     return "\n".join(lines)
 
 

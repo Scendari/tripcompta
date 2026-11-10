@@ -34,6 +34,9 @@ class Trip(Base):
     pay_info: Mapped[str] = mapped_column(Text, default="")  # « Comment payer » : RIB, chèque, lien, consigne… (texte libre)
     ai_notes: Mapped[str] = mapped_column(Text, default="")  # JSON : points « à vérifier » laissés par l'IA [{"texte", "le"}]
     closed_on: Mapped[Optional[dt.date]] = mapped_column(Date, nullable=True)   # voyage clôturé ce jour-là (figé) ; None : ouvert
+    # JSON : dates de paiement {"etapes": [{"nom", "date", "montant" (centimes par personne, null = tout le reste)}],
+    #                          "comptes": {"<id participant>": [mêmes étapes, montants pour tout le compte]}}
+    pay_dates: Mapped[str] = mapped_column(Text, default="")
     created: Mapped[dt.datetime] = mapped_column(DateTime, default=now)
 
     participants: Mapped[list["Participant"]] = relationship(

@@ -89,6 +89,17 @@
     {% elif bal < 0 %}➜ {{ asso_name|capfirst }} doit rembourser {{ (-bal)|money }} à {{ who }}
     {% else %}➜ {{ who }} est à jour ✓{% endif %}
   </div>
+  {% set pl = pay_plans(trip, r).get(acc.key) %}
+  {% if pl and (bal > 0 or pl.own) %}
+  <div class="pay-plan" id="dates-{{ payer }}">
+    <div class="row" style="justify-content:space-between;gap:.6rem;align-items:baseline"><b>📅 Dates de paiement{{ ' (rien que pour ' ~ who ~ ')' if pl.own }}</b>
+      <span class="pill {{ 'late' if pl.state == 'en_retard' else 'ok' }}">{{ pl.label }}</span></div>
+    <ul class="dates-list">{% for x in pl.lines if x.due > 0 %}
+      <li>{{ x.nom }} : {{ x.due|money }} au plus tard le {{ x.date|date }}
+        {% if x.missing == 0 %}<span class="ok-text">✓ payé</span>{% elif x.late %}<span class="late-text">en retard : il manque {{ x.missing|money }}</span>{% elif x.paid %}<span class="muted">déjà {{ x.paid|money }}, reste {{ x.missing|money }}</span>{% else %}<span class="muted">à venir</span>{% endif %}</li>{% endfor %}</ul>
+    <p class="small" style="margin:.3rem 0 0"><a href="/v/{{ trip.id }}/argent/dates?pour={{ payer }}">{{ 'Changer ses dates' if pl.own else 'Lui donner d\'autres dates (délai, paiement en plusieurs fois)' }}</a></p>
+  </div>
+  {% endif %}
   {% if bal > 0 %}
     <p class="small" style="margin-top:.6rem"><a href="/v/{{ trip.id }}/argent?k=versement&p={{ payer }}&a={{ bal|amount_input }}#ajout">Enregistrer {{ 'le versement de la famille' if acc.is_family else 'son versement' }} de {{ bal|money }}</a></p>
   {% elif bal < 0 %}

@@ -214,6 +214,13 @@ Deux situations :
     {"nom": "Resto du vendredi", "membres": ["Luc", "Marie", "Sophie"],
      "depenses": [{"libelle": "Addition", "montant": "180", "paye_par": "Luc", "pour": "tous"}]}
   ],
+  "dates_paiement": [
+    {"nom": "Acompte", "date": "2027-03-01", "montant": "150"},
+    {"nom": "Solde", "date": "2027-05-01"},
+    {"pour": "Hugo", "nom": "En trois fois", "date": "2027-03-01", "montant": "50"},
+    {"pour": "Hugo", "date": "2027-04-01", "montant": "50"},
+    {"pour": "Hugo", "date": "2027-05-01"}
+  ],
   "a_verifier": [
     "Le ticket de péage n'a pas de date.",
     "Hugo : 4 ou 6 sorties ? (mis 4 en attendant)"
@@ -248,6 +255,7 @@ On n'y met que ce qui change. Les noms de dépenses et de personnes sont ceux de
   "groupes": {"voiture de Marie": ["Marie", "Hugo", "Antoine"]},
   "remises": [],
   "desistements": [],
+  "dates_paiement": [{"pour": "Marie", "nom": "Délai accordé", "date": "2027-05-20"}],
   "a_verifier": ["Le ticket du pot de fin n'est pas lisible : 45 € ou 48 € ?"]
 }
 ```
@@ -312,6 +320,13 @@ On n'y met que ce qui change. Les noms de dépenses et de personnes sont ceux de
   des montants fixés ne peut pas dépasser la dépense.
 - `remises` : `participant`, `type` (`"remise"` par défaut, ou `"supplement"`), `montant`, `compense_par`
   (`"asso"` par défaut, ou `"autres"`), `motif`. Toujours sur **tout le voyage** de la personne.
+- `dates_paiement` (facultatif) : quand l'organisateur attend l'argent. `nom` (« Acompte », « Solde »…),
+  `date` (au plus tard ce jour-là), `montant` **par personne** ; sans `montant` = « tout ce qui reste », à
+  réserver à la dernière date. Les lignes sans `pour` valent pour tout le voyage et **remplacent** ses dates ;
+  avec `"pour": "Hugo"`, ce sont les dates de Hugo seulement (ou de sa famille : montants pour tout son compte),
+  par exemple un paiement en plusieurs fois ou un délai. N'invente pas de dates : ne remplis `dates_paiement` que
+  si l'utilisateur en donne. L'état du voyage indique ensuite, dans `paiements`, qui est « à jour », « en retard »
+  (de combien, depuis quand) ou « soldé » : sers-t'en si l'utilisateur demande qui relancer.
 - (Ancien format, encore accepté : `ajustements`. Sur une dépense, il devient un montant fixé ; sur le total,
   une remise. N'en produis plus.)
 - `desistements.pris_en_charge_par` : `"groupe"` ou `"asso"`. `parts_conservees` : libellés des dépenses

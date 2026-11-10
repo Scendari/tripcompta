@@ -1,8 +1,8 @@
 {% macro status(ps) -%}
-{% if ps.withdrawn and ps.balance == 0 %}<span class="pill grey">désisté · à jour</span>
+{% if ps.withdrawn and ps.balance == 0 %}<span class="pill grey">désisté · {{ trip|settled_word if trip is defined else 'à jour' }}</span>
 {% elif ps.balance > 0 %}<span class="pill doit">doit encore {{ ps.balance|money }}</span>
 {% elif ps.balance < 0 %}<span class="pill du">on lui doit {{ (-ps.balance)|money }}</span>
-{% else %}<span class="pill ok">à jour</span>{% endif %}
+{% else %}<span class="pill ok">{{ trip|settled_word if trip is defined else 'à jour' }}</span>{% endif %}
 {%- endmacro %}
 {% macro mode_note(mode) -%}
 {% if estimated %}<span class="small est-note" title="{{ estimated|map(attribute='label')|join(', ') }}"><span class="est">≈</span> {{ estimated|length }} dépense{{ 's' if estimated|length > 1 }} {{ 'sont comptées' if estimated|length > 1 else 'est comptée' }} sur {{ 'leur' if estimated|length > 1 else 'son' }} <span class="est">montant prévu</span> : le réel n'est pas encore saisi. <a href="/v/{{ trip.id }}/depenses">Voir</a></span>{% endif %}
@@ -29,21 +29,22 @@
 {%- endmacro %}
 
 
-{% macro share_menu(x, uid, label='Partager', primary=true) -%}
-{# Partager le compte d'une personne : WhatsApp, e-mail, partage du système (PDF joint), PDF, copier. #}
+{% macro share_menu(x, uid, label='Partager', primary=true, title='Envoyer son compte : WhatsApp, e-mail…') -%}
+{# Partager le compte d'une personne : WhatsApp, e-mail, partage du système (PDF joint), PDF, copier.
+   Sans x.pdf (une relance) : seulement le message, par WhatsApp, e-mail ou copié. #}
 <div class="share" data-share>
   <button type="button" class="btn small{{ '' if primary else ' ghost' }} share-btn" aria-haspopup="menu" aria-expanded="false"
-          title="Envoyer son compte : WhatsApp, e-mail…"><svg class="share-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> {{ label }} <span aria-hidden="true">▾</span></button>
+          title="{{ title }}"><svg class="share-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> {{ label }} <span aria-hidden="true">▾</span></button>
   <div class="share-menu" role="menu" hidden>
-    <a role="menuitem" href="{{ x.wa }}" target="_blank" rel="noopener" data-send-pdf="{{ x.pdf }}">
+    <a role="menuitem" href="{{ x.wa }}" target="_blank" rel="noopener" {% if x.pdf %}data-send-pdf="{{ x.pdf }}"{% else %}data-sent{% endif %}>
       <b>WhatsApp</b><span>{{ x.ref.phone or 'tu choisiras à qui envoyer' }}</span></a>
-    <a role="menuitem" href="{{ x.mail }}" data-send-pdf="{{ x.pdf }}">
+    <a role="menuitem" href="{{ x.mail }}" {% if x.pdf %}data-send-pdf="{{ x.pdf }}"{% else %}data-sent{% endif %}>
       <b>E-mail</b><span>{{ x.ref.email or 'tu choisiras à qui envoyer' }}</span></a>
-    <button type="button" role="menuitem" data-share-native data-pdf="{{ x.pdf }}" data-title="{{ x.subject }}" data-msg="#{{ uid }}" hidden>
-      <b>Autre…</b><span>Partage de l'ordinateur (messagerie, etc.), avec le PDF joint</span></button>
+    {% if x.pdf %}<button type="button" role="menuitem" data-share-native data-pdf="{{ x.pdf }}" data-title="{{ x.subject }}" data-msg="#{{ uid }}" hidden>
+      <b>Autre…</b><span>Partage de l'ordinateur (messagerie, etc.), avec le PDF joint</span></button>{% endif %}
     <hr>
-    <a role="menuitem" href="{{ x.pdf }}"><b>Télécharger le PDF</b></a>
-    <button type="button" role="menuitem" data-copy="#{{ uid }}"><b>Copier le message</b></button>
+    {% if x.pdf %}<a role="menuitem" href="{{ x.pdf }}"><b>Télécharger le PDF</b></a>{% endif %}
+    <button type="button" role="menuitem" data-copy="#{{ uid }}" {{ 'data-sent' if not x.pdf }}><b>Copier le message</b></button>
   </div>
   <template id="{{ uid }}">{{ x.msg }}</template>
 </div>

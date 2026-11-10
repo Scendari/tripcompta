@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div class="grow">
+  <h1>{% if acc %}Dates de paiement de {{ acc.name }}{% else %}Dates de paiement{% endif %}</h1>
+  <p class="muted">{% if acc %}Des dates rien que pour {{ 'cette famille' if acc.is_family else acc.name }} : un paiement en plusieurs fois, un délai accordé… Elles remplacent celles du voyage pour {{ 'elle' if acc.is_family else 'cette personne' }}.{% else %}Par exemple un acompte avant telle date, puis le reste avant le départ. Trip Compta te dit ensuite qui est à jour et qui est en retard, et prépare le message de relance.{% endif %}</p>
+</div>
+  <a class="btn ghost small" href="/v/{{ trip.id }}/argent{{ '/dates' if acc }}">← {{ 'Dates du voyage' if acc else 'Reste à régler' }}</a>
+</div>
+
+<form method="post" action="/v/{{ trip.id }}/argent/dates" class="card" id="dates-form">
+  {% if acc %}<input type="hidden" name="pour" value="{{ acc.referent }}">
+  <p class="small" style="margin-top:0">{{ acc.name }} doit en tout <b>{{ acc.share|money }}</b>{% if acc.balance > 0 %}, il reste <b>{{ acc.balance|money }}</b> à verser{% endif %}.
+    {% if trip_lines %}<span class="muted">Dates du voyage : {{ trip_lines|join(' ; ') }}.</span>{% endif %}</p>{% endif %}
+  <div class="table-wrap"><table class="dates-table">
+    <thead><tr><th scope="col">Quoi</th><th scope="col">Au plus tard le</th><th scope="col">Montant{{ '' if acc else ' par personne' }} (€)</th></tr></thead>
+    <tbody>
+    {% set hints = ['Acompte', 'Solde', ''] %}
+    {% for i in range(rows) %}{% set x = steps[i] if i < steps|length else none %}
+    <tr>
+      <td><input type="text" name="nom_{{ i }}" id="nom_{{ i }}" maxlength="40" value="{{ x.nom if x else '' }}" placeholder="{{ hints[i] if i < 3 and not steps else '' }}" aria-label="Quoi, ligne {{ i + 1 }}"></td>
+      <td><input type="date" data-no-today name="date_{{ i }}" id="date_{{ i }}" value="{{ x.date.isoformat() if x else '' }}" aria-label="Au plus tard le, ligne {{ i + 1 }}"></td>
+      <td><input class="amount" type="text" inputmode="decimal" name="montant_{{ i }}" id="montant_{{ i }}" value="{{ x.montant|amount_input if x and x.montant is not none else '' }}" placeholder="tout ce qui reste" aria-label="Montant, ligne {{ i + 1 }}"></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="hint">Une ligne par date. <b>Montant vide</b> = « tout ce qui reste à payer » : à garder pour la dernière date.
+    {% if not acc %}Le montant est <b>par personne</b> : une famille de trois doit trois fois l'acompte.{% endif %}
+    Pour retirer une ligne, vide-la. Une dépense payée pour le groupe compte comme un paiement.</p>
+  <div class="row" style="gap:.5rem;justify-content:flex-end">
+    <a class="btn small ghost" href="/v/{{ trip.id }}/argent{{ '/dates' if acc }}">Annuler</a>
+    <button class="btn small">Enregistrer</button></div>
+</form>
+
+{% if steps %}
+<form method="post" action="/v/{{ trip.id }}/argent/dates/retirer" class="row" style="justify-content:flex-end;margin:.2rem 0 1rem">
+  {% if acc %}<input type="hidden" name="pour" value="{{ acc.referent }}">{% endif %}
+  <button class="btn link small">{{ 'Revenir aux dates du voyage' if acc else 'Ne plus utiliser de dates de paiement' }}</button>
+</form>
+{% endif %}
+
+{% if not acc %}
+<h2>Des dates différentes pour quelqu'un</h2>
+<p class="muted small">Quelqu'un paie en plusieurs fois, ou a obtenu un délai ? Donne-lui ses propres dates : il ne sera plus signalé en retard à tort.</p>
+{% if others %}
+<div class="card table-wrap"><table>
+  <tbody>{% for o in others %}<tr><td><b>{{ o.acc.name }}</b><div class="small muted">{{ o.lines|join(' ; ') }}</div></td>
+    <td class="row-actions"><a class="btn link small" href="/v/{{ trip.id }}/argent/dates?pour={{ o.acc.referent }}">Modifier</a></td></tr>{% endfor %}</tbody>
+</table></div>
+{% endif %}
+{% if choices %}
+<form method="get" action="/v/{{ trip.id }}/argent/dates" class="row" style="gap:.5rem;align-items:end;flex-wrap:wrap">
+  <div class="field" style="margin:0"><label for="pour">Pour qui ?</label>
+    <select id="pour" name="pour" required><option value="">— choisir —</option>
+      {% for a in choices %}<option value="{{ a.referent }}">{{ a.name }}</option>{% endfor %}</select></div>
+  <button class="btn small ghost">Choisir ses dates</button>
+</form>
+{% endif %}
+{% endif %}
+{% endblock %}

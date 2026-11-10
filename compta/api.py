@@ -94,6 +94,19 @@ class AdjustIn(BaseModel):
     simulation: bool = False
 
 
+class PayDateIn(BaseModel):
+    nom: str = Field("", description="« Acompte », « Solde »…")
+    date: str = Field(..., description="au plus tard ce jour-là (AAAA-MM-JJ)")
+    montant: Amount = Field(None, description="par personne ; vide = « tout ce qui reste » (dernière date seulement)")
+    pour: Optional[Ref] = Field(None, description="vide : pour tout le voyage ; un nom : les dates de cette personne "
+                                                   "(ou de sa famille), montants pour tout son compte")
+
+
+class PayDatesIn(BaseModel):
+    dates: list[PayDateIn]
+    simulation: bool = False
+
+
 class WithdrawIn(BaseModel):
     participant: Ref
     pris_en_charge_par: str = Field("groupe", description="« groupe » ou « asso »")
@@ -177,6 +190,10 @@ def install_api(app: FastAPI):
     @r.post("/voyages/{voyage}/mouvements", summary="Versement d'un participant ou remboursement par l'asso")
     def add_movement(voyage: str, b: MovementIn):
         return ops.add_movement(voyage, **b.model_dump())
+
+    @r.post("/voyages/{voyage}/dates-paiement", summary="Fixer les dates de paiement (acompte, solde…)")
+    def set_pay_dates(voyage: str, b: PayDatesIn):
+        return ops.set_pay_dates(voyage, [x.model_dump() for x in b.dates], b.simulation)
 
     @r.post("/voyages/{voyage}/ajustements", summary="Ajuster la part de quelqu'un")
     def adjust(voyage: str, b: AdjustIn):

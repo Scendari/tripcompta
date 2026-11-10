@@ -35,7 +35,8 @@
           {% if a.holds_cash %}<span class="pill grey">tient la caisse</span>
           {% elif a.balance > 0 %}<span class="pill doit">doit {{ a.balance|money }}</span>
           {% elif a.balance < 0 %}<span class="pill du">on lui doit {{ (-a.balance)|money }}</span>
-          {% else %}<span class="pill ok">à jour</span>{% endif %}</h3>
+          {% else %}<span class="pill ok">{{ trip|settled_word }}</span>{% endif %}
+          {% set pl = plans.get(a.key) %}{% if pl and pl.state == 'en_retard' %}<span class="pill late" title="{{ pl.late|money }} à régler depuis le {{ pl.since|date }}">en retard</span>{% endif %}</h3>
         <div class="muted small">{% if a.is_family %}à {{ x.ref.name }} · {% endif %}{{ x.ref.phone or "pas de numéro" }} · {{ x.ref.email or "pas d'e-mail" }}</div>
       </div>
       <div class="row send-actions" style="gap:.4rem">

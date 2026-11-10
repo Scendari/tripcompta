@@ -13,7 +13,7 @@ from . import services as S
 from .ops import (GROUPS, FixedShare, OpsError, do_add_expense, do_add_movement, do_add_participants, do_adjust,
                   do_create_subaccount, do_fix_share,
                   do_create_trip, do_add_subexpense, do_delete_expense, do_delete_movement, do_update_expense,
-                  do_update_participant, do_update_trip, do_withdraw, trip_detail)
+                  do_set_pay_dates, do_update_participant, do_update_trip, do_withdraw, trip_detail)
 
 IA_DIR = Path(__file__).parent / "static" / "ia"
 GUIDE_FILE = IA_DIR / "guide_ia.md"
@@ -22,7 +22,7 @@ UPDATE_TEMPLATE_FILE = IA_DIR / "modele_ajustement.txt"   # voyage déjà rempli
 
 KNOWN = {"voyage_id", "voyage", "groupes", "participants", "participants_a_modifier", "familles", "depenses",
          "depenses_a_modifier", "depenses_a_supprimer", "versements", "versements_a_supprimer", "ajustements",
-         "remises", "desistements", "entre_nous", "a_verifier"}
+         "remises", "desistements", "entre_nous", "a_verifier", "dates_paiement"}
 
 
 def _apply_fixed(s, t, e, fixe) -> str:
@@ -388,6 +388,13 @@ def _run_import(s, data, t, expected_id, require_id) -> dict:
             return f"Compte « Entre nous » « {acc.name} »"
         for i, d in enumerate(_list(data, "entre_nous"), 1):
             step("entre_nous", i, d, sub)
+
+        if data.get("dates_paiement"):               # acompte, solde… : qui est en retard se lit ensuite dans l'état
+            try:
+                actions.extend(do_set_pay_dates(s, t, data["dates_paiement"]))
+                created["modifications"] += 1
+            except OpsError as e:
+                errors.append(f"Dates de paiement : {e}")
     except ImportErrors:
         raise
     if errors:

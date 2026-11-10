@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import share_menu %}
 {% macro method_field(id, value='') %}<div class="field"><label for="{{ id }}">Moyen de paiement <span class="hint">(facultatif)</span></label>
   <select id="{{ id }}" name="method"><option value="">— pas précisé —</option>{% for k, l in methods %}<option value="{{ k }}" {{ 'selected' if k == value }}>{{ l }}</option>{% endfor %}</select></div>{% endmacro %}
 {% block content %}
@@ -12,6 +13,33 @@
 </nav>
 
 {% if tab == 'regler' %}
+{% if reminders %}
+<div class="card relances" id="relances">
+  <div class="row" style="justify-content:space-between;gap:.6rem;align-items:baseline">
+    <h3 style="margin:0">🔔 À relancer aujourd'hui</h3>
+    <b class="num">{{ reminders|sum(attribute='plan.late')|money }}</b></div>
+  <p class="muted small" style="margin:.2rem 0 .6rem">Ces paiements devraient déjà être arrivés. Le message est prêt : clique sur <b>Relancer</b>, puis choisis WhatsApp ou E-mail. Rien ne part tout seul.</p>
+  {% for x in reminders %}{% set a = x.acc %}
+  <div class="send-row relance" data-send-row id="relance-{{ a.key }}">
+    <div class="row" style="justify-content:space-between;align-items:flex-start;gap:.6rem">
+      <div class="grow">
+        <b><a href="/v/{{ trip.id }}/participants/comptes?p={{ a.referent }}#p{{ a.referent }}">{{ a.name }}</a></b> <span class="pill late">en retard</span>
+        <div class="small"><b>{{ x.plan.late|money }}</b> à régler depuis le {{ x.plan.since|date }} <span class="muted">({{ x.plan.days }} jour{{ 's' if x.plan.days > 1 }})</span></div>
+        <div class="muted small">{% if a.is_family %}à {{ x.ref.name }} · {% endif %}{{ x.ref.phone or "pas de numéro" }} · {{ x.ref.email or "pas d'e-mail" }}</div>
+      </div>
+      <div class="row send-actions" style="gap:.4rem">{{ share_menu(x, 'relance-msg-' ~ a.key, label='Relancer', title='Envoyer le message de relance : WhatsApp, e-mail…') }}</div>
+    </div>
+    <details style="margin-top:.3rem"><summary class="small muted">Voir ou retoucher le message</summary>
+      <label class="sr-only" for="rmsg-{{ a.key }}">Message de relance pour {{ a.name }}</label>
+      <textarea class="msg" id="rmsg-{{ a.key }}" data-msg-edit data-num="{{ x.num or '' }}" data-mail="{{ x.ref.email or '' }}" data-subject="{{ x.subject }}"
+                rows="{{ x.msg.count('\n') + 2 }}">{{ x.msg }}</textarea>
+      <p class="hint" style="margin:.25rem 0 0">Tu peux changer ce texte avant de l'envoyer. Ta retouche vaut pour cet envoi.
+        <button type="button" class="linklike" data-msg-reset hidden>Remettre le message d'origine</button></p></details>
+    <span class="sent-mark small">✓ préparé</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
 <div class="settle-card">
   {% set st = r.settlements() %}
   {% set owe = st|rejectattr(0, 'equalto', ASSO)|sort(attribute=2, reverse=true)|list %}
@@ -24,7 +52,8 @@
     {% set many = rows|length > 1 %}
     <table class="settle-table">
       {% for a, b, c in rows %}{% set acc = a if kind == 'versement' else b %}
-      <tr>{% if many %}<td class="tick"><input type="checkbox" name="qui" value="{{ acc.referent }}" form="lot-{{ kind }}" data-amount="{{ c }}" aria-label="Cocher {{ acc.name }}"></td>{% endif %}<td><a href="/v/{{ trip.id }}/participants/comptes?p={{ acc.referent }}#p{{ acc.referent }}">{{ acc.name }}</a>{% if acc.is_family %} <span class="muted small">(à {{ r.people[acc.referent].name }})</span>{% endif %}</td>
+      <tr>{% if many %}<td class="tick"><input type="checkbox" name="qui" value="{{ acc.referent }}" form="lot-{{ kind }}" data-amount="{{ c }}" aria-label="Cocher {{ acc.name }}"></td>{% endif %}<td><a href="/v/{{ trip.id }}/participants/comptes?p={{ acc.referent }}#p{{ acc.referent }}">{{ acc.name }}</a>{% if acc.is_family %} <span class="muted small">(à {{ r.people[acc.referent].name }})</span>{% endif %}{% set pl = plans.get(acc.key) if kind == 'versement' else none %}{% if pl %}
+          <div class="pay-state small">{% if pl.state == 'en_retard' %}<span class="pill late">en retard</span> {{ pl.late|money }} depuis le {{ pl.since|date }}{% else %}<span class="pill ok">à jour</span>{% if pl.next %} <span class="muted">prochain paiement : {{ pl.next.missing|money }} au plus tard le {{ pl.next.date|date }}</span>{% endif %}{% endif %}</div>{% endif %}</td>
         <td class="num amt">{{ c|money }}</td>
         <td class="row-actions"><button type="button" class="btn small ghost" data-toggle-row="#pay-{{ kind }}-{{ acc.referent }}" aria-expanded="false">{{ btn }}</button></td></tr>
       <tr class="edit-row" id="pay-{{ kind }}-{{ acc.referent }}" hidden><td colspan="{{ 4 if many else 3 }}">
@@ -56,6 +85,21 @@
     {% endif %}
   </div>
   {% endfor %}
+</div>
+<div class="card dates-card" id="dates">
+  {% if dates_lines or own_dates %}
+  <div class="row" style="justify-content:space-between;gap:.6rem;align-items:baseline">
+    <h3 style="margin:0">📅 Dates de paiement</h3>
+    <a class="btn link small" href="/v/{{ trip.id }}/argent/dates">Modifier</a></div>
+  {% if dates_lines %}<ul class="dates-list">{% for l in dates_lines %}<li>{{ l }}</li>{% endfor %}</ul>
+  {% else %}<p class="muted small" style="margin:.3rem 0 0">Pas de dates pour tout le voyage.</p>{% endif %}
+  {% if own_dates %}<p class="small muted" style="margin:.4rem 0 0">Dates différentes pour : {% for o in own_dates %}<a href="/v/{{ trip.id }}/argent/dates?pour={{ o.acc.referent }}" title="{{ o.lines|join(' ; ') }}">{{ o.acc.name }}</a>{{ ', ' if not loop.last }}{% endfor %}.</p>{% endif %}
+  {% else %}
+  <div class="row" style="justify-content:space-between;gap:.8rem;align-items:center;flex-wrap:wrap">
+    <div class="grow"><b>📅 Tu attends des paiements à des dates précises ?</b>
+      <div class="muted small">Un acompte avant telle date, le reste avant le départ : Trip Compta te dira qui est en retard et préparera le message de relance.</div></div>
+    <a class="btn small ghost" href="/v/{{ trip.id }}/argent/dates">Fixer des dates de paiement</a></div>
+  {% endif %}
 </div>
 {% if cheques %}<p class="cheque-line"><a href="/v/{{ trip.id }}/argent/mouvements#cheques">📝 {{ cheques|length }} chèque{{ 's' if cheques|length > 1 }} reçu{{ 's' if cheques|length > 1 }}, pas encore déposé{{ 's' if cheques|length > 1 }} à la banque ({{ cheques|sum(attribute='amount')|money }})</a></p>{% endif %}
 {% if pending %}

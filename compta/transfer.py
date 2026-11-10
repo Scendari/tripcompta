@@ -163,7 +163,7 @@ def duplicate_trip(s, t: M.Trip, name: str, start=None, end=None, with_people: b
     v = trip_data(t)
     tv = v["voyage"]
     tv.update(name=name, start=start.isoformat() if start else None, end=end.isoformat() if end else None,
-              is_demo=False, ai_notes="", closed_on=None)
+              is_demo=False, ai_notes="", closed_on=None, pay_dates="")   # ses dates sont celles de l'ancien voyage
     if not with_people:
         v["participants"], v["familles"] = [], []
         tv["cashier_id"] = None
@@ -231,6 +231,13 @@ def import_trip(s, v: dict, z: zipfile.ZipFile, receipts_dir: Path) -> M.Trip:
         t.groups = json.dumps(groups, ensure_ascii=False) if groups else ""
     except (ValueError, TypeError, AttributeError):
         t.groups = ""
+    try:                                          # dates de paiement propres à quelqu'un : ses nouveaux numéros
+        dates = json.loads(tv.get("pay_dates") or "{}")
+        own = {str(P[int(k)]): v for k, v in (dates.get("comptes") or {}).items() if str(k).isdigit() and int(k) in P}
+        dates = {k: v for k, v in (("etapes", dates.get("etapes")), ("comptes", own)) if v}
+        t.pay_dates = json.dumps(dates, ensure_ascii=False) if dates else ""
+    except (ValueError, TypeError, AttributeError):
+        t.pay_dates = ""
     for row in v.get("categories") or []:
         c = _new(M.Category, row, trip_id=t.id)
         s.add(c)

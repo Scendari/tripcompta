@@ -188,6 +188,15 @@ def build_server(data_dir: Optional[str] = None):
 
     @mcp.tool()
     @_safe
+    def fixer_dates_paiement(voyage: Ref, dates: list[dict], simulation: bool = False) -> dict:
+        """Dates de paiement du voyage : [{"nom": "Acompte", "date": "2027-03-01", "montant": "100"},
+        {"nom": "Solde", "date": "2027-05-01"}]. montant = par personne ; sans montant = « tout ce qui reste »
+        (dernière date seulement). Avec "pour": "Luc" : des dates rien que pour Luc (ou sa famille), montants pour
+        tout son compte. L'état du voyage dit ensuite qui est à jour, en retard ou soldé (« paiements »)."""
+        return ops.set_pay_dates(voyage, dates, simulation)
+
+    @mcp.tool()
+    @_safe
     def ajuster_part(voyage: Ref, participant: Ref, montant: Union[float, str], type: str = "reduction",
                      sur: Ref = "total", compense_par: str = "autres", compensateur: Optional[Ref] = None,
                      motif: str = "", verrouiller: bool = False, simulation: bool = False) -> dict:

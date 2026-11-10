@@ -1337,6 +1337,22 @@ tr.to-check > td:last-child { border-right: 2px solid var(--coral); }
 .pay-tag.todo { background: color-mix(in srgb, var(--amber) 22%, transparent); }
 .pay-tag.ok { background: color-mix(in srgb, var(--ok) 16%, transparent); }
 .cheque-card { border-left: 4px solid var(--amber); }
+/* Dates de paiement : état des comptes, carte « À relancer », page des dates */
+.pill.late { background: var(--err-bg); color: var(--err); }
+.late-text { color: var(--err); font-weight: 600; }
+.ok-text { color: var(--ok); font-weight: 600; }
+.relances { border-left: 4px solid var(--err); }
+.relances .relance { padding: .55rem 0; border-top: 1px solid var(--border); }
+.relances .relance:first-of-type { border-top: 0; padding-top: 0; }
+.pay-state { margin-top: .15rem; }
+.dates-card { margin-top: .8rem; }
+.dates-list { margin: .35rem 0 0 1.1rem; padding: 0; font-size: .9rem; }
+.dates-list li { margin: .12rem 0; }
+.dates-table { width: 100%; }
+.dates-table th { text-align: left; font-size: .82rem; color: var(--muted); font-weight: 600; padding: 0 .3rem .25rem 0; }
+.dates-table td { padding: .2rem .3rem .2rem 0; vertical-align: middle; }
+.dates-table input { width: 100%; min-width: 0; }
+.pay-plan { margin-top: .7rem; padding: .6rem .8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-2); }
 .cheque-line { margin: .7rem 0 0; }
 .mv-edit label.check { display: inline-flex; align-items: center; gap: .4rem; align-self: center; }
 /* --- dépenses : chercher, filtrer, ranger --- */

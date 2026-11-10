@@ -65,6 +65,9 @@ templates.env.filters["role_label"] = S.role_label
 templates.env.globals["ROLE_TITLES"] = S.ROLE_TITLES
 templates.env.filters["weight"] = lambda w: E.fmt_weight(E.to_weight(w))
 templates.env.globals["ASSO"] = E.ASSO
+templates.env.globals["pay_plans"] = S.pay_plans      # où en est chaque compte par rapport aux dates de paiement
+# Un compte qui ne doit plus rien : « soldé » quand le voyage a des dates de paiement (à jour = pas en retard)
+templates.env.filters["settled_word"] = lambda t: "soldé" if S.has_pay_dates(t) else "à jour"
 # icône « Arrêter » dessinée : le caractère ⏻ (U+23FB) manque aux polices de Windows 10 (il s'affiche en carré vide)
 templates.env.globals["POWER"] = Markup('<svg class="ico-power" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true">'
     '<path d="M12 3v8M7.1 6.6a7.5 7.5 0 1 0 9.8 0" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>')
@@ -3227,7 +3230,14 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
         pending = [e for e in t.expenses if e.pending]
         to_pay = [e for e in t.expenses if e.actual is None and not e.pending and not e.is_income
                   and any(pid is None for pid, _ in e.splits())]
+        plans = S.pay_plans(t, r)
+        dates = S.pay_dates(t)
+        people = {p.id: p for p in t.participants}
+        own_dates = [dict(acc=a, lines=S.pay_dates_summary(S.account_steps(t, a, dates)[0], per_person=False))
+                     for a in r.accounts if S.account_steps(t, a, dates)[1]]
         return render(request, "money.html", trip=t, r=r, rows=rows, total_in=total_in, total_out=total_out,
+                      plans=plans, reminders=_reminder_rows(t, r, people), pay_dates=dates, own_dates=own_dates,
+                      dates_lines=S.pay_dates_summary(dates["etapes"]),
                       advances=advances, to_pay=to_pay, pending=pending, payer_label=S.payer_label, names=names(t), today=dt.date.today().isoformat(),
                       sel=request.query_params.get("p"), kind=request.query_params.get("k", "versement"),
                       prefill=request.query_params.get("a", ""), tab=tab, methods=S.PAY_METHODS,
@@ -3291,6 +3301,94 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
                                              f"{'par' if received else 'à'} {todo[0][0].name} enregistré")
         return back(f"/v/{tid}/argent", f"{len(todo)} {'versements reçus' if received else 'remboursements faits'} "
                                          f"enregistrés, {E.fmt(total)} en tout : {who}")
+
+    # ------------------------------------------------------------------ dates de paiement, relances
+    def _reminder_rows(t, r, people):
+        """Les comptes en retard, avec le message de relance prêt à partir (WhatsApp, e-mail, copier)."""
+        rows = []
+        for a, plan in S.late_accounts(t, r):
+            ref = people[a.referent]
+            msg = S.reminder_message(t, r, a, plan)
+            num = S.whatsapp_number(ref.phone)
+            subject = f"Rappel de paiement — voyage « {t.name} »"
+            rows.append(dict(acc=a, ref=ref, plan=plan, msg=msg, num=num, subject=subject, key=a.key, pdf=None,
+                             wa=f"https://wa.me/{num}?text={quote(msg)}" if num else f"https://wa.me/?text={quote(msg)}",
+                             mail=f"mailto:{quote(ref.email or '', safe='@.+-_')}?subject={quote(subject)}&body={quote(msg)}"))
+        return rows
+
+    def _dates_account(r, pid):
+        """Le compte (personne ou famille) auquel appartient cette personne, ou None."""
+        return next((a for a in r.accounts if pid in {m.id for m in a.members}), None)
+
+    @app.get("/v/{tid}/argent/dates", response_class=HTMLResponse)
+    def pay_dates_page(tid: int, request: Request, s: Session = Depends(get_s)):
+        t = trip_or_404(s, tid)
+        r = S.compute_trip(t)
+        dates = S.pay_dates(t)
+        acc = _dates_account(r, whole(request.query_params.get("pour"))) if request.query_params.get("pour") else None
+        if request.query_params.get("pour") and (acc is None or acc.holds_cash):
+            return refuse(f"/v/{tid}/argent/dates", "Choisis une personne ou une famille")
+        if acc is not None:
+            steps, own = S.account_steps(t, acc, dates)
+            steps = steps if own else []
+        else:
+            steps = dates["etapes"]
+        others = [dict(acc=a, lines=S.pay_dates_summary(S.account_steps(t, a, dates)[0], per_person=False))
+                  for a in r.accounts if S.account_steps(t, a, dates)[1]]
+        return render(request, "pay_dates.html", trip=t, r=r, acc=acc, steps=steps, others=others,
+                      rows=min(S.PAY_STEPS_MAX, max(3, len(steps) + 2)), trip_lines=S.pay_dates_summary(dates["etapes"]),
+                      choices=[a for a in r.accounts if not a.holds_cash and not S.account_steps(t, a, dates)[1]])
+
+    @app.post("/v/{tid}/argent/dates")
+    async def pay_dates_save(tid: int, request: Request, s: Session = Depends(get_s)):
+        t = trip_or_404(s, tid)
+        f = await request.form()
+        r = S.compute_trip(t)
+        acc = _dates_account(r, whole(f.get("pour"))) if f.get("pour") else None
+        here = f"/v/{tid}/argent/dates" + (f"?pour={acc.referent}" if acc else "")
+        if f.get("pour") and (acc is None or acc.holds_cash):
+            return refuse(f"/v/{tid}/argent/dates", "Choisis une personne ou une famille")
+        steps = []
+        for i in range(S.PAY_STEPS_MAX):
+            name, raw_date, raw_amount = (str(f.get(f"{k}_{i}") or "").strip() for k in ("nom", "date", "montant"))
+            if not (name or raw_date or raw_amount):
+                continue                                             # ligne vide : pas de date à cet endroit
+            date = S.parse_date(raw_date)
+            if date is None:
+                return refuse(here, f"Indique la date de « {name or 'ce paiement'} »", f"date_{i}")
+            steps.append((name, date, amount(f, f"montant_{i}") or None))
+        if not steps:
+            return refuse(here, "Indique au moins une date (ou clique sur « Ne plus utiliser de dates »)", "date_0")
+        who = f"de {acc.name}" if acc else "du voyage"
+        db.snapshot(f"dates de paiement {who}")
+        kept = W.set_account_pay_dates(t, acc, steps) if acc else W.set_pay_dates(t, steps)
+        s.commit()
+        late = S.late_accounts(t, S.compute_trip(t))
+        msg = f"Dates de paiement {who} enregistrées : " + " ; ".join(S.pay_dates_summary(kept, per_person=acc is None))
+        if late:
+            msg += f". {len(late)} paiement{'s' if len(late) > 1 else ''} en retard : le message de relance est prêt"
+        return back(f"/v/{tid}/argent" + ("#relances" if late else "#dates"), msg)
+
+    @app.post("/v/{tid}/argent/dates/retirer")
+    async def pay_dates_clear(tid: int, request: Request, s: Session = Depends(get_s)):
+        t = trip_or_404(s, tid)
+        f = await request.form()
+        r = S.compute_trip(t)
+        acc = _dates_account(r, whole(f.get("pour"))) if f.get("pour") else None
+        if f.get("pour") and acc is None:
+            return refuse(f"/v/{tid}/argent/dates", "Choisis une personne ou une famille")
+        if not (S.account_steps(t, acc)[1] if acc else S.pay_dates(t)["etapes"]):
+            return back(f"/v/{tid}/argent#dates", "Rien à changer")
+        db.snapshot(f"dates de paiement {'de ' + acc.name if acc else 'du voyage'} retirées")
+        if acc:
+            W.set_account_pay_dates(t, acc, [])
+        else:
+            W.set_pay_dates(t, [])
+        s.commit()
+        if acc:
+            return back(f"/v/{tid}/argent/dates", f"{acc.name} suit de nouveau les dates du voyage")
+        return back(f"/v/{tid}/argent#dates", "Dates de paiement du voyage retirées : plus de retard signalé"
+                    + (" (sauf pour ceux qui ont leurs propres dates)" if S.has_pay_dates(t) else ""))
 
     @app.post("/v/{tid}/argent/cheques-deposes")
     def cheques_all_deposited(tid: int, s: Session = Depends(get_s)):
@@ -3692,6 +3790,7 @@ def create_app(data_dir=None, restart=None, updater=None, coffre=None, token: st
         t = trip_or_404(s, tid)
         r = S.compute_trip(t)
         return render(request, "send.html", trip=t, r=r, rows=_send_rows(t, r), pay_info=t.pay_info or "",
+                      plans=S.pay_plans(t, r),
                       pay_max=S.PAY_INFO_MAX, owing=sum(1 for a in r.accounts if S.owes_money(a)))
 
     @app.post("/v/{tid}/envoyer/comment-payer")

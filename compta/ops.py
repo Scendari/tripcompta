@@ -280,6 +280,7 @@ def trip_detail(t: M.Trip, mode=E.ACTUAL) -> dict:
         out["entre_nous"].append(dict(
             id=sub.id, nom=sub.name, membres=[names.get(m) for m in sub.members], total=to_euros(v["total"]),
             a_regler=[dict(de=names.get(a), a=names.get(b), montant=to_euros(c)) for a, b, c in v["settlements"]]))
+    out["dates_paiement"], out["paiements"] = pay_dates_detail(t, r)    # montant null = « tout ce qui reste »
     out["pris_en_charge_par_asso"] = [dict(sur=c.label, pourquoi=c.reason, montant=to_euros(c.cents))
                                       for c in r.asso_charges]
     out["ecart_arrondi_asso"] = to_euros(r.rounding_gain)
@@ -690,6 +691,62 @@ def do_withdraw(s, t, participant, pris_en_charge_par="groupe", parts_conservees
     return w
 
 
+def do_set_pay_dates(s, t, dates) -> list:
+    """Dates de paiement : [{"nom", "date", "montant"}] pour tout le voyage (montant par personne ; sans montant :
+    « tout ce qui reste ») ; avec "pour": un nom, ce sont les dates de cette personne (ou de sa famille), montants
+    pour tout son compte. Les dates du voyage données remplacent celles du voyage ; celles d'une personne, les
+    siennes. Renvoie des phrases qui disent ce qui a été fixé."""
+    if not isinstance(dates, list):
+        raise OpsError("« dates_paiement » est une liste : [{\"nom\": \"Acompte\", \"date\": \"2027-03-01\", "
+                       "\"montant\": \"100\"}, {\"nom\": \"Solde\", \"date\": \"2027-05-01\"}].")
+    groups = {}
+    for i, x in enumerate(dates, 1):
+        if not isinstance(x, dict):
+            raise OpsError(f"Date de paiement n°{i} : chaque élément doit être un objet {{ … }}.")
+        d = date_of(x.get("date"), f"date du paiement n°{i}")
+        if d is None:
+            raise OpsError(f"Date de paiement n°{i} : il manque la date (« date »: « 2027-03-01 »).")
+        cents = euros(x.get("montant"), f"montant du paiement n°{i}", allow_none=True)
+        who = x.get("pour") or None
+        key = None if who in (None, "tous", "tout le monde") else person(t, who, "personne des dates de paiement").id
+        groups.setdefault(key, []).append((x.get("nom") or x.get("libelle") or "", d, cents or None))
+    out = []
+    r = S.compute_trip(t)
+    for key, steps in groups.items():
+        if key is None:
+            kept = W.set_pay_dates(t, steps)
+            out.append("Dates de paiement du voyage : " + " ; ".join(S.pay_dates_summary(kept)))
+        else:
+            acc = next(a for a in r.accounts if key in {m.id for m in a.members})
+            kept = W.set_account_pay_dates(t, acc, steps)
+            out.append(f"Dates de paiement de {acc.name} : " + " ; ".join(S.pay_dates_summary(kept, per_person=False)))
+    s.flush()
+    return out
+
+
+def pay_dates_detail(t: M.Trip, r: E.Result) -> tuple:
+    """Pour l'IA : (les dates fixées, où en est chaque compte qui en a)."""
+    dates = S.pay_dates(t)
+    names = {p.id: p.name for p in t.participants}
+    rows = [dict(nom=x["nom"], date=x["date"].isoformat(), montant=to_euros(x["montant"])) for x in dates["etapes"]]
+    for pid, steps in dates["comptes"].items():
+        rows += [dict(pour=names[pid], nom=x["nom"], date=x["date"].isoformat(), montant=to_euros(x["montant"]))
+                 for x in steps]
+    plans = S.pay_plans(t, r)
+    states = []
+    for a in r.accounts:
+        p = plans.get(a.key)
+        if p is None:
+            continue
+        row = dict(qui=a.name, etat=p["label"], reste=to_euros(p["rest"]))
+        if p["state"] == S.LATE:
+            row.update(en_retard_de=to_euros(p["late"]), depuis=p["since"].isoformat(), jours_de_retard=p["days"])
+        if p["next"]:
+            row.update(prochain_paiement=to_euros(p["next"]["missing"]), au_plus_tard=p["next"]["date"].isoformat())
+        states.append(row)
+    return rows, states
+
+
 def do_create_subaccount(s, t, nom, membres) -> M.SubAccount:
     if not (nom or "").strip():
         raise OpsError("Quel nom donner au compte « Entre nous » ?")
@@ -854,6 +911,11 @@ class Ops:
                         + (f" le {same.date:%d/%m/%Y}" if same.date else "") + " (peut-être un doublon).")
             return dict(message=msg)
         return self._write(f"{type} de {participant} (IA)", fn, trip_id, simulation)
+
+    def set_pay_dates(self, trip_id, dates, simulation=False) -> dict:
+        def fn(s, t):
+            return dict(message=" ".join(x + "." for x in do_set_pay_dates(s, t, dates)) or "Rien à changer.")
+        return self._write("dates de paiement (IA)", fn, trip_id, simulation)
 
     # ---- ajustements
     def adjust(self, trip_id, participant, montant, type="reduction", sur="total", compense_par="autres",

@@ -158,6 +158,7 @@ Après chaque action, le message de confirmation propose **↶ Défaire** (pour 
 - **Plusieurs tickets sur une dépense** (deux pleins d'essence…) : « + Plusieurs tickets ? » sous le montant réel (montant + date par ticket, total calculé), ou « 80,12 + 69,10 » tapé dans le montant. Liste des dépenses : 🧾2 et le détail au survol ; PDF : « tickets : … ». IA : `"reel": ["80,12", "69,10"]`.
 - **📲 Envoyer les comptes** : pour chaque personne ou famille, un PDF « Son compte » (en bref + détail par catégorie, sous-catégorie et dépense, avec le calcul) et un message WhatsApp prêt (wa.me, au numéro de la fiche). Un clic télécharge le PDF et ouvre WhatsApp ; il reste à glisser le PDF dans la conversation. ZIP de tous les PDF. Aussi sur la fiche de chaque participant.
 - **Voyage sans asso** : sur la page 🏛️, « Qui tient la caisse ? » → un participant (ex. Paul). Partout, « l'asso » devient « la caisse (Paul) » ; on verse l'argent à Paul ; son propre compte se règle avec la caisse qu'il tient (rien à se verser). Côté IA : `"voyage": {"caisse": "Paul"}`.
+- **📅 Dates de paiement et relances** : sur « Argent reçu et rendu », on fixe un acompte avant telle date, puis le reste avant le départ (montants par personne ; « tout ce qui reste » à la dernière date). Chaque personne ou famille est alors **à jour**, **en retard** (de combien, depuis quand) ou **soldée** ; une dépense avancée pour le groupe compte comme un paiement. La carte « 🔔 À relancer aujourd'hui » prépare le message (WhatsApp, e-mail, copier) : rien ne part tout seul. Quelqu'un paie en plusieurs fois ou a un délai : il peut avoir ses propres dates. IA : `"dates_paiement"`, et l'état `paiements` dit qui relancer.
 - **Argent reçu et rendu** : 💶 = mouvement saisi ici (modifiable / supprimable sur la ligne) ; 🧾 = paiement qui vient d'une dépense (« Modifier la dépense »).
 - **🏛️ L'asso** : le compte de l'asso pour le voyage (entrées / sorties réelles, ce qu'il reste à encaisser et à rendre, ce que le voyage lui coûte ou rapporte une fois tout réglé, ce qu'elle prend à sa charge). On peut lui donner un nom (commun à tous les voyages), accepté aussi comme payeur dans le JSON de l'IA. Section « Compte de l'asso » dans le PDF.
 - **Chaque dépense tombe juste au centime** : chaque part est arrondie au centime inférieur, et les centimes qui
@@ -231,7 +232,7 @@ La configuration exacte est dans la partie repliée en bas de la page **🤖 IA*
 ### Outils proposés à l'IA (serveur MCP)
 
 `lister_voyages`, `voir_voyage`, `creer_voyage`, `ajouter_participants`, `ajouter_depense`, `modifier_depense`,
-`supprimer_depense`, `enregistrer_mouvement`, `ajuster_part`, `desister`, `definir_roles`, `ajouter_justificatif`,
+`supprimer_depense`, `enregistrer_mouvement`, `fixer_dates_paiement`, `ajuster_part`, `desister`, `definir_roles`, `ajouter_justificatif`,
 `creer_compte_entre_nous`, `ajouter_depense_entre_nous`, `importer_voyage` (tout le JSON du guide d'un coup),
 `lire_guide`, `annuler_derniere_action`.
 
@@ -277,6 +278,7 @@ tests/
   test_scenarios.py  scénarios d'organisateur complets (budget -> régularisation, erreurs de saisie…)
   test_web.py        routes et parcours web
   test_un_seul_chemin.py  le même scénario à l'écran et par l'IA : mêmes lignes, mêmes comptes (à la main)
+  test_dates_paiement.py  dates de paiement : à jour / en retard / soldé à la main, relances, dates d'une personne
   test_jeton.py      jeton de session : rien n'est lisible ni modifiable sans lui
   test_ai.py         couche IA, API JSON, serveur MCP en vrai sous-processus
   test_import.py     import par l'IA : montants à la main, erreurs groupées, aperçu web,

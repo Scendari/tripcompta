@@ -292,6 +292,53 @@ def settle_batch(t: M.Trip, result: E.Result, kind: str, referents, date=None, m
             for acc, cents in S.settle_amounts(result, kind, referents)]
 
 
+# ---------------------------------------------------------------- dates de paiement
+
+def set_pay_dates(t: M.Trip, steps, pid=None) -> list:
+    """Fixe les dates de paiement : pour tout le voyage (pid=None, montants par personne) ou pour le compte d'une
+    personne (montants pour tout son compte). steps : [(nom, date, centimes ou None = « tout ce qui reste »)] ;
+    une liste vide retire ces dates. Renvoie les étapes retenues, dans l'ordre des dates."""
+    if pid is not None:
+        _member(t, pid, "Cette personne", "pour")
+    steps = list(steps or [])
+    if len(steps) > S.PAY_STEPS_MAX:
+        raise WriteError(f"{S.PAY_STEPS_MAX} dates de paiement au plus.")
+    clean = []
+    for i, (name, date, cents) in enumerate(steps):
+        if date is None:
+            raise WriteError(f"Indique la date de « {_clean(name) or 'ce paiement'} »", f"date_{i}")
+        if cents is not None and cents <= 0:
+            raise WriteError("Un montant doit être positif (ou vide : « tout ce qui reste »).", f"montant_{i}")
+        clean.append(dict(nom=_clean(name, S.PAY_STEP_NAME_MAX), date=date, montant=cents))
+    clean.sort(key=lambda x: x["date"])
+    rest = [i for i, x in enumerate(clean) if x["montant"] is None]
+    if len(rest) > 1 or (rest and rest[0] != len(clean) - 1):
+        raise WriteError("« Tout ce qui reste » (montant vide) ne peut être demandé qu'une fois, à la dernière date.")
+    fixed = 0
+    for x in clean:                              # un nom par défaut : Acompte, 2e paiement…, Solde
+        fixed += x["montant"] is not None
+        if not x["nom"]:
+            x["nom"] = "Solde" if x["montant"] is None else "Acompte" if fixed == 1 else f"{fixed}e paiement"
+    data = S.pay_dates(t)
+    if pid is None:
+        data["etapes"] = clean
+    else:
+        data["comptes"] = {k: v for k, v in data["comptes"].items() if k != pid}
+        if clean:
+            data["comptes"][pid] = clean
+    t.pay_dates = S.dump_pay_dates(data)
+    return clean
+
+
+def set_account_pay_dates(t: M.Trip, acc, steps) -> list:
+    """Des dates rien que pour un compte (une personne, ou toute une famille) : rangées chez celui qui paie pour
+    le compte. Une liste vide : le compte reprend les dates du voyage."""
+    for m in acc.members:
+        if m.id != acc.referent:
+            set_pay_dates(t, [], pid=m.id)
+    return set_pay_dates(t, steps, pid=acc.referent)
+
+
 # ---------------------------------------------------------------- remises et suppléments
 
 def save_discount(s, t: M.Trip, pid, value: int, compensation=E.OTHERS, compensator_id=None, reason="",

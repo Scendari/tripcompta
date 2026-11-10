@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import status, role_pills, people_tabs %}
+{% from "_macros.html" import status, role_pills, people_tabs with context %}
 {% block content %}
 {% set nc = trip.participants|selectattr('companion')|list|length %}
 <div class="page-head"><div class="grow"><h1>Participants</h1>
