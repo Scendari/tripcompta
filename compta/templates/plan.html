@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_plan_tabs.html" import plan_head %}
-{% block title %}{{ plan.name }} · En préparation · Trip Compta{% endblock %}
+{% block title %}Postes et offres · {{ plan.name }} · Trip Compta{% endblock %}
 {% macro deadline_box(x, it) %}
 {% set o = x.o %}{% set ds = deadlines.get(o.id, []) %}{% set u = o.id ~ '-' ~ it.id %}
 <div class="plan-deadlines" id="echeances-{{ u }}">

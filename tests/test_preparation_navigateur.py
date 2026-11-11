@@ -232,7 +232,7 @@ def test_cancelled_delete_does_nothing(site, browser):
     assert "Avion" in clean(page.content())
     page.locator("form[action$='/preparer/1/supprimer'] button").click()
     page.goto(site.base + site.url)
-    assert page.locator("h1").inner_text() == "Mer Rouge 2027"
+    assert page.locator("aside.side .trip-name").inner_text() == "Mer Rouge 2027"
 
 
 def test_deadline_checkbox_and_ideas(site, browser):
@@ -310,7 +310,7 @@ def test_day_meal_by_keyboard_and_edit_from_programme(site, browser):
     page.fill("#e_place", "Hurghada, Égypte")
     page.click("#modifier button:has-text('Enregistrer')")
     pw.expect(page.locator(".flash")).to_contain_text("Projet modifié")
-    assert "/programme" in page.url and "Hurghada, Égypte" in page.locator(".page-head").inner_text()
+    assert "/programme" in page.url and "Hurghada, Égypte" in page.locator("aside.side .trip-meta").inner_text()
     page.fill("#meal-4", "")
     page.locator("#jour-4 button:has-text('OK')").click()             # rendu à l'enveloppe pour les autres essais
     pw.expect(page.locator(".flash")).to_contain_text("Jour 4 : repas comptés")
@@ -409,11 +409,24 @@ def test_side_menu_on_every_project_page(site, browser):
         page.goto(site.base + url)
         assert page.locator("aside.side .side-kicker").inner_text().strip().lower() == "en préparation", url
         assert page.locator("aside.side .trip-name").inner_text() == "Mer Rouge 2027", url
+        assert " · Mer Rouge 2027 · Trip Compta" in page.title(), (url, page.title())      # le nom dans l'onglet
+        h1 = page.locator("main h1").inner_text()
+        assert "Mer Rouge" not in h1 and "En préparation" not in page.locator("main .page-head").inner_text(), (url, h1)
         assert menu_entries(page) == ["🧾 Postes et offres", "📅 Programme", "🤖 IA", "🚀 Lancer le voyage",
                                       "← Tous les voyages"], url
         lit = page.locator("aside.side nav a.on")
         assert lit.count() == 1 and lit.inner_text().strip() == on, (url, lit.all_inner_texts())
         assert page.locator(".tabs.plan-tabs").count() == 0
+    titles = {}
+    for url, _ in pages:
+        page.goto(site.base + url)
+        titles[url.split("?")[0].replace(site.url, "") or "/"] = (page.title().split(" · ")[0], page.locator("main h1").inner_text())
+    assert titles["/"] == ("Postes et offres", "Postes et offres") and titles["/programme"] == ("Programme", "Programme")
+    assert titles["/lancer"] == ("Lancer le voyage", "Lancer le voyage") and titles["/ia"][1] == "🤖 Ajouter des offres avec une IA"
+    # « ← Retour au projet » reste seulement sur le formulaire d'une offre
+    for url, _ in pages:
+        page.goto(site.base + url)
+        assert (page.locator("main a:has-text('Retour au projet')").count() == 1) == ("/offres/" in url), url
     # le bouton du haut et l'entrée du menu mènent à la même page
     page.goto(site.base + site.url)
     assert page.locator("#lancer a").get_attribute("href") == page.locator("aside.side nav a:has-text('Lancer')").get_attribute("href")

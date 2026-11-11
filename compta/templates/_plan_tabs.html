@@ -1,13 +1,11 @@
-{# En-tête d'un voyage en préparation, le même sur « Postes et offres » et « Programme » : nom, lieu, dates, note ;
-   « Modifier » (le panneau s'ouvre sur place, on revient sur la page d'où l'on vient) et « Supprimer le projet ». Le
-   reste (pages du projet, IA, tous les voyages) est dans le menu de gauche (base.html). #}
+{# En-tête de « Postes et offres » et « Programme » : le titre de la page (le nom, les dates et le lieu du projet sont
+   dans le menu de gauche, base.html) ; la note du projet sous « Postes et offres » ; « Modifier » (le panneau s'ouvre
+   sur place, on revient sur la page d'où l'on vient) et « Supprimer le projet ». #}
 {% macro plan_head(plan, current) %}
 <div class="page-head">
   <div class="grow">
-    <p class="plan-kicker">En préparation</p>
-    <h1>{{ plan.name }}</h1>
-    <p class="muted">{% if plan.start %}{{ plan.start|date }}{% if plan.end %} → {{ plan.end|date }}{% endif %}{% endif %}{% if plan.start and plan.place %} · {% endif %}{{ plan.place }}</p>
-    {% if plan.note %}<p class="plan-note">{{ plan.note }}</p>{% endif %}
+    <h1>{{ 'Programme' if current == 'programme' else 'Postes et offres' }}</h1>
+    {% if plan.note and current != 'programme' %}<p class="plan-note">{{ plan.note }}</p>{% endif %}
   </div>
   <div class="row plan-head-actions">
     <button type="button" class="btn ghost small" data-toggle-row="#modifier" aria-expanded="false" aria-controls="modifier">Modifier</button>
