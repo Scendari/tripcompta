@@ -23,7 +23,7 @@ VERSION_KEY = "app_version"
 # Numéro de la structure de la base (tables, colonnes), gardé dans le fichier lui-même (PRAGMA user_version).
 # À augmenter de 1 à chaque changement de structure : une application qui connaît un numéro plus petit refuse
 # d'ouvrir la base (elle ne saurait pas la lire sans l'abîmer) ; deux versions au même numéro s'entendent.
-SCHEMA = 2
+SCHEMA = 3
 WRITER_KEY = "dernier_ecrivain"        # {"ordinateur", "quand"} : le dernier ordinateur qui a modifié les voyages
 
 

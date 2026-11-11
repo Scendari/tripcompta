@@ -290,11 +290,14 @@ de version Linux publiée) sont fabriquées par GitHub (voir « Publier une vers
 ```
 compta/
   engine.py       moteur de calcul pur (centimes, fractions exactes, arrondis, ajustements, désistements)
+  preparation.py  calcul pur d'un voyage en préparation (postes, offres, offre retenue, budget, prix par
+                  personne, marge, réserve, « si tu retiens cette offre »), sans écran pour l'instant
   models.py       modèle SQLAlchemy / SQLite
   db.py           dossier de données, sauvegardes, « Défaire » / « Rétablir »
   services.py     pont base ↔ moteur, alertes
   writes.py       le seul endroit qui crée et modifie les lignes d'un voyage (voyage, participants, dépenses,
-                  versements, remises, désistements) : les formulaires et l'IA passent tous les deux par lui
+                  versements, remises, désistements) et d'un voyage en préparation (projet, postes, offres) :
+                  les formulaires et l'IA passent tous les deux par lui
   web.py          application FastAPI (pages Jinja2) : démarrage, dossier des voyages, garde-fous, erreurs,
                   ce que toutes les pages ont en commun (`render`, `back`, `refuse`…)
   pages/          les pages, un module par domaine (voyages, participants, depenses, repartition, argent,
@@ -326,6 +329,8 @@ tests/
   test_web.py        routes et parcours web
   test_un_seul_chemin.py  le même scénario à l'écran et par l'IA : mêmes lignes, mêmes comptes (à la main)
   test_dates_paiement.py  dates de paiement : à jour / en retard / soldé à la main, relances, dates d'une personne
+  test_preparation.py  voyage en préparation : montants à la main, une offre retenue par poste, forfaits,
+                     refus, suppression d'un poste, défaire / rétablir
   test_pages.py      les pages rangées par domaine : rien d'oublié, aucune adresse cachée par une autre
   test_guides.py     INSTALLER.md et README.md disent vrai : boutons cités, fichiers, dossiers, liens
   test_jeton.py      jeton de session : rien n'est lisible ni modifiable sans lui

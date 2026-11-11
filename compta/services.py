@@ -5,6 +5,7 @@ import datetime as dt
 
 from . import engine as E
 from . import models as M
+from . import preparation as P
 
 import json
 import re
@@ -473,6 +474,22 @@ def compute_trip(trip: M.Trip, mode: str = E.ACTUAL, **overrides) -> E.Result:
     if trip.cashier_id and trip.cashier_id in r.people:
         r.cashier = trip.cashier_id
     return r
+
+
+def plan_offer(o: M.PlanOffer) -> P.Offer:
+    """Une offre d'un voyage en préparation, pour le calcul (preparation.py)."""
+    ids = o.item_ids()
+    shares = {ln.item_id: ln.share for ln in o.links}
+    return P.Offer(id=o.id, price=o.price, counting=o.counting, items=ids, quantity=o.quantity, capacity=o.capacity,
+                   chosen=o.chosen, split=o.split if len(ids) > 1 else "",
+                   shares=[shares[i] for i in ids] if o.split and len(ids) > 1 else None)
+
+
+def compute_plan(plan: M.Plan, people: int | None = None) -> P.Result:
+    """Budget, prix par personne, marge et « si tu retiens » d'un voyage en préparation (people : un autre nombre
+    de participants que celui du projet, pour comparer)."""
+    return P.compute(people or plan.people, [i.id for i in plan.items], [plan_offer(o) for o in plan.offers],
+                     plan.margin_kind, plan.margin_value, plan.announced)
 
 
 def everyone_expense(trip: M.Trip, expense: M.Expense) -> bool:

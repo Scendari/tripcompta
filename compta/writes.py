@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from . import engine as E
 from . import models as M
+from . import preparation as P
 from . import services as S
 
 MOVES = ("versement", "remboursement")
@@ -393,3 +394,250 @@ def save_withdrawal(s, t: M.Trip, pid, date=None, absorber=E.GROUP, kept=(), not
         add_movement(t, pid, "remboursement", refund, date=refund_date or date, note=WITHDRAWAL_REFUND)
     s.flush()
     return w, new
+
+
+# ---------------------------------------------------------------- préparer un voyage (projets, postes, offres)
+# Calcul : compta/preparation.py. Une seule offre retenue par poste : la règle est tenue ici, pas à l'écran.
+
+def _plan_of(plan: M.Plan, obj, what: str):
+    if obj is None or obj.plan_id != plan.id:
+        raise WriteError(f"{what} ne fait pas partie de ce projet.")
+    return obj
+
+
+def _people(people) -> int:
+    if not isinstance(people, int) or isinstance(people, bool) or people < 1:
+        raise WriteError("Il faut au moins une personne pour calculer un prix par personne.", "people")
+    return people
+
+
+def save_plan(s, plan: M.Plan | None = None, *, name, people=1, place="", start=None, end=None, note="",
+              margin_kind=P.PERCENT, margin_value=0, announced=None) -> M.Plan:
+    """Crée (plan=None) ou réécrit un voyage en préparation. margin_value : centièmes de % (500 = 5 %) pour
+    « pourcent », centimes par personne pour « euros » ; announced : prix annoncé par personne (centimes) ou None."""
+    name = _clean(name, 200)
+    if not name:
+        raise WriteError("Donne un nom au projet", "name")
+    people = _people(people)
+    if margin_kind not in P.MARGIN_KINDS:
+        raise WriteError("Marge : en pourcentage ou en euros par personne.", "margin_kind")
+    if margin_value is None or margin_value < 0:
+        raise WriteError("La marge ne peut pas être négative.", "margin_value")
+    if announced is not None and announced < 0:
+        raise WriteError("Le prix annoncé ne peut pas être négatif.", "announced")
+    if start and end and end < start:
+        raise WriteError("La date de retour est avant la date de départ.", "end")
+    if plan is None:
+        plan = M.Plan(name=name)
+        s.add(plan)
+    plan.name, plan.people, plan.place, plan.start, plan.end = name, people, _clean(place, 200), start, end
+    plan.note = str(note or "").strip()
+    plan.margin_kind, plan.margin_value, plan.announced = margin_kind, int(margin_value), announced
+    s.flush()
+    return plan
+
+
+PLAN_FIELDS = ("name", "people", "place", "start", "end", "note", "margin_kind", "margin_value", "announced")
+
+
+def update_plan(s, plan: M.Plan, **fields) -> M.Plan:
+    """Change seulement les champs donnés (« et si on était 9 ? ») ; les autres gardent leur valeur. Mêmes refus que
+    save_plan, qui fait l'écriture."""
+    unknown = set(fields) - set(PLAN_FIELDS)
+    if unknown:
+        raise TypeError(f"update_plan : champ inconnu {sorted(unknown)}")
+    values = {k: getattr(plan, k) for k in PLAN_FIELDS}
+    values.update(fields)
+    return save_plan(s, plan, **values)
+
+
+def delete_plan(s, plan: M.Plan) -> str:
+    """Supprime un voyage en préparation, ses postes et ses offres (pas le voyage créé à partir de lui)."""
+    name = plan.name
+    plan.offers.clear()          # les offres (et leurs liens aux postes) d'abord, puis les postes
+    s.flush()
+    s.delete(plan)
+    s.flush()
+    return name
+
+
+def _item_name(plan: M.Plan, name, skip: M.PlanItem | None = None) -> str:
+    name = _clean(name, 200)
+    if not name:
+        raise WriteError("Donne un nom au poste (Avion, Hôtel…)", "name")
+    if E.sort_key(name) in {E.sort_key(i.name) for i in plan.items if i is not skip}:
+        raise WriteError(f"Le poste « {name} » existe déjà dans ce projet", "name")
+    return name
+
+
+def add_plan_item(s, plan: M.Plan, name) -> M.PlanItem:
+    """Un poste de plus, à la fin de la liste. Deux postes d'un projet ne portent pas le même nom."""
+    name = _item_name(plan, name)
+    it = M.PlanItem(name=name, position=max((i.position for i in plan.items), default=-1) + 1)
+    plan.items.append(it)
+    s.flush()
+    return it
+
+
+def rename_plan_item(s, plan: M.Plan, item: M.PlanItem, name) -> M.PlanItem:
+    _plan_of(plan, item, "Ce poste")
+    item.name = _item_name(plan, name, skip=item)
+    s.flush()
+    return item
+
+
+def order_plan_items(s, plan: M.Plan, ids) -> list:
+    """Range les postes dans cet ordre (`ids` : tous les postes du projet, chacun une fois). L'ordre compte aussi
+    pour la répartition d'un forfait : le dernier de ses postes reçoit le reste. Renvoie les postes rangés."""
+    ids = list(ids)
+    by_id = {i.id: i for i in plan.items}
+    if sorted(ids) != sorted(by_id) or len(set(ids)) != len(ids):
+        raise WriteError("Pour ranger les postes, donne chacun des postes de ce projet une fois.", "items")
+    for n, x in enumerate(ids):
+        by_id[x].position = n
+    s.flush()
+    s.expire(plan, ["items"])                    # relue dans le nouvel ordre
+    return list(plan.items)
+
+
+def move_plan_item(s, plan: M.Plan, item: M.PlanItem, index: int) -> list:
+    """Déplace un poste à la place `index` (0 = en premier ; au-delà de la fin : en dernier)."""
+    _plan_of(plan, item, "Ce poste")
+    ids = [i.id for i in plan.items if i.id != item.id]
+    ids.insert(max(0, min(int(index), len(ids))), item.id)
+    return order_plan_items(s, plan, ids)
+
+
+def delete_plan_item(s, plan: M.Plan, item: M.PlanItem) -> list:
+    """Supprime un poste. Ses offres qui ne couvrent que lui partent avec lui ; un forfait qui couvre aussi d'autres
+    postes les garde et perd sa répartition (elle ne tomberait plus juste). Renvoie les noms des offres supprimées."""
+    _plan_of(plan, item, "Ce poste")
+    gone = []
+    for o in list(plan.offers):
+        mine = [ln for ln in o.links if ln.item_id == item.id]
+        if not mine:
+            continue
+        if len(o.links) == len(mine):
+            gone.append(o.label)
+            plan.offers.remove(o)
+            continue
+        for ln in mine:
+            o.links.remove(ln)
+        o.split = ""
+        for ln in o.links:
+            ln.share = None
+    s.flush()
+    plan.items.remove(item)
+    s.flush()
+    return gone
+
+
+def _unchoose_overlaps(plan: M.Plan, offer: M.PlanOffer) -> list:
+    """Retire « retenue » aux autres offres qui partagent au moins un poste avec `offer`. Renvoie leurs noms."""
+    mine = {ln.item_id for ln in offer.links}
+    out = []
+    for o in plan.offers:
+        if o is not offer and o.chosen and mine & {ln.item_id for ln in o.links}:
+            o.chosen = False
+            out.append(o.label)
+    return out
+
+
+def check_offer(plan: M.Plan, *, label, price, counting=P.GROUP, quantity=1, capacity=None, items=(), split="",
+                shares=None) -> tuple:
+    """Refuse (WriteError) une offre impossible. Ne modifie rien. Renvoie (postes sans doublon, parts ou None)."""
+    if not _clean(label):
+        raise WriteError("Donne un nom à l'offre (le prestataire, par exemple)", "label")
+    if price is None or price < 0:
+        raise WriteError("Le prix ne peut pas être négatif (0 si c'est inclus).", "price")
+    if counting not in P.COUNTINGS:
+        raise WriteError("Compte le prix par personne, pour le groupe ou par lot.", "counting")
+    if not isinstance(quantity, int) or quantity < 1:
+        raise WriteError("La quantité doit être d'au moins 1.", "quantity")
+    if counting == P.LOT and (not isinstance(capacity, int) or capacity < 1):
+        raise WriteError("Un lot doit avoir au moins une place (un taxi de 4 places, une chambre de 2…).",
+                         "capacity")
+    ids, seen = [], set()
+    for x in items or ():
+        if x not in seen:
+            seen.add(x)
+            ids.append(x)
+    if not ids:
+        raise WriteError("Choisis au moins un poste pour cette offre.", "items")
+    known = {i.id for i in plan.items}
+    if any(x not in known for x in ids):
+        raise WriteError("Ce poste ne fait pas partie de ce projet.", "items")
+    if split not in P.SPLITS:
+        raise WriteError("Répartition : en montants ou en pourcentages.", "split")
+    if not split or len(ids) < 2:
+        return ids, None
+    shares = dict(shares or {})
+    if set(shares) != set(ids) or any(v is None or v < 0 for v in shares.values()):
+        raise WriteError("Donne une part (0 ou plus) pour chaque poste de l'offre.", "shares")
+    total = sum(shares.values())
+    if split == P.AMOUNTS and total != price:
+        raise WriteError(f"Les montants par poste font {E.fmt(total)}, mais le prix de l'offre est "
+                         f"{E.fmt(price)} : il faut que ça tombe juste.", "shares")
+    if split == P.PERCENT and total != P.FULL:
+        raise WriteError(f"Les pourcentages par poste font {_pct(total)}, il faut 100 %.", "shares")
+    return ids, shares
+
+
+def _pct(v: int) -> str:
+    whole, rest = divmod(v, 100)
+    return f"{whole} %" if not rest else f"{whole},{rest:02d}".rstrip("0") + " %"
+
+
+def save_offer(s, plan: M.Plan, offer: M.PlanOffer | None = None, *, label, price, counting=P.GROUP, quantity=1,
+               quantity_label="", capacity=None, items=(), split="", shares=None, note="",
+               chosen: bool | None = None) -> M.PlanOffer:
+    """Crée (offer=None) ou réécrit une offre.
+
+    - price : centimes (0 = inclus) ; counting : « personne », « groupe » ou « lot » (capacity = places d'un lot) ;
+    - items : les postes couverts (un ou plusieurs) ;
+    - split : "" (un seul bloc), « montant » (shares = {poste: centimes}, dont la somme fait le prix) ou « pourcent »
+      (shares = {poste: centièmes de %}, somme 10000) ; ignoré pour une offre d'un seul poste ;
+    - chosen : None = ne pas changer. Une offre retenue (ou qui le reste en changeant de postes) retire « retenue »
+      aux autres offres qui partagent un poste avec elle.
+    """
+    if offer is not None:
+        _plan_of(plan, offer, "Cette offre")
+    ids, shares = check_offer(plan, label=label, price=price, counting=counting, quantity=quantity,
+                              capacity=capacity, items=items, split=split, shares=shares)
+    if offer is None:
+        offer = M.PlanOffer(label=_clean(label, 200))
+        plan.offers.append(offer)
+    offer.label, offer.price, offer.counting, offer.quantity = _clean(label, 200), price, counting, quantity
+    offer.capacity = capacity if counting == P.LOT else None
+    offer.quantity_label = _clean(quantity_label, 50)
+    offer.note = str(note or "").strip()
+    offer.split = split if shares else ""
+    for ln in list(offer.links):
+        offer.links.remove(ln)
+    s.flush()
+    for x in ids:
+        offer.links.append(M.PlanOfferItem(item_id=x, share=shares[x] if shares else None))
+    if chosen is not None:
+        offer.chosen = bool(chosen)
+    if offer.chosen:
+        _unchoose_overlaps(plan, offer)
+    s.flush()
+    return offer
+
+
+def choose_offer(s, plan: M.Plan, offer: M.PlanOffer, chosen: bool = True) -> list:
+    """Retient (ou ne retient plus) une offre. La retenir retire « retenue » à toute offre qui partage au moins un
+    poste avec elle ; rien n'est re-retenu tout seul. Renvoie les noms des offres qui ne sont plus retenues."""
+    _plan_of(plan, offer, "Cette offre")
+    offer.chosen = bool(chosen)
+    out = _unchoose_overlaps(plan, offer) if chosen else []
+    s.flush()
+    return out
+
+
+def delete_offer(s, plan: M.Plan, offer: M.PlanOffer) -> str:
+    _plan_of(plan, offer, "Cette offre")
+    label = offer.label
+    plan.offers.remove(offer)
+    s.flush()
+    return label

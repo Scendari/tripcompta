@@ -373,6 +373,76 @@ class SubTransfer(Base):
     date: Mapped[Optional[dt.date]] = mapped_column(Date, nullable=True)
 
 
+# ---------------------------------------------------------------- Préparer un voyage (calcul : preparation.py)
+
+class Plan(Base):
+    """Voyage en préparation (« projet ») : des postes, des offres, un prix par personne. À part des voyages en
+    comptabilité ; `trip_id` : le voyage créé à partir de lui (lien dans un seul sens, vide tant qu'il n'est pas
+    lancé)."""
+    __tablename__ = "plans"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    place: Mapped[str] = mapped_column(String(200), default="")
+    start: Mapped[Optional[dt.date]] = mapped_column(Date, nullable=True)
+    end: Mapped[Optional[dt.date]] = mapped_column(Date, nullable=True)
+    note: Mapped[str] = mapped_column(Text, default="")
+    people: Mapped[int] = mapped_column(Integer, default=1)                  # nombre de participants (>= 1)
+    margin_kind: Mapped[str] = mapped_column(String(20), default="pourcent")  # pourcent | euros (par personne)
+    margin_value: Mapped[int] = mapped_column(Integer, default=0)   # centièmes de % (500 = 5 %) ou centimes par personne
+    announced: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # prix annoncé par personne (centimes)
+    trip_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)    # id de Trip, une fois lancé
+    created: Mapped[dt.datetime] = mapped_column(DateTime, default=now)
+
+    items: Mapped[list["PlanItem"]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan", order_by="(PlanItem.position, PlanItem.id)")
+    offers: Mapped[list["PlanOffer"]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan", order_by="PlanOffer.id")
+
+
+class PlanItem(Base):
+    """Poste de dépense d'un projet (Avion, Hôtel, Plongées…), en texte libre."""
+    __tablename__ = "plan_items"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("plans.id"))
+    name: Mapped[str] = mapped_column(String(200))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    plan: Mapped[Plan] = relationship(back_populates="items")
+
+
+class PlanOffer(Base):
+    """Offre d'un prestataire, pour un ou plusieurs postes (un forfait « plongée + hébergement »)."""
+    __tablename__ = "plan_offers"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("plans.id"))
+    label: Mapped[str] = mapped_column(String(200))                  # prestataire / libellé
+    note: Mapped[str] = mapped_column(Text, default="")
+    price: Mapped[int] = mapped_column(Integer, default=0)           # centimes (0 = inclus)
+    counting: Mapped[str] = mapped_column(String(20), default="groupe")   # personne | groupe | lot
+    capacity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)   # places d'un lot
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+    quantity_label: Mapped[str] = mapped_column(String(50), default="")      # « nuits », « plongées »
+    chosen: Mapped[bool] = mapped_column(Boolean, default=False)            # offre retenue
+    split: Mapped[str] = mapped_column(String(20), default="")    # répartition : "" (un bloc) | montant | pourcent
+    plan: Mapped[Plan] = relationship(back_populates="offers")
+    links: Mapped[list["PlanOfferItem"]] = relationship(cascade="all, delete-orphan", back_populates="offer")
+
+    def item_ids(self) -> list:
+        """Les postes couverts, dans l'ordre des postes du projet."""
+        order = {it.id: n for n, it in enumerate(self.plan.items)}
+        return [ln.item_id for ln in sorted(self.links, key=lambda ln: (order.get(ln.item_id, 1 << 30), ln.item_id))]
+
+
+class PlanOfferItem(Base):
+    """Une offre couvre ce poste ; `share` : sa part quand l'offre est répartie (centimes du prix saisi, ou
+    centièmes de %), vide sinon."""
+    __tablename__ = "plan_offer_items"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    offer_id: Mapped[int] = mapped_column(ForeignKey("plan_offers.id"))
+    item_id: Mapped[int] = mapped_column(ForeignKey("plan_items.id"))
+    share: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    offer: Mapped[PlanOffer] = relationship(back_populates="links")
+
+
 ASSO_NAME_KEY = "nom_asso"   # réglage : nom proposé pour la caisse des nouveaux voyages (le dernier utilisé)
 
 
