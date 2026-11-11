@@ -444,7 +444,8 @@ def test_about_page_dev(client):
     assert "Pas de nouvelle version à installer" in r.text
 
 
-def test_banner_check_and_later(client):
+def test_banner_check_and_later(client, monkeypatch):
+    monkeypatch.setattr(U, "asset_name", lambda *a, **k: "TripCompta-mac-arm64.zip")   # un ordinateur qui a sa version (pas Linux)
     gh = FakeGitHub()
     u = make(fetch=gh)
     c = client(u)
@@ -460,6 +461,10 @@ def test_banner_check_and_later(client):
     r = c.post("/maj/plus-tard", data={"version": "1.1.0"}, headers={"referer": "http://testserver/"})
     assert "tu retrouveras la mise à jour" in r.text and "est disponible." not in c.get("/").text
     assert "Nouvelle version : 1.1.0" in c.get("/reglages/a-propos").text
+    # sur un ordinateur sans version toute prête (Linux…), la raison le dit, et le téléchargement reste proposé
+    monkeypatch.setattr(U, "asset_name", lambda *a, **k: None)
+    about = c.get("/reglages/a-propos").text
+    assert "Pas de version toute prête pour cet ordinateur" in about and "Télécharger la nouvelle version" in about
 
 
 def test_check_offline_message_and_toggle(client):
@@ -644,6 +649,17 @@ def test_relaunched_after_update_reads_options(monkeypatch, tmp_path):
 ])
 def test_mac_app_outside_applications_is_noticed(exe, where):
     assert U.misplaced_app(exe, "darwin", True, home="/Users/zoe") == where
+
+
+def test_mac_paths_read_as_is_on_another_computer(monkeypatch):
+    """Les essais Mac tournent aussi sous Windows : un chemin Mac n'y devient pas « D:/Applications/… »."""
+    from pathlib import PureWindowsPath
+    monkeypatch.setattr(U.sys, "platform", "win32")
+    monkeypatch.setattr(U, "Path", PureWindowsPath)              # comme sous Windows : chemins à la Windows
+    assert U.misplaced_app("/Applications/TripCompta.app/Contents/MacOS/TripCompta", "darwin", True, home="/Users/zoe") is None
+    assert U.misplaced_app("/Users/zoe/Downloads/TripCompta.app/Contents/MacOS/TripCompta", "darwin", True,
+                           home="/Users/zoe") == "Téléchargements"
+    assert U.misplaced_app("/opt/x/TripCompta.app/Contents/MacOS/TripCompta", "darwin", True, home="/Users/zoe") == "« /opt/x »"
 
 
 def test_misplaced_never_on_windows_or_from_source():

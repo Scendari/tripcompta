@@ -74,12 +74,16 @@ class Premier:
             time.sleep(0.005)
 
 
+TOKEN = "essai-fenetre-windows"                               # jeton de session imposé, comme après un redémarrage
+
+
 def test_real_window_discreet_windows(tmp_path):
     from playwright.sync_api import sync_playwright
     port, cdp = _free_port(), _free_port()
     dl = tmp_path / "telechargements"
     env = dict(os.environ, TRIPCOMPTA_FENETRE_DISCRETE="1", TRIPCOMPTA_NO_UPDATE_CHECK="1",
                TRIPCOMPTA_CONFIG=str(tmp_path / "reglages.json"), TRIPCOMPTA_TELECHARGEMENTS=str(dl),
+               TRIPCOMPTA_JETON=TOKEN,
                WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=f"--remote-debugging-port={cdp}")
     env.pop("TRIPCOMPTA_DATA_DIR", None)
     watch = Premier()
@@ -137,7 +141,8 @@ def test_real_window_discreet_windows(tmp_path):
 
             # Export : PDF et ZIP directement dans Téléchargements, sans « Enregistrer sous… »
             import json
-            tid = json.load(urllib.request.urlopen(base + "api/voyages"))[0]["id"]
+            tid = json.load(urllib.request.urlopen(urllib.request.Request(
+                base + "api/voyages", headers={"X-TripCompta-Jeton": TOKEN})))[0]["id"]
             page.goto(base + f"v/{tid}/export")
             page.get_by_text("Télécharger le PDF").click()
             page.get_by_text("Télécharger le ZIP").click()

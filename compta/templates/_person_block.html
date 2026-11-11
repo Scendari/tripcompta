@@ -69,12 +69,14 @@
 
   {% if acc.is_family %}
   <h3 style="margin-top:1.2rem">Les comptes se font en famille : {{ acc.name }}</h3>
-  <table>
+  <div class="table-wrap">
+  <table class="family-members">
     <thead><tr><th>Membre</th><th class="num">Sa part</th><th class="num">Versé + avancé</th></tr></thead>
     <tbody>{% for m in acc.members %}<tr><td>{% if m.id == p.id %}<b>{{ m.name }}</b>{% else %}<a href="/v/{{ trip.id }}/participants/comptes?p={{ m.id }}">{{ m.name }}</a>{% endif %}{% if m.companion %} <span class="muted small">(accompagnant)</span>{% endif %}{% if m.id == acc.referent %} <span class="muted small">· paie pour la famille</span>{% endif %}</td>
       <td class="num">{{ m.share|money }}</td><td class="num">{{ (m.paid + m.advanced - m.refunded)|money }}</td></tr>{% endfor %}</tbody>
     <tfoot><tr><td>Famille</td><td class="num">{{ acc.share|money }}</td><td class="num">{{ (acc.paid + acc.advanced - acc.refunded)|money }}</td></tr></tfoot>
   </table>
+  </div>
   {% set who = acc.name %}{% set bal = acc.balance %}{% set st = acc.status %}{% set payer = acc.referent %}
   {% else %}
   {% set who = p.name %}{% set bal = me.balance %}{% set st = me.status %}{% set payer = p.id %}

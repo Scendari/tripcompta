@@ -211,6 +211,7 @@ tfoot td { font-weight: 700; border-top: 2px solid var(--border); border-bottom:
 tr.withdrawn td { color: var(--muted); }
 tr.family-row td { background: var(--bg-2); }
 .table-wrap { overflow-x: auto; }
+.family-members th.num { white-space: normal; }   /* « Versé + avancé » passe à la ligne plutôt que de déborder en fenêtre étroite */
 .matrix th, .matrix td { font-size: .84rem; padding: .4rem .5rem; }
 .matrix thead th.num { min-width: 92px; max-width: 130px; white-space: normal; vertical-align: bottom; }
 .matrix td.cell a { display: block; color: var(--text); border-radius: 6px; padding: .1rem .3rem; }
