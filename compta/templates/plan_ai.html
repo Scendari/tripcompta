@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}IA · {{ plan.name }} · Trip Compta{% endblock %}
 {% macro eur(x) %}{{ ((x or 0) * 100)|round|int|money }}{% endmacro %}
-{% block page %}
+{% block content %}
 <div class="plan-page">
 <div class="page-head">
   <div class="grow">

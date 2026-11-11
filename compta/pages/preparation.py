@@ -34,6 +34,11 @@ def install(site):
     AI_GUIDE = HERE / "static" / "ia" / "guide_preparation.md"
     AI_TEMPLATE = HERE / "static" / "ia" / "modele_preparation.txt"
 
+    def side(plan, on: str) -> dict:
+        """Le menu de gauche d'un projet (base.html) : l'entrée allumée, et le voyage lancé s'il existe."""
+        from sqlalchemy.orm import object_session
+        return dict(side_plan=plan, side_on=on, side_trip=W.plan_trip(object_session(plan), plan))
+
     def today() -> dt.date:
         """Aujourd'hui (les essais le fixent : app.state.aujourdhui)."""
         return getattr(app.state, "aujourdhui", None) or dt.date.today()
@@ -215,6 +220,7 @@ def install(site):
             by_offer.setdefault(x["offer"].id, []).append(x)
         trip = W.plan_trip(s, plan)
         return render(request, "plan.html", plan=plan, r=r, rows=rows, names=names, missing=[names[i] for i in r.empty],
+                      **side(plan, "postes"),
                       deadlines=by_offer, soon=[x for x in deadlines if x["counts"]], trip_made=trip,
                       deadline_ideas=S.DEADLINE_IDEAS, today_iso=today().isoformat(),
                       missing_ni=S.plan_ni_list([names[i] for i in r.empty]),
@@ -292,6 +298,7 @@ def install(site):
         shares = {ln.item_id: ln.share for ln in offer.links} if offer and offer.split else {}
         counting = {P.PER_PERSON: "personne", P.GROUP: "groupe", P.LOT: "nombre"}[offer.counting if offer else P.PER_PERSON]
         return render(request, "plan_offer.html", plan=plan, offer=offer, checked=checked, shares=shares,
+                      **side(plan, "postes"),
                       counting=counting,
                       share_input={i: (S.plan_amount_input(v) if offer.split == P.AMOUNTS
                                        else S.plan_percent(v, sign=False)) for i, v in shares.items()},
@@ -439,7 +446,7 @@ def install(site):
         names = {i.id: i.name for i in plan.items}
         stored = S.asso_name(s)
         last = S.last_trip(s)
-        return render(request, "plan_launch.html", plan=plan, r=r, lines=S.plan_launch_lines(plan),
+        return render(request, "plan_launch.html", plan=plan, r=r, lines=S.plan_launch_lines(plan), **side(plan, "lancer"),
                       missing=[names[i] for i in r.empty], asso_default="" if stored == "l'asso" else stored,
                       diving_default=bool(last and S.is_diving(last)))
 
@@ -477,7 +484,7 @@ def install(site):
     def ai_render(request, plan, **ctx):
         f = draft_file(plan.id)
         draft = f.read_text(encoding="utf-8") if f.exists() else None
-        return render(request, "plan_ai.html", plan=plan, modele=AI_TEMPLATE.read_text(encoding="utf-8"),
+        return render(request, "plan_ai.html", plan=plan, **side(plan, "ia"), modele=AI_TEMPLATE.read_text(encoding="utf-8"),
                       guide=AI_GUIDE.read_text(encoding="utf-8"), state=ai_state(plan), draft=draft,
                       draft_saved=dt.datetime.fromtimestamp(f.stat().st_mtime) if draft is not None else None,
                       has_prev=f.with_suffix(".precedent.txt").exists(), texte=ctx.pop("texte", ""), **ctx)
@@ -563,7 +570,7 @@ def install(site):
     def program_page(pid: int, request: Request, s: Session = Depends(get_s)):
         plan = plan_or_404(s, pid)
         r = S.compute_plan(plan)
-        return render(request, "plan_program.html", plan=plan, r=r, days=S.plan_program(plan),
+        return render(request, "plan_program.html", plan=plan, r=r, days=S.plan_program(plan), **side(plan, "programme"),
                       meal_said=S.plan_meals_said(plan, r) if r.meals_days and plan.meal_per_day is not None else "",
                       meals_item=next((i.name for i in plan.items if E.sort_key(i.name) == E.sort_key("Repas")), None),
                       trip_made=W.plan_trip(s, plan))

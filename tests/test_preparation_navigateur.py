@@ -359,7 +359,7 @@ def test_finishing_touches(site, browser):
     dark = browser.new_context(viewport={"width": 1280, "height": 900}, color_scheme="dark").new_page()
     for url in (f"{site.url}/programme", site.url):
         dark.goto(site.base + url)
-        tab = dark.locator(".tabs a.on")
+        tab = dark.locator(".side nav a.on")
         fg, bg = tab.evaluate("e => [getComputedStyle(e).color, getComputedStyle(e).backgroundColor]")
         rgb = lambda c: tuple(int(x) for x in re.findall(r"\d+", c)[:3])                     # noqa: E731
         assert _contrast(rgb(fg), rgb(bg)) >= 4.5, (url, fg, bg)
@@ -386,3 +386,60 @@ def test_reference_amounts_unchanged(site, browser):
         for d in (1, 7):
             site.post(f"{site.url}/jours/{d}/repas", dict(on="1"))
         site.post(f"{site.url}/jours/4/repas", dict(on="1", amount=""))
+
+
+TRIP_MENU = ["🏠 Où j'en suis", "Saisir", "👥 Participants", "🧾 Dépenses", "💶 Argent reçu et rendu", "📎 Justificatifs",
+             "🏷️ Catégories", "Suivre", "🧮 Qui paie quoi", "📊 En images", "🏛️", "Cas particuliers", "🚪 Désistement",
+             "🤝 Entre nous", "🤖 IA", "Partager", "📤 Envoyer les comptes", "📄 Exporter le bilan",
+             "📦 Exporter le voyage", "← Tous les voyages"]
+
+
+def menu_entries(page):
+    return page.evaluate("""() => [...document.querySelectorAll('aside.side nav > *')]
+        .filter(e => !e.classList.contains('sep')).map(e => e.textContent.trim())""")
+
+
+def test_side_menu_on_every_project_page(site, browser):
+    page = new_page(browser)
+    pages = [(site.url, "🧾 Postes et offres"), (f"{site.url}/programme", "📅 Programme"), (f"{site.url}/ia", "🤖 IA"),
+             (f"{site.url}/lancer", "🚀 Lancer le voyage"),
+             (f"{site.url}/offres/{site.offer('Taxi')}/modifier", "🧾 Postes et offres"),
+             (f"{site.url}/offres/nouvelle?poste={site.item('Taxi')}", "🧾 Postes et offres")]
+    for url, on in pages:
+        page.goto(site.base + url)
+        assert page.locator("aside.side .side-kicker").inner_text().strip().lower() == "en préparation", url
+        assert page.locator("aside.side .trip-name").inner_text() == "Mer Rouge 2027", url
+        assert menu_entries(page) == ["🧾 Postes et offres", "📅 Programme", "🤖 IA", "🚀 Lancer le voyage",
+                                      "← Tous les voyages"], url
+        lit = page.locator("aside.side nav a.on")
+        assert lit.count() == 1 and lit.inner_text().strip() == on, (url, lit.all_inner_texts())
+        assert page.locator(".tabs.plan-tabs").count() == 0
+    # le bouton du haut et l'entrée du menu mènent à la même page
+    page.goto(site.base + site.url)
+    assert page.locator("#lancer a").get_attribute("href") == page.locator("aside.side nav a:has-text('Lancer')").get_attribute("href")
+    # fenêtre étroite : le menu passe au-dessus, sans défilement horizontal
+    narrow = new_page(browser, width=390, height=844)
+    for url, _ in pages:
+        narrow.goto(site.base + url)
+        assert narrow.evaluate("document.documentElement.scrollWidth") <= 391, url
+        side, main = (narrow.locator(x).evaluate("e => e.getBoundingClientRect().top") for x in ("aside.side", "main"))
+        assert side < main, url
+    assert not page.errors and not narrow.errors, page.errors + narrow.errors
+
+
+def test_menu_after_launch_and_trip_menu_unchanged(site, browser):
+    import re as _re
+    r = site.post(f"{site.url}/lancer", dict(caisse="asso"))
+    tid = int(_re.match(r"/v/(\d+)", r.headers["location"]).group(1))
+    try:
+        page = new_page(browser)
+        page.goto(site.base + site.url)
+        assert menu_entries(page) == ["🧾 Postes et offres", "📅 Programme", "🤖 IA", "🧳 Voir le voyage", "← Tous les voyages"]
+        assert page.locator("aside.side nav a:has-text('Voir le voyage')").get_attribute("href") == f"/v/{tid}"
+        page.goto(site.base + f"/v/{tid}")                         # la comptabilité garde exactement son menu
+        got = menu_entries(page)
+        assert [x if not x.startswith("🏛️") else "🏛️" for x in got] == TRIP_MENU
+        assert page.locator("aside.side .side-kicker").count() == 0
+        assert not page.errors, page.errors
+    finally:
+        site.post(f"/v/{tid}/supprimer")                           # le projet peut être relancé : les autres essais

@@ -61,9 +61,24 @@
   <form method="post" action="/maj/plus-tard" class="inline"><input type="hidden" name="version" value="{{ update_banner.version }}"><button class="btn link small" title="Masquer jusqu'à la prochaine version">Plus tard</button></form>
 </div>
 {% endif %}
-{% if trip %}
+{% if trip or side_plan %}
+{# Mise en page à menu : les comptes d'un voyage (trip), ou un voyage en préparation (side_plan, side_on) #}
 <div class="layout">
   <aside class="side">
+    {% if side_plan %}
+    <div class="side-kicker">En préparation</div>
+    <div class="trip-name">{{ side_plan.name }}</div>
+    <div class="trip-meta">{% if side_plan.start %}{{ side_plan.start|date }}{% if side_plan.end %} → {{ side_plan.end|date }}{% endif %}{% endif %}{% if side_plan.start and side_plan.place %} · {% endif %}{{ side_plan.place }}</div>
+    <nav aria-label="Voyage en préparation">
+      <a href="/preparer/{{ side_plan.id }}" class="{{ 'on' if side_on == 'postes' }}"{% if side_on == 'postes' %} aria-current="page"{% endif %}>🧾 Postes et offres</a>
+      <a href="/preparer/{{ side_plan.id }}/programme" class="{{ 'on' if side_on == 'programme' }}"{% if side_on == 'programme' %} aria-current="page"{% endif %}>📅 Programme</a>
+      <a href="/preparer/{{ side_plan.id }}/ia" class="{{ 'on' if side_on == 'ia' }}"{% if side_on == 'ia' %} aria-current="page"{% endif %}>🤖 IA</a>
+      {% if side_trip %}<a href="/v/{{ side_trip.id }}">🧳 Voir le voyage</a>
+      {% else %}<a href="/preparer/{{ side_plan.id }}/lancer" class="{{ 'on' if side_on == 'lancer' }}"{% if side_on == 'lancer' %} aria-current="page"{% endif %}>🚀 Lancer le voyage</a>{% endif %}
+      <div class="sep"></div>
+      <a href="/">← Tous les voyages</a>
+    </nav>
+    {% else %}
     <div class="trip-name">{{ trip.name }}</div>
     <div class="trip-meta">{% if trip.start %}{{ trip.start|date }}{% if trip.end %} → {{ trip.end|date }}{% endif %}{% endif %}{% if trip.place %} · {{ trip.place }}{% endif %}</div>
     {% set cur = request.url.path %}
@@ -90,9 +105,10 @@
       <div class="sep"></div>
       <a href="/">← Tous les voyages</a>
     </nav>
+    {% endif %}
   </aside>
-  <main class="main {% block mainclass %}{% endblock %}"{% if trip.closed_on %} data-closed="1"{% endif %}>
-    {% if trip.closed_on %}<div class="closed-banner" role="note" id="voyage-cloture"><span>🔒 <b>Voyage clôturé le {{ trip.closed_on|date }}.</b> Ses comptes sont figés : tu peux tout consulter et exporter, mais plus rien modifier.</span>
+  <main class="main {% block mainclass %}{% endblock %}"{% if trip and trip.closed_on %} data-closed="1"{% endif %}>
+    {% if trip and trip.closed_on %}<div class="closed-banner" role="note" id="voyage-cloture"><span>🔒 <b>Voyage clôturé le {{ trip.closed_on|date }}.</b> Ses comptes sont figés : tu peux tout consulter et exporter, mais plus rien modifier.</span>
       <span class="row" style="gap:.4rem">
         <a class="btn small ghost" href="/v/{{ trip.id }}/dupliquer">⧉ Dupliquer</a>
         <form method="post" action="/v/{{ trip.id }}/rouvrir" class="inline" data-closed-ok><button class="btn small ghost">Rouvrir le voyage</button></form>
@@ -101,7 +117,7 @@
       {% if undo_token %}<form method="post" action="/annuler" class="inline"><input type="hidden" name="d" value="{{ undo_token }}"><button class="btn small ghost" title="Défaire : {{ undo_label }}">↶ Défaire</button></form>{% endif %}
       {% if redo_token %}<form method="post" action="/retablir" class="inline"><input type="hidden" name="r" value="{{ redo_token }}"><button class="btn small ghost">↷ Rétablir</button></form>{% endif %}
     </div>{% endif %}
-    {% if trip.is_demo %}<div class="demo-banner" role="note"><span>🧭 <b>Voyage d'exemple</b>, entièrement fictif : essaie librement, rien ne compte pour de vrai.</span>
+    {% if trip and trip.is_demo %}<div class="demo-banner" role="note"><span>🧭 <b>Voyage d'exemple</b>, entièrement fictif : essaie librement, rien ne compte pour de vrai.</span>
       <span class="row" style="gap:.4rem">
         <form method="post" action="/v/{{ trip.id }}/exemple/recommencer" class="inline" data-confirm="Remettre l'exemple à neuf ? Tes essais dans ce voyage seront effacés."><button class="btn small ghost">↺ Recommencer l'exemple</button></form>
         <form method="post" action="/v/{{ trip.id }}/exemple/retirer" class="inline" data-confirm="Retirer le voyage d'exemple ? Tu pourras le rouvrir depuis Réglages."><button class="btn small ghost">Retirer l'exemple</button></form>

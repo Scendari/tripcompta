@@ -402,7 +402,7 @@ def test_launch_needs_a_chosen_offer(screen):
     sc = screen
     sc.create(name="Vide", people="4")
     sc.add_item("Gîte")
-    assert "Lancer le voyage" not in sc.text()
+    assert 'id="lancer"' not in sc.cl.get(sc.url).text          # pas de bouton en haut ; le menu y mène, et la page refuse
     r = sc.cl.get(f"{sc.url}/lancer", follow_redirects=False)
     assert refused(r) and "Retiens au moins une offre" in message(r)
     with sc.db.Session() as s:

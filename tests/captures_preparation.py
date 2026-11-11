@@ -198,9 +198,16 @@ def main(out: Path):
         dark = browser.new_context(viewport={"width": 1280, "height": 900}, color_scheme="dark", locale="fr-FR",
                                    device_scale_factor=2).new_page()
         for name, url in (("32-sombre-accueil", "/"), ("33-sombre-projet", sc.url), ("34-sombre-programme", f"{sc.url}/programme"),
-                          ("35-sombre-ia-projet", f"{sc.url}/ia"), ("36-sombre-ia-voyage", f"/v/{tid}/ia")):
+                          ("35-sombre-ia-projet", f"{sc.url}/ia"), ("36-sombre-ia-voyage", f"/v/{tid}/ia"),
+                          ("38-sombre-offre", f"{sc.url}/offres/{sc.offer('Taxi')}/modifier"),
+                          ("39-sombre-lancer", f"{sc.url}/lancer")):
             shot(name, url, full=False, pg=dark)
         shot("37-projet-fenetre-etroite-finitions", sc.url, pg=narrow)
+        # ---- menu de gauche (tranche 6) : offre et lancement, grand écran et fenêtre étroite
+        shot("40-offre-avec-menu", f"{sc.url}/offres/{sc.offer('Forfait Club A')}/modifier", full=False)
+        shot("41-lancer-avec-menu", f"{sc.url}/lancer", full=False)
+        shot("42-offre-avec-menu-etroite", f"{sc.url}/offres/{sc.offer('Taxi')}/modifier", full=False, pg=narrow)
+        shot("43-programme-avec-menu-etroite", f"{sc.url}/programme", full=False, pg=narrow)
         srv.should_exit = True
         browser.close()
 

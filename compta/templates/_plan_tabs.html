@@ -1,13 +1,6 @@
-{# Onglets d'un voyage en préparation : « Postes et offres » / « Programme » #}
-{% macro plan_tabs(plan, current) %}
-<nav class="tabs plan-tabs" aria-label="Parties du projet">
-  <a href="/preparer/{{ plan.id }}" class="{{ 'on' if current == 'postes' }}"{% if current == 'postes' %} aria-current="page"{% endif %}>Postes et offres</a>
-  <a href="/preparer/{{ plan.id }}/programme" class="{{ 'on' if current == 'programme' }}"{% if current == 'programme' %} aria-current="page"{% endif %}>Programme</a>
-</nav>
-{% endmacro %}
-
-{# En-tête d'un voyage en préparation, le même sur les deux onglets : nom, lieu, dates, note ; « Modifier » (le panneau
-   s'ouvre sur place, on revient sur l'onglet d'où l'on vient), « Supprimer le projet », IA ; puis les onglets. #}
+{# En-tête d'un voyage en préparation, le même sur « Postes et offres » et « Programme » : nom, lieu, dates, note ;
+   « Modifier » (le panneau s'ouvre sur place, on revient sur la page d'où l'on vient) et « Supprimer le projet ». Le
+   reste (pages du projet, IA, tous les voyages) est dans le menu de gauche (base.html). #}
 {% macro plan_head(plan, current) %}
 <div class="page-head">
   <div class="grow">
@@ -17,16 +10,12 @@
     {% if plan.note %}<p class="plan-note">{{ plan.note }}</p>{% endif %}
   </div>
   <div class="row plan-head-actions">
-    <a class="btn ghost small" href="/">← Tous les voyages</a>
-    <a class="btn ghost small" href="/preparer/{{ plan.id }}/ia">🤖 IA</a>
     <button type="button" class="btn ghost small" data-toggle-row="#modifier" aria-expanded="false" aria-controls="modifier">Modifier</button>
     <form method="post" action="/preparer/{{ plan.id }}/supprimer" class="inline"
           data-confirm="Supprimer le projet « {{ plan.name }} » ? {% if plan.items or plan.offers %}Ses {{ plan.items|length }} poste{{ 's' if plan.items|length > 1 }} et ses {{ plan.offers|length }} offre{{ 's' if plan.offers|length > 1 }} partent avec lui. {% endif %}Tu pourras encore annuler juste après.">
       <button class="btn ghost small danger-text">Supprimer le projet</button></form>
   </div>
 </div>
-
-{{ plan_tabs(plan, current) }}
 
 <form id="modifier" class="card plan-edit" method="post" action="/preparer/{{ plan.id }}/modifier" hidden>
   <input type="hidden" name="retour" value="{{ current }}">

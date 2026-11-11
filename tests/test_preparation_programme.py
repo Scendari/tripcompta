@@ -373,20 +373,26 @@ def test_detail_without_programme_keeps_amounts(screen):
 def test_no_forbidden_words(screen):
     sc = meals_ref(screen.reference())
     sc.post(f"{sc.url}/programme", dict(day="2", until="6", text="Plongées"))
-    src = (TEMPLATES / "plan_program.html").read_text(encoding="utf-8") + (TEMPLATES / "_plan_tabs.html").read_text(encoding="utf-8")
+    src = (TEMPLATES / "plan_program.html").read_text(encoding="utf-8") + (TEMPLATES / "_plan_tabs.html").read_text(encoding="utf-8") \
+        + (TEMPLATES / "base.html").read_text(encoding="utf-8")
     assert not FORBIDDEN.search(src)
     for url in (f"{sc.url}/programme", sc.url, f"{sc.url}/lancer"):
         t = sc.text(url)
         assert not FORBIDDEN.search(t), (url, FORBIDDEN.search(t).group(0))
 
 
-def test_same_header_on_both_tabs_and_edit_from_programme(screen):
+def test_same_header_on_both_pages_and_edit_from_programme(screen):
+    """« Postes et offres » et « Programme » : même en-tête (Modifier, Supprimer le projet) ; IA et « Tous les voyages »
+    sont dans le menu de gauche, pas répétés ; « Modifier » revient sur la page d'où l'on vient."""
     sc = screen.reference()
     for url in (sc.url, f"{sc.url}/programme"):
         page = sc.cl.get(url).text
-        head = clean(page[page.index('<div class="page-head">'):page.index('aria-label="Parties du projet"')])
-        assert "Modifier" in head and "Supprimer le projet" in head and "IA" in head and "Tous les voyages" in head
-        assert 'id="modifier"' in page and f'action="{sc.url}/modifier"' in page
+        head = clean(page[page.index('<div class="page-head">'):page.index('id="modifier"')])
+        assert "Modifier" in head and "Supprimer le projet" in head
+        assert "IA" not in head and "Tous les voyages" not in head
+        menu = clean(page[page.index('<aside class="side">'):page.index("</aside>")])
+        assert "🤖 IA" in menu and "← Tous les voyages" in menu
+        assert f'action="{sc.url}/modifier"' in page
     r = ok(sc.post(f"{sc.url}/modifier", dict(name="Mer Rouge 2027", place="Hurghada", start="2027-05-01",
                                                end="2027-05-07", retour="programme")))
     assert urlparse(r.headers["location"]).path == f"{sc.url}/programme" and message(r) == "Projet modifié"

@@ -1489,7 +1489,6 @@ tr.to-check > td:last-child { border-right: 2px solid var(--coral); }
   .soon-what { grid-column: 2; margin-bottom: .45rem; }
 }
 /* Préparer un voyage : onglets, programme du séjour, enveloppe repas */
-.plan-tabs { margin: 0 0 1rem; }
 .plan-meals { margin-top: .25rem; font-size: .92rem; color: var(--muted); }
 .plan-stay, .plan-meal-card { margin-bottom: 1rem; }
 .plan-days-form { gap: .5rem; }
@@ -1555,3 +1554,5 @@ summary.act::-webkit-details-marker { display: none; }
 }
 .plan-line:has(.plan-line-edit[open]) { grid-template-columns: minmax(0, 1fr); }   /* formulaire ouvert : toute la largeur */
 .plan-line-actions:has(.plan-line-edit[open]) { justify-content: flex-start; }
+/* menu de gauche d'un voyage en préparation : « En préparation » au-dessus du nom */
+.side .side-kicker { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--teal-strong); padding: 0 .6rem .15rem; }
