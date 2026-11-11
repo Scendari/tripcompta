@@ -570,7 +570,9 @@ def install(site):
     def program_page(pid: int, request: Request, s: Session = Depends(get_s)):
         plan = plan_or_404(s, pid)
         r = S.compute_plan(plan)
+        vue = request.query_params.get("vue")
         return render(request, "plan_program.html", plan=plan, r=r, days=S.plan_program(plan), **side(plan, "programme"),
+                      vue=vue if vue in ("jour", "tableau") else None,
                       meal_said=S.plan_meals_said(plan, r) if r.meals_days and plan.meal_per_day is not None else "",
                       meals_item=next((i.name for i in plan.items if E.sort_key(i.name) == E.sort_key("Repas")), None),
                       trip_made=W.plan_trip(s, plan))

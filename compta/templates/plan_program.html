@@ -54,6 +54,13 @@
 
 {% if trip_made %}<p class="small muted">Voyage lancé : modifier le programme ne change pas les comptes du voyage.</p>{% endif %}
 
+{% set vue_on = vue or 'jour' %}
+<nav class="view-switch" aria-label="Façon de voir le programme" id="vue-choix">
+  <a href="?vue=jour" data-vue="jour" class="{{ 'on' if vue_on == 'jour' }}" aria-pressed="{{ 'true' if vue_on == 'jour' else 'false' }}">Par jour</a>
+  <a href="?vue=tableau" data-vue="tableau" class="{{ 'on' if vue_on == 'tableau' }}" aria-pressed="{{ 'true' if vue_on == 'tableau' else 'false' }}">Tableau</a>
+</nav>
+
+<div id="vue-jour" {{ 'hidden' if vue_on == 'tableau' }}>
 {% if not plan.duration %}
 <div class="card plan-empty"><p style="margin:0">Indique la durée du séjour pour voir les jours.</p></div>
 {% endif %}
@@ -117,7 +124,67 @@
 </section>
 {% endfor %}
 </div>
+<div id="vue-tableau" {{ 'hidden' if vue_on != 'tableau' }}>
+{% if not plan.duration %}
+<div class="card plan-empty"><p style="margin:0">Indique la durée du séjour pour voir les jours.</p></div>
+{% else %}
+{% set meals = plan.meal_per_day is not none %}
+<div class="card prog-card">
+<table class="prog-table{{ ' with-meals' if meals }}" id="programme-tableau">
+  <caption class="sr-only">Le programme du séjour, jour par jour</caption>
+  <thead><tr><th scope="col">Jour</th><th scope="col">Ce qu'on fait</th><th scope="col">Prestataire</th>{% if meals %}<th scope="col" class="num">Repas</th>{% endif %}</tr></thead>
+  {% for x in days %}{% set d = x.day %}{% set n = (x.lines|length + x.after|length) or 1 %}
+  <tbody class="prog-day" id="t-jour-{{ d }}">
+    {% set rows = x.lines + x.after %}
+    {% for y in (rows if rows else [None]) %}
+    <tr>
+      {% if loop.first %}
+      <th scope="row" rowspan="{{ n }}" class="prog-when"><a href="?vue=jour#jour-{{ d }}" data-vue-link="jour">Jour {{ d }}</a>{% if x.date %}<span class="prog-date"><span class="prog-sep" aria-hidden="true"> · </span>{{ x.date|shortdate }}</span>{% endif %}</th>
+      {% endif %}
+      {% if y is none %}
+      <td class="prog-what prog-nothing">rien de prévu</td><td class="prog-who"></td>
+      {% elif y.line is defined %}{% set ln = y.line %}
+      <td class="prog-what">{% if ln.time %}<b class="prog-time">{{ y.time_text }}</b> {% endif %}{{ ln.text }}{% if ln.until %} <span class="pill du">Jours {{ ln.day }} à {{ ln.until }}</span>{% endif %}
+        {% if ln.note %}<span class="prog-note">{{ ln.note }}</span>{% endif %}</td>
+      <td class="prog-who">{% if y.who == 'pas encore choisi' %}<span class="muted">pas encore choisi</span>{% elif y.who %}{{ y.who }}{% endif %}</td>
+      {% else %}
+      <td class="prog-what prog-cont">↳ {{ y.text }}</td><td class="prog-who"></td>
+      {% endif %}
+      {% if meals and loop.first %}
+      {% set amt = x.meal_amount if x.meal_amount is not none else plan.meal_per_day %}
+      <td rowspan="{{ n }}" class="num prog-meal">{% if x.meal_on %}<span class="{{ 'prog-meal-changed' if x.changed }}">{{ amt|amount_input }} €</span>{% else %}<span class="muted" aria-label="pas de repas compté">—</span>{% endif %}</td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+  {% endfor %}
+</table>
+{% if meals and r.meals_days %}<p class="prog-total muted small">Repas : {{ r.meals_per_person|money }} par personne sur {{ r.meals_days }} jour{{ 's' if r.meals_days > 1 }}</p>{% endif %}
+</div>
+{% endif %}
+</div>
+
+</div>
 <script>
+// Deux façons de voir : « Par jour » (on saisit) ou « Tableau » (on lit). Le choix est retenu dans ce navigateur ;
+// l'adresse ?vue=… l'emporte (liens, retour d'un formulaire).
+(function () {
+  var KEY = "programme-vue", q = new URLSearchParams(location.search).get("vue");
+  function show(v, push) {
+    document.getElementById("vue-jour").hidden = v !== "jour";
+    document.getElementById("vue-tableau").hidden = v !== "tableau";
+    document.querySelectorAll("#vue-choix a").forEach(function (a) {
+      var on = a.dataset.vue === v; a.classList.toggle("on", on); a.setAttribute("aria-pressed", String(on));
+    });
+    try { localStorage.setItem(KEY, v); } catch (e) {}
+    if (push) { var u = new URL(location.href); u.searchParams.set("vue", v); u.hash = ""; history.replaceState(null, "", u); }
+  }
+  if (q === "jour" || q === "tableau") { show(q, false); }
+  else { var saved = null; try { saved = localStorage.getItem(KEY); } catch (e) {} if (saved === "tableau") show("tableau", false); }
+  document.querySelectorAll("#vue-choix a").forEach(function (a) {
+    a.addEventListener("click", function (ev) { ev.preventDefault(); show(a.dataset.vue, true); });
+  });
+})();
 // « Repas » : enregistré dès qu'on coche ou décoche. « plus de détails » : le jour choisi remplace celui du bloc.
 document.querySelectorAll('[data-autosubmit]').forEach(function (c) {
   c.addEventListener('change', function () { c.form.requestSubmit ? c.form.requestSubmit() : c.form.submit(); });

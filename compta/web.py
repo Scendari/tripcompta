@@ -57,6 +57,7 @@ templates.env.filters["money"] = E.fmt
 templates.env.filters["money_sign"] = lambda c: E.fmt(c, sign=True)
 templates.env.filters["date"] = _date
 templates.env.filters["longdate"] = lambda d: long_date(d) if d else ""     # « samedi 1er mai 2027 »
+templates.env.filters["shortdate"] = S.short_date                                 # « lun. 3 mai »
 templates.env.filters["amount_input"] = _amount_input
 templates.env.tests["contains"] = lambda seq, x: x in (seq or ())
 templates.env.globals["ROLES"] = S.ROLES

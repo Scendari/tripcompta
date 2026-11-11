@@ -339,6 +339,8 @@ tests/
                      à la main), IA du projet (même projet à l'écran et par l'IA), API, MCP, diagnostic
   test_preparation_programme.py  programme du séjour (jours, dates, périodes, ordre, poste rattaché) et enveloppe
                      repas (montants à la main, budget, lancement, IA)
+  test_preparation_tableau.py  vue « Tableau » du programme : jours, heures, périodes, prestataires, repas, choix
+                     de la vue retenu, fenêtre étroite et thème sombre
   test_pages.py      les pages rangées par domaine : rien d'oublié, aucune adresse cachée par une autre
   test_guides.py     INSTALLER.md et README.md disent vrai : boutons cités, fichiers, dossiers, liens
   test_jeton.py      jeton de session : rien n'est lisible ni modifiable sans lui

@@ -208,6 +208,13 @@ def main(out: Path):
         shot("41-lancer-avec-menu", f"{sc.url}/lancer", full=False)
         shot("42-offre-avec-menu-etroite", f"{sc.url}/offres/{sc.offer('Taxi')}/modifier", full=False, pg=narrow)
         shot("43-programme-avec-menu-etroite", f"{sc.url}/programme", full=False, pg=narrow)
+        # ---- vue Tableau du programme (tranche 7)
+        shot("44-programme-tableau", f"{sc.url}/programme?vue=tableau")
+        page.goto(base + f"{sc.url}/programme?vue=jour")
+        page.locator("#vue-choix").screenshot(path=str(out / "45-choix-de-la-vue.png"))
+        print(out / "45-choix-de-la-vue.png")
+        shot("46-programme-tableau-sombre", f"{sc.url}/programme?vue=tableau", pg=dark)
+        shot("47-programme-tableau-etroit", f"{sc.url}/programme?vue=tableau", pg=narrow)
         srv.should_exit = True
         browser.close()
 

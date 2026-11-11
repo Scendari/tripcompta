@@ -675,6 +675,17 @@ def plan_day_date(plan: M.Plan, day: int):
     return plan.start + dt.timedelta(days=day - 1) if plan.start else None
 
 
+DAYS_SHORT = ("lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim.")
+MONTHS_SHORT = ("janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc.")
+
+
+def short_date(d) -> str:
+    """« lun. 3 mai », « sam. 1er mai » (vue Tableau du programme)."""
+    if not d:
+        return ""
+    return f"{DAYS_SHORT[d.weekday()]} {d.day}{'er' if d.day == 1 else ''} {MONTHS_SHORT[d.month - 1]}"
+
+
 def time_text(hhmm: str) -> str:
     """« 09:30 » -> « 9 h 30 » ; « 14:00 » -> « 14 h »."""
     if not hhmm:
@@ -703,13 +714,21 @@ def plan_program(plan: M.Plan) -> list:
             return names[ln.item_id]                   # l'offre porte le nom du poste : « Taxi », pas « Taxi : Taxi »
         return f"{names[ln.item_id]} : {label or 'pas encore choisi'}"
 
+    def who(ln):
+        """Le prestataire d'une ligne rattachée à un poste (vue Tableau) : l'offre retenue, « pas encore choisi »
+        (None : la ligne n'a pas de poste)."""
+        if ln.item_id not in names:
+            return None
+        return labels.get((r.by_item.get(ln.item_id) or {}).get("offer")) or "pas encore choisi"
+
     out = []
     for d in range(1, n + 1):
         mine = [ln for ln in plan.lines if ln.day == d]
         mine.sort(key=lambda ln: (bool(ln.time), ln.time or "", ln.id))
         row = meals.get(d)
         out.append(dict(day=d, date=plan_day_date(plan, d),
-                        lines=[dict(line=ln, item_text=item_text(ln), time_text=time_text(ln.time)) for ln in mine],
+                        lines=[dict(line=ln, item_text=item_text(ln), time_text=time_text(ln.time), who=who(ln))
+                               for ln in mine],
                         after=[ln for ln in plan.lines if ln.day < d <= (ln.until or 0)],
                         meal_on=row.meal_on if row else True,
                         meal_amount=row.meal_amount if row else None,
