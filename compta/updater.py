@@ -158,6 +158,14 @@ class Updater:
         v = self._conf().get("maj_verifiee")
         return float(v) if isinstance(v, (int, float)) else None
 
+    def auto_state(self) -> str:
+        """La vérification automatique telle qu'elle tourne vraiment (diagnostic) : le réglage, et ce qui la coupe."""
+        if self.dev:
+            return "non (version de développement)"
+        if os.environ.get("TRIPCOMPTA_NO_UPDATE_CHECK"):
+            return "non (coupée par TRIPCOMPTA_NO_UPDATE_CHECK)" + ("" if self.auto else ", et coupée dans les réglages")
+        return "oui" if self.auto else "non (coupée dans les réglages)"
+
     # ----- vérifier
     def due(self) -> bool:
         if self.dev or not self.auto or os.environ.get("TRIPCOMPTA_NO_UPDATE_CHECK"):

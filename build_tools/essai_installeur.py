@@ -81,6 +81,20 @@ def wait_for(cond, seconds):
     return False
 
 
+UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\{6F3C2A91-5B7E-4D2A-9C1E-7A4B8D2E5F10}_is1"
+
+
+def shown_version(value=None):
+    """Le numéro affiché dans « Applications installées » (installation pour l'utilisateur : HKCU) ; l'écrit si
+    `value` est donné (pour simuler une ancienne version : l'essai n'a qu'un installeur, donc un seul numéro)."""
+    import winreg
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, UNINSTALL_KEY, 0,
+                        winreg.KEY_READ | (winreg.KEY_SET_VALUE if value else 0)) as k:
+        if value:
+            winreg.SetValueEx(k, "DisplayVersion", 0, winreg.REG_SZ, value)
+        return winreg.QueryValueEx(k, "DisplayVersion")[0]
+
+
 def check(ok, what):
     print(("OK   " if ok else "ÉCHEC ") + what)
     if not ok:
@@ -105,6 +119,7 @@ def main():
     check(any(inst.glob("unins*.exe")), "désinstalleur présent")
     menu = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Trip Compta.lnk"
     check(menu.exists(), "raccourci du menu Démarrer")
+    check(shown_version() == version, f"« Applications installées » affiche {version}")
     check((inst / "_internal").is_dir(), "fichiers de l'application")
 
     # 2. l'application installée démarre
@@ -135,11 +150,14 @@ def main():
     check(wait_for(lambda: (work / U.STARTED).exists(), 60), "la nouvelle version a dit « j'ai démarré »")
     check((work / U.STARTED).read_text(encoding="utf-8").strip() == version, "… avec son numéro de version")
     check(wait_for(lambda: not aside.exists(), 120), "l'ancienne version, mise de côté, est effacée après coup")
+    check(shown_version() == version, "« Applications installées » affiche le numéro de la mise à jour")
     quit_app(port2)
     time.sleep(2)
 
     # 3 bis. la nouvelle version ne dit jamais « j'ai démarré » (l'installeur regarde un autre dossier que le sien)
     (inst / "temoin-ancienne.txt").write_text("ancienne version", encoding="utf-8")
+    OLD = "0.0.1-ancienne"
+    shown_version(OLD)                                          # l'ancienne version a son propre numéro
     elsewhere = tmp / "maj sans réponse"
     elsewhere.mkdir()
     port3, port4 = free_port(), free_port()
@@ -160,6 +178,7 @@ def main():
     said = (elsewhere / "echec.txt").read_text(encoding="utf-8-sig")
     check("n'a pas démarré correctement" in said and "remise en place" in said, f"message d'échec lisible : {said.strip()}")
     check((inst / "temoin-ancienne.txt").exists(), "l'ancienne version est remise à sa place")
+    check(shown_version() == OLD, f"« Applications installées » affiche à nouveau son numéro ({OLD})")
     check(not aside.exists() and not spoiled.exists(), "aucun dossier de secours ne traîne")
     check(ping(port3) is None, "la version qui ne répondait pas est arrêtée")
     check(wait_ping(port4, version, 180), "l'ancienne version est relancée")

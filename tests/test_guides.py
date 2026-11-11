@@ -163,10 +163,21 @@ def test_new_computer_and_uninstall_sections_say_the_essential():
     assert "n'efface pas tes voyages" in out
     mac, win = out.split("### Sur Windows")
     assert "### Sur Mac" in mac and "corbeille" in mac and "⌘Q" in mac
-    assert "Applications installées" in win
+    assert "Applications installées" in win and "Applications et fonctionnalités" in win      # Windows 11 et 10
     for part in (mac, win):                       # tout effacer : dans l'ordre, et en prévenant
         assert part.index("Oublier le mot de passe sur cet ordinateur") < part.index("Tes voyages")
         assert "⚠️" in part and "sauvegardes quotidiennes" in part
+
+
+def test_desktop_shortcut_is_described_as_the_installer_does_it():
+    """Le raccourci du Bureau : coché par défaut dans l'installeur, sauf « Flags: unchecked »."""
+    iss = (ROOT / "build_tools" / "windows" / "TripCompta.iss").read_text(encoding="utf-8")
+    task = next(line for line in iss.splitlines() if line.startswith('Name: "bureau"'))
+    win = flat(section(INSTALLER, "Windows"))
+    if "unchecked" in task:
+        assert "si tu le coches" in win
+    else:
+        assert "un sur le Bureau (décoche la case" in win and "si tu le coches" not in win
 
 
 def test_links_inside_the_guides_lead_somewhere():

@@ -82,6 +82,8 @@ Filename: "{app}\TripCompta.exe"; Description: "Ouvrir Trip Compta"; Flags: nowa
 const
   SYNCHRONIZE = $00100000;
   WEBVIEW2 = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
+  { l'inscription dans « Applications installées » (même identifiant que AppId, suffixe _is1 d'Inno Setup) }
+  UNINSTALL_KEY = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{6F3C2A91-5B7E-4D2A-9C1E-7A4B8D2E5F10}_is1';
 
 function OpenProcess(dwDesiredAccess: Cardinal; bInheritHandle: Boolean; dwProcessId: Cardinal): THandle;
   external 'OpenProcess@kernel32.dll stdcall';
@@ -94,6 +96,7 @@ var
   Installed: Boolean;
   AppDir: String;      { le dossier de l'application (connu à partir de PrepareToInstall) }
   Backup: String;      { mise à jour : l'ancienne version, mise de côté le temps d'installer ('' : aucune) }
+  OldVersion: String;  { son numéro dans « Applications installées », remis si on revient à elle }
 
 function IsUpdate: Boolean;
 begin
@@ -148,6 +151,14 @@ begin
   if RenameFile(Backup, AppDir) then
   begin
     Log('Ancienne version remise en place');
+    if OldVersion <> '' then
+    begin
+      { l'installation a déjà écrit le nouveau numéro : « Applications installées » doit montrer celui d'avant }
+      if RegWriteStringValue(HKA, UNINSTALL_KEY, 'DisplayVersion', OldVersion) then
+        Log('Numéro remis dans « Applications installées » : ' + OldVersion)
+      else
+        Log('Impossible de remettre le numéro ' + OldVersion + ' dans « Applications installées »');
+    end;
     Result := True;
     Backup := '';
     DelTree(AppDir + '.rate', True, True, True);
@@ -259,6 +270,8 @@ begin
     begin
       Backup := AppDir + '.ancien';
       Log('Ancienne version mise de côté : ' + Backup);
+      if not RegQueryStringValue(HKA, UNINSTALL_KEY, 'DisplayVersion', OldVersion) then
+        OldVersion := '';
     end
     else
       Log('Ancienne version pas mise de côté (dossier absent ou occupé) : installation par-dessus');

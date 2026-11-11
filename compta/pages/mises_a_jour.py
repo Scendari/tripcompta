@@ -45,7 +45,7 @@ def install(site):
     def diagnostic_file():
         """« Exporter un diagnostic » : état de l'application et des fichiers, sans nom ni montant."""
         locked = bool(site.vault_box is not None and site.vault_box.locked)
-        extra = [f"vérification automatique des mises à jour : {'oui' if upd.auto else 'non'}",
+        extra = [f"vérification automatique des mises à jour : {upd.auto_state()}",
                  f"mise à jour disponible : {(upd.available() or {}).get('version') or 'non'}",
                  "sauvegarde du jour : " + ("ÉCHEC le " + app.state.backup_failed if app.state.backup_failed else "faite")]
         if app.state.misplaced:
