@@ -46,6 +46,8 @@ def main(out: Path):
             pg = pg or page
             if url:
                 pg.goto(base + url)
+            if full:
+                pg.evaluate("window.scrollTo(0, 0)")      # sinon la barre du haut apparaît au milieu de l'image
             pg.wait_for_timeout(350)
             pg.screenshot(path=str(out / f"{name}.png"), full_page=full)
             print(out / f"{name}.png")
@@ -99,6 +101,52 @@ def main(out: Path):
         sc.post(f"{sc.url}/offres/{sc.offer('Taxi')}/ne-plus-retenir")
         sc.post(f"{sc.url}/offres/{sc.offer('Transavia')}/ne-plus-retenir")
         shot("14-budget-incomplet", sc.url)
+
+        # ---- tranche 3 : échéances, « À faire bientôt », lancement, IA (aujourd'hui fixé au 10/01/2027)
+        import datetime as dt
+        import json
+        from compta import models as M
+        from compta import writes as W
+        sc.app.state.aujourdhui = dt.date(2027, 1, 10)
+        sc.post(f"{sc.url}/offres/{sc.offer('Transavia')}/retenir")
+        for offer, label, day, amount in (("Forfait Club A", "Option à confirmer", "2027-01-08", ""),
+                                          ("Forfait Club A", "Acompte à verser", "2027-01-25", "1000"),
+                                          ("Minibus", "Reste à payer", "2027-01-10", "600"),
+                                          ("Transavia", "Prix garanti jusqu'à cette date", "2027-01-11", ""),
+                                          ("Hôtel X", "Acompte à verser", "2027-01-12", "500")):
+            sc.post(f"{sc.url}/offres/{sc.offer(offer)}/echeances", dict(label=label, date=day, amount=amount))
+        page.goto(base + sc.url)
+        page.locator(f"#poste-{sc.item('Hôtel')}").screenshot(path=str(out / "15-offre-avec-echeances.png"))
+        print(out / "15-offre-avec-echeances.png")
+        page.locator("#a-faire").screenshot(path=str(out / "16-a-faire-bientot-projet.png"))
+        print(out / "16-a-faire-bientot-projet.png")
+        with sc.db.Session() as s:
+            t = s.query(M.Trip).first()
+            a = W.add_participant(s, t, "Anne Martin")
+            b = W.add_participant(s, t, "Bruno Petit")
+            c = W.add_participant(s, t, "Chloé Roux")
+            W.save_expense(s, t, label="Gîte", planned=90000, weights={a.id: 1, b.id: 1, c.id: 1})
+            W.set_pay_dates(t, [("Acompte", dt.date(2027, 1, 5), 10000)])
+            s.commit()
+        shot("17-a-faire-bientot-accueil", "/", full=False)
+        shot("18-confirmation-lancement", f"{sc.url}/lancer")
+        sc.post(f"{sc.url}/offres/{sc.offer('Taxi')}/ne-plus-retenir")
+        shot("18b-confirmation-lancement-poste-sans-offre", f"{sc.url}/lancer")
+        r = sc.post(f"{sc.url}/lancer", dict(caisse="asso", asso_name="Club Subaqua"))
+        tid = int(r.headers["location"].split("?")[0].rsplit("/", 1)[1])
+        shot("19-projet-apres-lancement", sc.url, full=False)
+        shot("20-depenses-du-voyage-cree", f"/v/{tid}/depenses")
+        shot("20b-ou-j-en-suis-du-voyage-cree", f"/v/{tid}", full=False)
+        page.goto(base + f"{sc.url}/ia")
+        page.fill("#texte", "Voici ma proposition.\n```json\n" + json.dumps({
+            "projet_id": sc.pid, "offres": [{"prestataire": "Navette", "prix": 45, "compte": "pour un nombre de personnes",
+                                             "pour_combien": 8, "postes": ["Taxi"], "retenue": True,
+                                             "echeances": [{"libelle": "Acompte à verser", "date": "2027-01-20",
+                                                            "montant": 30}]}]}, ensure_ascii=False) + "\n```")
+        page.click("button:has-text('Voir ce qui changera')")
+        page.wait_for_selector("#resultat")
+        shot("21-page-ia-du-projet")
+        shot("22-projet-echeances-fenetre-etroite", sc.url, pg=narrow)
         srv.should_exit = True
         browser.close()
 

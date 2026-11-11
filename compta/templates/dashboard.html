@@ -18,7 +18,7 @@
   </ol>
 </section>
 {% endif %}
-<div class="page-head"><div class="grow"><h1>Où j'en suis ?</h1>{{ mode_note(mode) }}</div></div>
+<div class="page-head"><div class="grow"><h1>Où j'en suis ?</h1>{{ mode_note(mode) }}</div>{% if prep %}<a class="btn ghost small" href="/preparer/{{ prep.id }}" id="voir-preparation">Voir la préparation de ce voyage</a>{% endif %}</div>
 
 <section class="trip-info" aria-labelledby="h-trip">
   <div class="row section-head">

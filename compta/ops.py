@@ -17,6 +17,7 @@ from typing import Iterable, Optional
 from . import engine as E
 from . import fichiers
 from . import models as M
+from . import preparation as P
 from . import services as S
 from . import writes as W
 from .db import Database
@@ -995,7 +996,343 @@ class Ops:
             return dict(message=f"Rôles de {p.name} : {', '.join(S.role_label(r) for r in p.role_list) or 'aucun'}.")
         return self._write(f"rôles de {participant} (IA)", fn, trip_id, simulation)
 
+    # ---- voyages en préparation (projets) : tout passe par plan_apply
+    def list_plans(self) -> list:
+        with self.db.Session() as s:
+            return [plan_summary_row(p) for p in s.query(M.Plan).order_by(M.Plan.id).all()]
+
+    def plan(self, projet) -> dict:
+        with self.db.Session() as s:
+            return plan_detail(get_plan(s, projet))
+
+    def create_plan(self, nom, participants, lieu="", debut=None, fin=None, simulation=False) -> dict:
+        def fn(s, _):
+            p = W.save_plan(s, name=nom or "", people=_whole(participants, "nombre de participants"), place=lieu or "",
+                            start=date_of(debut, "date de début"), end=date_of(fin, "date de fin"))
+            return dict(projet_id=p.id, message=f"Projet « {p.name} » créé (n°{p.id}), pour {p.people} personnes.")
+        return self._write(f"création du voyage en préparation « {' '.join(str(nom or '').split())} » (IA)", fn,
+                           None, simulation)
+
+    def plan_import(self, projet, data, simulation=False) -> dict:
+        """Applique le JSON du guide (guide_preparation.md) au projet : tout ou rien, une seule copie « Défaire »."""
+        with self.db.Session() as s:
+            name = get_plan(s, projet).name
+        def fn(s, _):
+            res = plan_apply(s, get_plan(s, projet), data)
+            n = len(res["actions"])
+            res["message"] = (f"{n} changement{'s' if n > 1 else ''} pour « {name} »." if n
+                              else "Rien à changer.")
+            return res
+        return self._write(f"changements proposés par l'IA pour « {name} »", fn, None, simulation)
+
+    def add_plan_items(self, projet, noms, simulation=False) -> dict:
+        return self.plan_import(projet, {"postes": list(noms)}, simulation)
+
+    def rename_plan_item(self, projet, ancien, nouveau, simulation=False) -> dict:
+        return self.plan_import(projet, {"renommer_postes": {ancien: nouveau}}, simulation)
+
+    def save_plan_offer(self, projet, offre: dict, simulation=False) -> dict:
+        return self.plan_import(projet, {"offres": [offre]}, simulation)
+
+    def choose_plan_offer(self, projet, offre, simulation=False) -> dict:
+        return self.plan_import(projet, {"retenir": [offre]}, simulation)
+
+    def set_plan(self, projet, changes: dict, simulation=False) -> dict:
+        return self.plan_import(projet, {k: v for k, v in changes.items()
+                                         if k in ("nom", "lieu", "debut", "fin", "note", "participants", "marge",
+                                                  "prix_annonce")}, simulation)
+
+    def add_plan_deadline(self, projet, offre, libelle, date, montant=None, simulation=False) -> dict:
+        return self.plan_import(projet, {"echeances": [dict(offre=offre, libelle=libelle, date=date,
+                                                            montant=montant)]}, simulation)
+
     # ---- annuler
     def undo(self) -> dict:
         label = self.db.undo()
         return dict(message=f"Annulé : {label}" if label else "Rien à annuler.")
+
+
+# ---------------------------------------------------------------- voyages en préparation (projets)
+# Un seul moteur : plan_apply lit le JSON du guide (guide_preparation.md) et écrit par writes.py, avec les mêmes refus
+# qu'à l'écran. Les opérations de l'API et du serveur MCP ne font que lui préparer un petit JSON.
+
+COUNTINGS = {"par personne": P.PER_PERSON, "personne": P.PER_PERSON, "pour le groupe": P.GROUP,
+             "pour tout le groupe": P.GROUP, "groupe": P.GROUP, "pour un nombre de personnes": P.LOT,
+             "nombre de personnes": P.LOT}
+COUNTING_NAMES = {P.PER_PERSON: "par personne", P.GROUP: "pour le groupe", P.LOT: "pour un nombre de personnes"}
+SPLIT_WORDS = {"euros": P.AMOUNTS, "montant": P.AMOUNTS, "montants": P.AMOUNTS, "pourcent": P.PERCENT,
+               "pourcentage": P.PERCENT, "pourcentages": P.PERCENT, "%": P.PERCENT}
+PLAN_KEYS = {"projet_id", "nom", "lieu", "debut", "fin", "note", "participants", "marge", "prix_annonce", "postes",
+             "renommer_postes", "offres", "retenir", "echeances"}
+OFFER_KEYS = {"prestataire", "prix", "compte", "pour_combien", "quantite", "de_quoi", "postes", "repartition", "note",
+              "retenue", "echeances"}
+
+
+def get_plan(s, ref) -> M.Plan:
+    """Un projet par son numéro ou son nom (accents et majuscules ignorés)."""
+    if ref is None or str(ref).strip() == "":
+        raise OpsError("Quel projet ? Donne son numéro ou son nom.")
+    if str(ref).strip().isdigit():
+        p = s.get(M.Plan, int(str(ref).strip()))
+        if p:
+            return p
+    key = E.sort_key(str(ref)).strip()
+    found = [p for p in s.query(M.Plan).all() if E.sort_key(p.name).strip() == key]
+    if len(found) == 1:
+        return found[0]
+    names = ", ".join(f"{p.id} : {p.name}" for p in s.query(M.Plan).order_by(M.Plan.id).all()) or "aucun"
+    raise OpsError(f"Projet introuvable : « {ref} ». Projets : {names}")
+
+
+def _plan_item(plan: M.Plan, name):
+    key = E.sort_key(str(name or "")).strip()
+    return next((i for i in plan.items if E.sort_key(i.name).strip() == key), None)
+
+
+def _plan_offer(plan: M.Plan, label):
+    key = E.sort_key(str(label or "")).strip()
+    found = [o for o in plan.offers if E.sort_key(o.label).strip() == key]
+    if len(found) > 1:
+        raise OpsError(f"Deux offres s'appellent « {label} » dans ce projet : renomme l'une d'elles à l'écran.")
+    return found[0] if found else None
+
+
+def plan_detail(plan: M.Plan, today: dt.date | None = None) -> dict:
+    """Tout sur un projet, en euros : postes, offres (avec « si tu la retiens »), calcul, échéances."""
+    r = S.compute_plan(plan)
+    names = {i.id: i.name for i in plan.items}
+    labels = {o.id: o.label for o in plan.offers}
+    today = today or dt.date.today()
+    offers = []
+    for o in plan.offers:
+        ids = o.item_ids()
+        w = r.what_if.get(o.id)
+        split = None
+        if o.split and len(ids) > 1:
+            shares = {ln.item_id: ln.share for ln in o.links}
+            split = dict(type="euros" if o.split == P.AMOUNTS else "pourcent",
+                         parts={names[i]: to_euros(shares[i]) for i in ids})
+        offers.append(dict(
+            prestataire=o.label, prix=to_euros(o.price), compte=COUNTING_NAMES[o.counting],
+            pour_combien=o.capacity, quantite=o.quantity, de_quoi=o.quantity_label or None,
+            postes=[names[i] for i in ids], repartition=split, note=o.note or None, retenue=o.chosen,
+            prix_en_clair=S.plan_offer_text(o, plan.people), total=to_euros(r.totals[o.id]),
+            par_personne=to_euros(r.offer_per_person[o.id]),
+            si_retenue=None if w is None else dict(
+                budget=to_euros(w.budget), ecart=to_euros(w.delta), ecart_par_personne=to_euros(w.delta_per_person),
+                remplace=[labels[x] for x in w.replaces], postes_sans_offre=[names[i] for i in w.lost]),
+            echeances=[dict(libelle=d.label, date=d.date.isoformat(), montant=to_euros(d.amount), fait=d.done)
+                       for d in o.deadlines]))
+    return dict(
+        projet_id=plan.id, nom=plan.name, lieu=plan.place, debut=plan.start.isoformat() if plan.start else None,
+        fin=plan.end.isoformat() if plan.end else None, note=plan.note, participants=plan.people,
+        marge=dict(type=plan.margin_kind, valeur=to_euros(plan.margin_value)),
+        prix_annonce=to_euros(plan.announced), postes=[i.name for i in plan.items], offres=offers,
+        budget=to_euros(r.budget), par_personne=to_euros(r.per_person),
+        postes_pas_encore_choisis=[names[i] for i in r.empty], marge_totale=to_euros(r.margin),
+        prix_avec_marge=to_euros(r.price_with_margin), reserve=to_euros(r.reserve),
+        a_faire=[dict(date=x["d"].date.isoformat(), quand=x["words"], offre=x["offer"].label, libelle=x["d"].label,
+                      montant=to_euros(x["d"].amount)) for x in S.plan_deadlines(plan, today) if x["counts"]],
+        voyage_lance=plan.trip_id if plan.trip_id else None)
+
+
+def plan_summary_row(plan: M.Plan) -> dict:
+    r = S.compute_plan(plan)
+    return dict(projet_id=plan.id, nom=plan.name, participants=plan.people, budget=to_euros(r.budget),
+                par_personne=to_euros(r.per_person), postes=len(plan.items), offres=len(plan.offers))
+
+
+def _whole(value, field: str) -> int:
+    try:
+        f = float(str(value).replace(",", "."))
+    except (TypeError, ValueError):
+        raise OpsError(f"{field.capitalize()} : un nombre entier est attendu (reçu « {value} »).")
+    if f != int(f):
+        raise OpsError(f"{field.capitalize()} : un nombre entier est attendu (reçu « {value} »).")
+    return int(f)
+
+
+def plan_apply(s, plan: M.Plan, data) -> dict:
+    """Applique au projet les changements décrits en JSON (format de guide_preparation.md). Tout ou rien : chaque
+    refus est noté (« offre 2 (Transavia) : … ») et l'ensemble est refusé s'il y en a un. -> {actions, apercu}."""
+    from .importer import parse
+    data = parse(data)
+    errors, actions = [], []
+
+    def attempt(where: str, fn):
+        try:
+            return fn()
+        except W.WriteError as e:
+            errors.append(f"{where} : {e}" if where else str(e))
+        return None
+
+    unknown = set(data) - PLAN_KEYS
+    if unknown:
+        errors.append("Champs inconnus : " + ", ".join(sorted(unknown)) + ". Voir le guide.")
+    if data.get("projet_id") not in (None, "") and str(data["projet_id"]) != str(plan.id):
+        raise OpsError(f"Ce bloc est pour le projet n°{data['projet_id']}, pas pour le projet n°{plan.id} "
+                       f"(« {plan.name} »). Vérifie que tu colles la bonne réponse.")
+
+    # le projet lui-même
+    fields = {}
+    def read_plan():
+        if "nom" in data:
+            fields["name"] = data["nom"]
+        if "lieu" in data:
+            fields["place"] = data["lieu"] or ""
+        if "note" in data:
+            fields["note"] = data["note"] or ""
+        for k, f in (("debut", "start"), ("fin", "end")):
+            if k in data:
+                fields[f] = date_of(data[k], "date de " + ("début" if k == "debut" else "fin"))
+        if "participants" in data:
+            fields["people"] = _whole(data["participants"], "nombre de participants")
+        if "marge" in data:
+            m = data["marge"] or {}
+            if not isinstance(m, dict):
+                raise OpsError("Marge : donne {\"type\": \"pourcent\" ou \"euros\", \"valeur\": nombre}.")
+            kind = {"pourcent": P.PERCENT, "%": P.PERCENT, "euros": P.EUROS, "euros par personne": P.EUROS}.get(
+                str(m.get("type") or "pourcent").strip().lower())
+            if kind is None:
+                raise OpsError("Marge : le type est « pourcent » ou « euros » (par personne).")
+            fields["margin_kind"], fields["margin_value"] = kind, euros(m.get("valeur") or 0, "valeur de la marge")
+        if "prix_annonce" in data:
+            fields["announced"] = euros(data["prix_annonce"], "prix annoncé", allow_none=True)
+        if fields:
+            W.update_plan(s, plan, **fields)
+            actions.append("Projet : " + ", ".join(_said(k, v) for k, v in fields.items()))
+    attempt("Projet", read_plan)
+
+    # postes
+    def ensure_item(name, where):
+        it = _plan_item(plan, name)
+        if it is None:
+            it = W.add_plan_item(s, plan, name)
+            actions.append(f"Poste « {it.name} » ajouté")
+        return it
+    for n, name in enumerate(data.get("postes") or [], 1):
+        attempt(f"Poste {n}", lambda name=name: ensure_item(name, n))
+    for old, new in (data.get("renommer_postes") or {}).items():
+        def rename(old=old, new=new):
+            it = _plan_item(plan, old)
+            if it is None:
+                raise OpsError(f"pas de poste « {old} » dans ce projet")
+            W.rename_plan_item(s, plan, it, new)
+            actions.append(f"Poste « {old} » renommé « {it.name} »")
+        attempt(f"Renommer « {old} »", rename)
+
+    # offres
+    for n, x in enumerate(data.get("offres") or [], 1):
+        where = f"Offre {n}" + (f" ({x.get('prestataire')})" if isinstance(x, dict) and x.get("prestataire") else "")
+        attempt(where, lambda x=x: _apply_offer(s, plan, x, ensure_item, actions))
+
+    for label in data.get("retenir") or []:
+        def choose(label=label):
+            o = _plan_offer(plan, label)
+            if o is None:
+                raise OpsError(f"pas d'offre « {label} » dans ce projet")
+            gone = W.choose_offer(s, plan, o)
+            actions.append(f"Offre « {o.label} » retenue" + (f" (à la place de {', '.join(gone)})" if gone else ""))
+        attempt(f"Retenir « {label} »", choose)
+
+    for n, d in enumerate(data.get("echeances") or [], 1):
+        def deadline(d=d):
+            if not isinstance(d, dict) or not d.get("offre"):
+                raise OpsError("donne « offre » (le prestataire), « libelle » et « date »")
+            o = _plan_offer(plan, d["offre"])
+            if o is None:
+                raise OpsError(f"pas d'offre « {d['offre']} » dans ce projet")
+            _add_deadline(s, plan, o, d, actions)
+        attempt(f"Échéance {n}", deadline)
+
+    if errors:
+        err = OpsError(errors[0] if len(errors) == 1 else f"{len(errors)} points à corriger.")
+        err.errors = errors
+        raise err
+    s.flush()
+    return dict(actions=actions, apercu=plan_detail(plan))
+
+
+def _said(k, v) -> str:
+    if k == "people":
+        return f"{v} personne{'s' if v > 1 else ''}"
+    if k == "margin_value":
+        return "valeur de la marge"
+    if k == "announced":
+        return f"prix annoncé {E.fmt(v)}" if v is not None else "prix annoncé retiré"
+    return {"name": "nom", "place": "lieu", "note": "note", "start": "date de début", "end": "date de fin",
+            "margin_kind": "marge"}.get(k, k)
+
+
+def _add_deadline(s, plan, o, d, actions):
+    label = d.get("libelle") or ""
+    day = date_of(d.get("date"), "date de l'échéance")
+    if any(E.sort_key(x.label) == E.sort_key(str(label)) and x.date == day for x in o.deadlines):
+        return                                   # déjà là : rien en double
+    W.save_deadline(s, plan, o, label=label, date=day, amount=euros(d.get("montant"), "montant", allow_none=True),
+                    done=_truthy(d.get("fait")))
+    actions.append(f"Échéance « {' '.join(str(label).split())} » ({day:%d/%m/%Y}) pour « {o.label} »")
+
+
+def _apply_offer(s, plan: M.Plan, x, ensure_item, actions):
+    if not isinstance(x, dict):
+        raise OpsError("chaque offre est un objet {\"prestataire\": …, \"prix\": …, \"postes\": […]}")
+    unknown = set(x) - OFFER_KEYS
+    if unknown:
+        raise OpsError("champs inconnus : " + ", ".join(sorted(unknown)))
+    old = _plan_offer(plan, x.get("prestataire"))
+    names = {i.id: i.name for i in plan.items}
+    v = dict(label=old.label if old else "", price=old.price if old else None,
+             counting=old.counting if old else P.PER_PERSON, quantity=old.quantity if old else 1,
+             quantity_label=old.quantity_label if old else "", capacity=old.capacity if old else None,
+             items=old.item_ids() if old else [], split=old.split if old else "", note=old.note if old else "",
+             shares={ln.item_id: ln.share for ln in old.links} if old and old.split else None)
+    v["label"] = x.get("prestataire") or v["label"]
+    if "prix" in x:
+        v["price"] = euros(x["prix"], "prix")
+    if v["price"] is None:
+        raise OpsError("il manque le prix (0 si c'est inclus)")
+    if "compte" in x:
+        c = COUNTINGS.get(" ".join(str(x["compte"] or "").lower().split()))
+        if c is None:
+            raise OpsError("« compte » vaut « par personne », « pour le groupe » ou « pour un nombre de personnes »")
+        v["counting"] = c
+    if "pour_combien" in x:
+        v["capacity"] = _whole(x["pour_combien"], "pour combien de personnes") if x["pour_combien"] not in (None, "") else None
+    if "quantite" in x:
+        v["quantity"] = _whole(x["quantite"] if x["quantite"] not in (None, "") else 1, "quantité")
+    if "de_quoi" in x:
+        v["quantity_label"] = x["de_quoi"] or ""
+    if "note" in x:
+        v["note"] = x["note"] or ""
+    if "postes" in x:
+        wanted = x["postes"] if isinstance(x["postes"], list) else [x["postes"]]
+        v["items"] = [ensure_item(n, None).id for n in wanted if str(n or "").strip()]
+        names = {i.id: i.name for i in plan.items}
+        if not ("repartition" in x):
+            v["split"], v["shares"] = "", None              # autres postes : l'ancienne répartition ne vaut plus
+    if "repartition" in x:
+        rep = x["repartition"]
+        if not rep:
+            v["split"], v["shares"] = "", None
+        else:
+            kind = SPLIT_WORDS.get(str(rep.get("type") or "").strip().lower()) if isinstance(rep, dict) else None
+            if kind is None or not isinstance(rep.get("parts"), dict):
+                raise OpsError("répartition : {\"type\": \"euros\" ou \"pourcent\", \"parts\": {poste: valeur}}")
+            shares = {}
+            for name, value in rep["parts"].items():
+                it = _plan_item(plan, name)
+                if it is None or it.id not in v["items"]:
+                    raise OpsError(f"répartition : « {name} » n'est pas un des postes de cette offre")
+                shares[it.id] = euros(value, f"part de {name}")
+            v["split"], v["shares"] = kind, shares
+    chosen = _truthy(x["retenue"]) if "retenue" in x else None
+    o = W.save_offer(s, plan, old, label=v["label"], price=v["price"], counting=v["counting"], quantity=v["quantity"],
+                     quantity_label=v["quantity_label"], capacity=v["capacity"], items=v["items"], split=v["split"],
+                     shares=v["shares"], note=v["note"], chosen=chosen)
+    actions.append(f"Offre « {o.label} » {'modifiée' if old else 'ajoutée'} : {S.plan_offer_text(o, plan.people)}, "
+                   f"pour {S.plan_and_list(names[i] for i in o.item_ids())}" + (" (retenue)" if o.chosen else ""))
+    for d in x.get("echeances") or []:
+        if not isinstance(d, dict):
+            raise OpsError("chaque échéance est {\"libelle\": …, \"date\": …, \"montant\": …}")
+        _add_deadline(s, plan, o, d, actions)

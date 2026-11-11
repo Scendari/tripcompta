@@ -40,7 +40,8 @@ def install(site):
         q = request.query_params
         stored = S.asso_name(s)
         plans = [S.plan_summary(p) for p in s.query(M.Plan).order_by(M.Plan.created.desc(), M.Plan.id.desc()).all()]
-        return render(request, "index.html", cards=cards, plans=plans, data_dir=db.home, open_plan=q.get("preparer") == "1",
+        soon = S.upcoming(s, site.today())
+        return render(request, "index.html", cards=cards, plans=plans, soon=soon, data_dir=db.home, open_plan=q.get("preparer") == "1",
                       asso_default="" if stored == "l'asso" else stored,
                       diving_default=bool(trips) and any(S.is_diving(t_) for t_ in trips[:1] if not t_.is_demo),
                       open_new=q.get("nouveau") == "1", open_import=q.get("importer") == "1")
@@ -206,6 +207,7 @@ def install(site):
         return back(f"/v/{t.id}", "Voyage d'exemple remis à neuf.")
 
     def _delete_trip(s, t):
+        W.forget_trip(s, t.id)               # un projet qui l'avait lancé n'y mène plus (et peut être relancé)
         for e in t.expenses:
             for l in list(e.receipt_links):
                 s.delete(l)
@@ -231,7 +233,8 @@ def install(site):
         for e in t.expenses:
             cn = e.category.name if e.category else "Divers"
             cat_totals[cn] = cat_totals.get(cn, 0) + r.expense_totals.get(e.id, 0)
-        return render(request, "dashboard.html", trip=t, r=r, alerts=S.alerts(t, r), msum=S.money_summary(t, r),
+        prep = s.query(M.Plan).filter(M.Plan.trip_id == t.id).first()
+        return render(request, "dashboard.html", trip=t, r=r, prep=prep, alerts=S.alerts(t, r), msum=S.money_summary(t, r),
                       ai_notes=S.ai_notes(t), start_steps=S.getting_started(t),
                       asso_paid=asso_paid, cat_totals=cat_totals,
                       adv_total=sum(a["amount"] for a in S.advances(t) if not a["income"]),

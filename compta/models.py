@@ -138,6 +138,9 @@ class Expense(Base):
     # « dont remboursé » : partie rendue par le fournisseur (annulation…) et qui l'a reçue (None = l'asso)
     refund: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     refund_to_id: Mapped[Optional[int]] = mapped_column(ForeignKey("participants.id"), nullable=True)
+    # « pour tout le monde », y compris ceux qui arriveront : chaque nouveau participant y entre (voyage lancé depuis
+    # une préparation, avant d'avoir ses participants). Perdu dès que « Pour qui ? » ne vaut plus tout le monde.
+    for_all: Mapped[bool] = mapped_column(Boolean, default=False)
 
     trip: Mapped[Trip] = relationship(back_populates="expenses")
     category: Mapped[Optional[Category]] = relationship()
@@ -391,6 +394,7 @@ class Plan(Base):
     margin_value: Mapped[int] = mapped_column(Integer, default=0)   # centièmes de % (500 = 5 %) ou centimes par personne
     announced: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # prix annoncé par personne (centimes)
     trip_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)    # id de Trip, une fois lancé
+    launched_on: Mapped[Optional[dt.date]] = mapped_column(Date, nullable=True)   # jour du lancement
     created: Mapped[dt.datetime] = mapped_column(DateTime, default=now)
 
     items: Mapped[list["PlanItem"]] = relationship(
@@ -425,6 +429,8 @@ class PlanOffer(Base):
     split: Mapped[str] = mapped_column(String(20), default="")    # répartition : "" (un bloc) | montant | pourcent
     plan: Mapped[Plan] = relationship(back_populates="offers")
     links: Mapped[list["PlanOfferItem"]] = relationship(cascade="all, delete-orphan", back_populates="offer")
+    deadlines: Mapped[list["PlanDeadline"]] = relationship(
+        cascade="all, delete-orphan", back_populates="offer", order_by="(PlanDeadline.date, PlanDeadline.id)")
 
     def item_ids(self) -> list:
         """Les postes couverts, dans l'ordre des postes du projet."""
@@ -441,6 +447,18 @@ class PlanOfferItem(Base):
     item_id: Mapped[int] = mapped_column(ForeignKey("plan_items.id"))
     share: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     offer: Mapped[PlanOffer] = relationship(back_populates="links")
+
+
+class PlanDeadline(Base):
+    """Échéance d'une offre, côté prestataire : option à confirmer, acompte à verser, solde à payer…"""
+    __tablename__ = "plan_deadlines"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    offer_id: Mapped[int] = mapped_column(ForeignKey("plan_offers.id"))
+    label: Mapped[str] = mapped_column(String(200))
+    date: Mapped[dt.date] = mapped_column(Date)
+    amount: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)      # centimes, facultatif
+    done: Mapped[bool] = mapped_column(Boolean, default=False)
+    offer: Mapped[PlanOffer] = relationship(back_populates="deadlines")
 
 
 ASSO_NAME_KEY = "nom_asso"   # réglage : nom proposé pour la caisse des nouveaux voyages (le dernier utilisé)

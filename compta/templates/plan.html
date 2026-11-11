@@ -1,5 +1,47 @@
 {% extends "base.html" %}
 {% block title %}{{ plan.name }} · En préparation · Trip Compta{% endblock %}
+{% macro deadline_box(x, it) %}
+{% set o = x.o %}{% set ds = deadlines.get(o.id, []) %}{% set u = o.id ~ '-' ~ it.id %}
+<div class="plan-deadlines" id="echeances-{{ u }}">
+  {% if ds %}
+  <ul class="plan-dl" aria-label="Échéances de l'offre « {{ o.label }} »">
+  {% for y in ds %}{% set d = y.d %}
+    <li class="plan-dl-row{{ ' done' if d.done }}{{ ' off' if not y.live and not d.done }}">
+      <form method="post" action="/preparer/{{ plan.id }}/echeances/{{ d.id }}/fait" class="inline plan-dl-done">
+        <input type="hidden" name="fait" value="{{ '0' if d.done else '1' }}">
+        <label><input type="checkbox" {{ 'checked' if d.done }} data-autosubmit> Fait</label>
+        <noscript><button class="btn small ghost">OK</button></noscript>
+      </form>
+      <span class="plan-dl-text"><span class="plan-dl-date">{{ d.date|date }}</span> · {{ d.label }}{% if d.amount is not none %} · {{ d.amount|money }}{% endif %}</span>
+      {% if y.counts %}<span class="plan-dl-when{{ ' late' if y.late }}">{{ y.words }}</span>
+      {% elif not d.done and not y.live %}<span class="muted small">ne compte plus : l'offre est écartée</span>{% endif %}
+      <details class="plan-dl-edit">
+        <summary class="linklike small">Modifier</summary>
+        <form method="post" action="/preparer/{{ plan.id }}/echeances/{{ d.id }}" class="plan-dl-form">
+          <div class="field"><label for="dl-l-{{ d.id }}-{{ it.id }}">Ce qu'il faut faire</label><input type="text" id="dl-l-{{ d.id }}-{{ it.id }}" name="label" value="{{ d.label }}" required maxlength="200"></div>
+          <div class="field"><label for="dl-d-{{ d.id }}-{{ it.id }}">Date</label><input type="date" id="dl-d-{{ d.id }}-{{ it.id }}" name="date" value="{{ d.date }}" required data-no-today></div>
+          <div class="field"><label for="dl-a-{{ d.id }}-{{ it.id }}">Montant <span class="hint">(facultatif)</span></label><input type="text" id="dl-a-{{ d.id }}-{{ it.id }}" name="amount" value="{{ d.amount|amount_input }}" inputmode="decimal" class="num-input"></div>
+          <button class="btn small">Enregistrer</button>
+        </form>
+      </details>
+      <form method="post" action="/preparer/{{ plan.id }}/echeances/{{ d.id }}/supprimer" class="inline" data-confirm="Supprimer l'échéance « {{ d.label }} » ({{ d.date|date }}) ?"><button class="linklike small danger-text">Supprimer</button></form>
+    </li>
+  {% endfor %}
+  </ul>
+  {% endif %}
+  <details class="plan-dl-add">
+    <summary class="linklike small">+ Ajouter une échéance</summary>
+    <form method="post" action="/preparer/{{ plan.id }}/offres/{{ o.id }}/echeances" class="plan-dl-form">
+      <div class="field"><label for="dl-new-{{ u }}">Ce qu'il faut faire</label>
+        <input type="text" id="dl-new-{{ u }}" name="label" required maxlength="200" placeholder="ex. Acompte à verser">
+        <div class="plan-ideas">{% for idea in deadline_ideas %}<button type="button" class="chip" data-fill="#dl-new-{{ u }}">{{ idea }}</button>{% endfor %}</div></div>
+      <div class="field"><label for="dl-date-{{ u }}">Date</label><input type="date" id="dl-date-{{ u }}" name="date" required data-no-today></div>
+      <div class="field"><label for="dl-amt-{{ u }}">Montant <span class="hint">(facultatif)</span></label><input type="text" id="dl-amt-{{ u }}" name="amount" inputmode="decimal" class="num-input" placeholder="ex. 500"></div>
+      <button class="btn small">Ajouter</button>
+    </form>
+  </details>
+</div>
+{% endmacro %}
 {% block page %}
 <div class="plan-page">
 <div class="page-head">
@@ -11,12 +53,25 @@
   </div>
   <div class="row plan-head-actions">
     <a class="btn ghost small" href="/">← Tous les voyages</a>
+    <a class="btn ghost small" href="/preparer/{{ plan.id }}/ia">🤖 IA</a>
     <button type="button" class="btn ghost small" data-toggle-row="#modifier" aria-expanded="false" aria-controls="modifier">Modifier</button>
     <form method="post" action="/preparer/{{ plan.id }}/supprimer" class="inline"
           data-confirm="Supprimer le projet « {{ plan.name }} » ? {% if plan.items or plan.offers %}Ses {{ plan.items|length }} poste{{ 's' if plan.items|length > 1 }} et ses {{ plan.offers|length }} offre{{ 's' if plan.offers|length > 1 }} partent avec lui. {% endif %}Tu pourras encore annuler juste après.">
       <button class="btn ghost small danger-text">Supprimer le projet</button></form>
   </div>
 </div>
+
+{% if trip_made %}
+<div class="card plan-launched" id="voyage-lance" role="note">
+  <div><b>✓ Voyage lancé le {{ plan.launched_on|date }}.</b> Modifier ce projet ne change plus les comptes du voyage.</div>
+  <a class="btn small" href="/v/{{ trip_made.id }}">Ouvrir le voyage</a>
+</div>
+{% elif r.chosen %}
+<div class="plan-launch-bar" id="lancer">
+  <a class="btn" href="/preparer/{{ plan.id }}/lancer">🚀 Lancer le voyage</a>
+  <span class="hint">Crée le voyage pour en tenir les comptes, avec les offres retenues en dépenses prévues. Tu verras tout avant.</span>
+</div>
+{% endif %}
 
 <form id="modifier" class="card plan-edit" method="post" action="/preparer/{{ plan.id }}/modifier" hidden>
   <h2 class="home-h">Modifier le projet</h2>
@@ -89,9 +144,31 @@
       {% else %}
       <p class="plan-alert" id="reserve" role="alert">⚠️ À ce prix, il manque {{ 'déjà ' if missing }}<b>{{ (-r.reserve)|money }}</b> ({{ (-r.reserve_per_person)|money }} par personne).</p>
       {% endif %}
+      {% if r.chosen and r.above_margin is not none %}
+      <p class="plan-out small" id="ecart-marge">{% if r.above_margin > 0 %}C'est {{ r.above_margin|money }} de plus que le prix avec ta marge ({{ r.price_with_margin|money }}).{% elif r.above_margin < 0 %}C'est {{ (-r.above_margin)|money }} de moins que le prix avec ta marge ({{ r.price_with_margin|money }}).{% else %}C'est exactement le prix avec ta marge.{% endif %}</p>
+      {% endif %}
     </form>
   </div>
 </section>
+
+{% if soon %}
+<section class="card plan-soon" id="a-faire" aria-labelledby="a-faire-h">
+  <h2 id="a-faire-h" class="section-title">À faire bientôt</h2>
+  <ul class="soon-list">
+  {% for y in soon %}{% set d = y.d %}
+    <li class="soon-row">
+      <form method="post" action="/preparer/{{ plan.id }}/echeances/{{ d.id }}/fait?retour=liste" class="inline plan-dl-done soon-check">
+        <input type="hidden" name="fait" value="1">
+        <label><input type="checkbox" data-autosubmit> Fait</label>
+        <noscript><button class="btn small ghost">OK</button></noscript>
+      </form>
+      <span class="soon-when{{ ' late' if y.late }}">{{ y.words|capfirst }}</span>
+      <span class="soon-what"><a href="#offre-{{ y.offer.id }}">{{ y.offer.label }}</a> · {{ d.label }}{% if d.amount is not none %} · <b>{{ d.amount|money }}</b>{% endif %}</span>
+    </li>
+  {% endfor %}
+  </ul>
+</section>
+{% endif %}
 
 {# ------------------------------------------------------------ les postes #}
 <div class="section-head plan-items-head"><h2>Les postes</h2></div>
@@ -113,7 +190,7 @@
     <h3 id="poste-{{ it.id }}-h">{{ it.name }}</h3>
     <div class="plan-item-chosen">
       {% if not row.got.offer %}<span class="pill doit">pas encore choisi</span>
-      {% elif row.with_names %}<span class="pill ok">compris dans {{ row.chosen }}{% if row.got.amount is not none %} · {{ row.got.amount|money }}{% endif %}</span>
+      {% elif row.with_names %}<span class="pill ok">compris dans {{ row.chosen }} · {% if row.got.amount is not none %}{{ row.got.amount|money }}{% else %}{{ row.block_total|money }} pour {{ row.block_items }}{% endif %}</span>
       {% else %}<span class="pill ok">{{ row.chosen }} · {{ row.got.amount|money }}</span>{% endif %}
     </div>
     <div class="row plan-item-tools">
@@ -159,8 +236,9 @@
         <form method="post" action="/preparer/{{ plan.id }}/offres/{{ o.id }}/retenir" class="inline"><button class="btn small">Retenir</button></form>
         {% endif %}
         <a class="btn ghost small" href="/preparer/{{ plan.id }}/offres/{{ o.id }}/modifier">Modifier</a>
-        <form method="post" action="/preparer/{{ plan.id }}/offres/{{ o.id }}/supprimer" class="inline" data-confirm="Supprimer l'offre « {{ o.label }} » ?"><button class="btn ghost small danger-text">Supprimer</button></form>
+        <form method="post" action="/preparer/{{ plan.id }}/offres/{{ o.id }}/supprimer" class="inline" data-confirm="Supprimer l'offre « {{ o.label }} »{% if deadlines.get(o.id) %} et ses échéances{% endif %} ?"><button class="btn ghost small danger-text">Supprimer</button></form>
       </div>
+      {{ deadline_box(x, it) }}
     </li>
   {% endfor %}
   </ul>
@@ -182,4 +260,13 @@
   {% endif %}
 </section>
 </div>
+<script>
+// Case « Fait » : enregistrée dès qu'on la coche ; propositions d'échéances : remplissent le champ
+document.querySelectorAll('[data-autosubmit]').forEach(function (c) {
+  c.addEventListener('change', function () { c.form.requestSubmit ? c.form.requestSubmit() : c.form.submit(); });
+});
+document.querySelectorAll('[data-fill]').forEach(function (b) {
+  b.addEventListener('click', function () { var i = document.querySelector(b.dataset.fill); if (i) { i.value = b.textContent; i.focus(); } });
+});
+</script>
 {% endblock %}

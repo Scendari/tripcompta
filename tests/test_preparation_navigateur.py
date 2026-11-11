@@ -21,8 +21,13 @@ def site(tmp_path_factory):
     import socket
 
     import uvicorn
+    import datetime as dt
     sc = Screen(tmp_path_factory.mktemp("preparer")).reference()
+    sc.app.state.aujourdhui = dt.date(2027, 1, 10)
     sc.choose("Forfait Club A")
+    for offer, label, day in (("Forfait Club A", "Option à confirmer", "2027-01-08"),
+                              ("Transavia", "Reste à payer", "2027-01-22"), ("Hôtel X", "Acompte", "2027-01-15")):
+        sc.post(f"{sc.url}/offres/{sc.offer(offer)}/echeances", dict(label=label, date=day))
     sc.create(name="Projet vide", people="4", place="")
     empty_url = sc.url
     sc.url, sc.pid = "/preparer/1", 1
@@ -59,7 +64,7 @@ def new_page(browser, width=1366, height=900):
 
 
 def urls(sc):
-    return ["/", sc.url, sc.empty_url, f"{sc.url}/offres/nouvelle?poste={sc.item('Taxi')}",
+    return ["/", sc.url, sc.empty_url, f"{sc.url}/lancer", f"{sc.url}/ia", f"{sc.url}/offres/nouvelle?poste={sc.item('Taxi')}",
             f"{sc.url}/offres/{sc.offer('Taxi')}/modifier", f"{sc.url}/offres/{sc.offer('Forfait Club A')}/modifier"]
 
 
@@ -223,3 +228,30 @@ def test_cancelled_delete_does_nothing(site, browser):
     page.locator("form[action$='/preparer/1/supprimer'] button").click()
     page.goto(site.base + site.url)
     assert page.locator("h1").inner_text() == "Mer Rouge 2027"
+
+
+def test_deadline_checkbox_and_ideas(site, browser):
+    page = new_page(browser)
+    page.goto(site.base + site.url)
+    soon = page.locator("#a-faire")
+    assert "En retard de 2 jours" in soon.inner_text() and "Dans 12 jours (22/01/2027)" in soon.inner_text()
+    # une idée remplit le champ ; l'échéance s'ajoute
+    box = page.locator(f"#echeances-{site.offer('Taxi')}-{site.item('Taxi')}")
+    box.locator("summary:has-text('+ Ajouter une échéance')").click()
+    box.locator("button.chip:has-text('Acompte à verser')").click()
+    assert box.locator("input[name=label]").input_value() == "Acompte à verser"
+    box.locator("input[name=date]").fill("2027-01-11")
+    box.locator("button:has-text('Ajouter')").click()
+    page.wait_for_url(re.compile(r"/preparer/1\?"))
+    assert "Échéance « Acompte à verser » ajoutée (11/01/2027)" in page.locator(".flash").inner_text()
+    assert "Demain" in page.locator("#a-faire").inner_text()
+    # cocher « Fait » l'enregistre tout de suite
+    page.locator("#a-faire li:has-text('Taxi') input[type=checkbox]").check()
+    page.wait_for_url(re.compile(r"#a-faire$"))
+    assert "« Acompte à verser » (Taxi) : fait ✓" in page.locator(".flash").inner_text()
+    assert "Taxi" not in page.locator("#a-faire").inner_text()
+    row = page.locator(f"#echeances-{site.offer('Taxi')}-{site.item('Taxi')} li.plan-dl-row.done")
+    assert row.count() == 1 and "line-through" in row.locator(".plan-dl-text").evaluate("e => getComputedStyle(e).textDecorationLine")
+    row.locator("input[type=checkbox]").uncheck()                    # décocher : de nouveau à faire
+    pw.expect(page.locator(".flash")).to_contain_text("de nouveau à faire")
+    assert not page.errors, page.errors

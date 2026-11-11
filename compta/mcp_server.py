@@ -262,6 +262,40 @@ def build_server(data_dir: Optional[str] = None):
 
     @mcp.tool()
     @_safe
+    def lister_projets() -> list[dict]:
+        """Les voyages en préparation (projets) : numéro, nom, participants, budget, prix par personne."""
+        return ops.list_plans()
+
+    @mcp.tool()
+    @_safe
+    def voir_projet(projet: Ref) -> dict:
+        """Tout sur un projet : postes, offres (prix en clair, total, « si tu la retiens »), budget, prix par
+        personne, marge, prix annoncé, échéances à venir."""
+        return ops.plan(projet)
+
+    @mcp.tool()
+    @_safe
+    def creer_projet(nom: str, participants: int, lieu: str = "", debut: Optional[str] = None,
+                     fin: Optional[str] = None) -> dict:
+        """Crée un voyage en préparation (pour comparer des offres et trouver un prix par personne)."""
+        return ops.create_plan(nom, participants, lieu, debut, fin)
+
+    @mcp.tool()
+    @_safe
+    def modifier_projet(projet: Ref, donnees: dict, simulation: bool = True) -> dict:
+        """Ajoute ou modifie postes, offres (par personne, pour le groupe, pour un nombre de personnes ; forfaits et
+        répartition), offre retenue, participants, marge, prix annoncé, échéances : format de `lire_guide_preparation`.
+        Fais d'abord simulation=true et montre les « actions » à l'utilisateur. Lancer le voyage se fait à l'écran."""
+        return ops.plan_import(projet, donnees, simulation)
+
+    @mcp.tool()
+    def lire_guide_preparation() -> str:
+        """Mode d'emploi pour préparer un voyage, avec le format JSON de `modifier_projet`."""
+        from pathlib import Path
+        return (Path(__file__).parent / "static" / "ia" / "guide_preparation.md").read_text(encoding="utf-8")
+
+    @mcp.tool()
+    @_safe
     def annuler_derniere_action() -> dict:
         """Annule la dernière modification (comme le bouton « Annuler » de l'application)."""
         return ops.undo()

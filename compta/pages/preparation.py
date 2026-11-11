@@ -6,8 +6,12 @@ Partie de l'application web (voir compta/web.py, qui installe ces pages dans l'o
 """
 from __future__ import annotations
 
+import datetime as dt
+import os
+from pathlib import Path
+
 from fastapi import Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from markupsafe import escape
 from sqlalchemy.orm import Session
 
@@ -16,6 +20,7 @@ from .. import models as M
 from .. import preparation as P
 from .. import services as S
 from .. import writes as W
+from ..web import HERE
 
 def install(site):
     """Installe ces pages dans l'application. `site` : ce que les pages ont en commun (voir web.py)."""
@@ -26,6 +31,12 @@ def install(site):
     refuse = site.refuse
     render = site.render
     FormError = site.FormError
+    AI_GUIDE = HERE / "static" / "ia" / "guide_preparation.md"
+    AI_TEMPLATE = HERE / "static" / "ia" / "modele_preparation.txt"
+
+    def today() -> dt.date:
+        """Aujourd'hui (les essais le fixent : app.state.aujourdhui)."""
+        return getattr(app.state, "aujourdhui", None) or dt.date.today()
 
     # ------------------------------------------------------------------ lire un formulaire
     def plan_or_404(s, pid: int) -> M.Plan:
@@ -121,6 +132,12 @@ def install(site):
     def plan_delete(pid: int, s: Session = Depends(get_s)):
         plan = plan_or_404(s, pid)
         name, _ = write(s, f"suppression du voyage en préparation « {plan.name} »", lambda: W.delete_plan(s, plan), "/")
+        stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")    # un projet créé ensuite peut reprendre ce numéro
+        for f_ in site.drafts().glob(f"projet-{pid}.*"):
+            try:
+                f_.rename(site.drafts() / f"supprime-{stamp}-{f_.name}")
+            except OSError:
+                pass
         return back("/", f"Projet « {name} » supprimé (tu peux encore annuler)")
 
     @app.post("/preparer/{pid}/participants")
@@ -184,9 +201,19 @@ def install(site):
             if kept:
                 confirm += " " + ", ".join(f"« {k} »" for k in kept) + (" reste" if len(kept) == 1 else " restent") \
                     + " pour ses autres postes (sans sa répartition)."
+            block = offers[got["offer"]] if got["offer"] else None
             rows.append(dict(item=it, got=got, chosen=labels.get(got["offer"]), offers=mine, confirm=confirm,
-                             with_names=[names[i] for i in got["with"]]))
+                             with_names=[names[i] for i in got["with"]],
+                             block_total=block["total"] if block else None,
+                             block_items=S.plan_and_list(names[i] for i in block["items"]) if block else ""))
+        deadlines = S.plan_deadlines(plan, today())
+        by_offer = {}
+        for x in deadlines:
+            by_offer.setdefault(x["offer"].id, []).append(x)
+        trip = W.plan_trip(s, plan)
         return render(request, "plan.html", plan=plan, r=r, rows=rows, names=names, missing=[names[i] for i in r.empty],
+                      deadlines=by_offer, soon=[x for x in deadlines if x["counts"]], trip_made=trip,
+                      deadline_ideas=S.DEADLINE_IDEAS, today_iso=today().isoformat(),
                       missing_ni=S.plan_ni_list([names[i] for i in r.empty]),
                       suggestions=[x for x in S.PLAN_SUGGESTIONS if E.sort_key(x) not in {E.sort_key(n) for n in names.values()}],
                       margin_shown=(E.fmt(plan.margin_value) + " par personne" if plan.margin_kind == P.EUROS
@@ -341,3 +368,189 @@ def install(site):
         o = offer_or_404(plan, oid)
         label, _ = write(s, f"offre « {o.label} » supprimée", lambda: W.delete_offer(s, plan, o), page_url(plan))
         return back(page_url(plan), f"Offre « {label} » supprimée")
+
+    # ------------------------------------------------------------------ échéances
+    def deadline_or_404(plan, did: int) -> M.PlanDeadline:
+        d = next((x for o in plan.offers for x in o.deadlines if x.id == did), None)
+        if d is None:
+            raise HTTPException(404, "Cette échéance n'existe pas (ou plus).")
+        return d
+
+    def deadline_values(f) -> dict:
+        try:
+            amount = E.parse_amount(f.get("amount"))
+        except ValueError:
+            raise FormError(f"Montant invalide : « {f.get('amount')} ». Exemple : 500 ou 12,50", "amount")
+        return dict(label=f.get("label") or "", date=S.parse_date(f.get("date")), amount=amount)
+
+    @app.post("/preparer/{pid}/offres/{oid}/echeances")
+    async def deadline_add(pid: int, oid: int, request: Request, s: Session = Depends(get_s)):
+        plan = plan_or_404(s, pid)
+        o = offer_or_404(plan, oid)
+        v = deadline_values(await request.form())
+        label = " ".join(str(v["label"]).split())
+        d, err = write(s, f"échéance « {label} » ajoutée à l'offre « {o.label} »",
+                       lambda: W.save_deadline(s, plan, o, **v), page_url(plan, f"offre-{oid}"),
+                       check=lambda: W.check_deadline(plan, o, **v))
+        return err or back(page_url(plan, f"offre-{oid}"), f"Échéance « {d.label} » ajoutée ({d.date:%d/%m/%Y})")
+
+    @app.post("/preparer/{pid}/echeances/{did}")
+    async def deadline_edit(pid: int, did: int, request: Request, s: Session = Depends(get_s)):
+        plan = plan_or_404(s, pid)
+        d = deadline_or_404(plan, did)
+        o = d.offer
+        v = deadline_values(await request.form())
+        _, err = write(s, f"échéance « {d.label} » modifiée", lambda: W.save_deadline(s, plan, o, d, done=d.done, **v),
+                       page_url(plan, f"offre-{o.id}"), check=lambda: W.check_deadline(plan, o, **v))
+        return err or back(page_url(plan, f"offre-{o.id}"), f"Échéance « {d.label} » modifiée")
+
+    @app.post("/preparer/{pid}/echeances/{did}/fait")
+    async def deadline_done(pid: int, did: int, request: Request, s: Session = Depends(get_s)):
+        plan = plan_or_404(s, pid)
+        d = deadline_or_404(plan, did)
+        done = str((await request.form()).get("fait") or "") == "1"
+        where = str(request.query_params.get("retour") or "")
+        url = "/#a-faire" if where == "accueil" else page_url(plan, "a-faire" if where == "liste" else f"offre-{d.offer_id}")
+        write(s, f"échéance « {d.label} » ({d.offer.label}) {'faite' if done else 'à faire'}",
+              lambda: W.set_deadline_done(s, plan, d, done), url)
+        return back(url, f"« {d.label} » ({d.offer.label}) : {'fait ✓' if done else 'de nouveau à faire'}")
+
+    @app.post("/preparer/{pid}/echeances/{did}/supprimer")
+    def deadline_delete(pid: int, did: int, s: Session = Depends(get_s)):
+        plan = plan_or_404(s, pid)
+        d = deadline_or_404(plan, did)
+        oid = d.offer_id
+        label, _ = write(s, f"échéance « {d.label} » supprimée", lambda: W.delete_deadline(s, plan, d), page_url(plan))
+        return back(page_url(plan, f"offre-{oid}"), f"Échéance « {label} » supprimée")
+
+    # ------------------------------------------------------------------ lancer le voyage
+    @app.get("/preparer/{pid}/lancer", response_class=HTMLResponse)
+    def launch_page(pid: int, request: Request, s: Session = Depends(get_s)):
+        plan = plan_or_404(s, pid)
+        trip = W.plan_trip(s, plan)
+        if trip is not None:
+            return back(f"/v/{trip.id}", "Ce projet a déjà été lancé : voici son voyage.")
+        r = S.compute_plan(plan)
+        if not r.chosen:
+            return refuse(page_url(plan), "Retiens au moins une offre avant de lancer le voyage.")
+        names = {i.id: i.name for i in plan.items}
+        stored = S.asso_name(s)
+        last = S.last_trip(s)
+        return render(request, "plan_launch.html", plan=plan, r=r, lines=S.plan_launch_lines(plan),
+                      missing=[names[i] for i in r.empty], asso_default="" if stored == "l'asso" else stored,
+                      diving_default=bool(last and S.is_diving(last)))
+
+    @app.post("/preparer/{pid}/lancer")
+    async def launch(pid: int, request: Request, s: Session = Depends(get_s)):
+        plan = plan_or_404(s, pid)
+        f = await request.form()
+        values = dict(cashier="personne" if f.get("caisse") == "personne" else "asso",
+                      asso_name=f.get("asso_name") or "", holder=f.get("cashier_name") or "",
+                      diving=bool(f.get("plongee")), today=today())
+        if values["cashier"] == "personne" and not " ".join(str(values["holder"]).split()):
+            return refuse(f"/preparer/{pid}/lancer", "Écris le nom de la personne qui tient la caisse", "cashier_name")
+        t, err = write(s, f"lancement du voyage « {plan.name} » (depuis sa préparation)",
+                       lambda: W.launch_plan(s, plan, **values), f"/preparer/{pid}/lancer")
+        if err:
+            return err
+        n = len(t.expenses)
+        return back(f"/v/{t.id}", f"Voyage « {t.name} » lancé : {n} dépense{'s' if n > 1 else ''} "
+                                  f"prévue{'s' if n > 1 else ''}, pour un total de {E.fmt(sum(e.planned or 0 for e in t.expenses))}. "
+                                  "Ajoute maintenant les participants : ils seront comptés dans chaque dépense.")
+
+    # ------------------------------------------------------------------ IA (modèle à copier, réponse à coller)
+    def draft_file(pid: int) -> Path:
+        return site.drafts() / f"projet-{pid}.txt"
+
+    def ai_state(plan) -> str:
+        import json
+        from ..ops import plan_detail
+        d = plan_detail(plan, today())
+        for o in d["offres"]:
+            for k in ("prix_en_clair", "si_retenue"):
+                o.pop(k, None)
+        return json.dumps(d, ensure_ascii=False, indent=1)
+
+    def ai_render(request, plan, **ctx):
+        f = draft_file(plan.id)
+        draft = f.read_text(encoding="utf-8") if f.exists() else None
+        return render(request, "plan_ai.html", plan=plan, modele=AI_TEMPLATE.read_text(encoding="utf-8"),
+                      guide=AI_GUIDE.read_text(encoding="utf-8"), state=ai_state(plan), draft=draft,
+                      draft_saved=dt.datetime.fromtimestamp(f.stat().st_mtime) if draft is not None else None,
+                      has_prev=f.with_suffix(".precedent.txt").exists(), texte=ctx.pop("texte", ""), **ctx)
+
+    @app.get("/preparer/{pid}/ia", response_class=HTMLResponse)
+    def plan_ai(pid: int, request: Request, s: Session = Depends(get_s)):
+        return ai_render(request, plan_or_404(s, pid))
+
+    @app.get("/ia/guide_preparation.md")
+    def plan_ai_guide():
+        return Response(AI_GUIDE.read_text(encoding="utf-8"), media_type="text/markdown; charset=utf-8",
+                        headers={"Content-Disposition": 'attachment; filename="guide_ia_preparer_un_voyage.md"'})
+
+    @app.put("/preparer/{pid}/ia/brouillon")
+    @app.post("/preparer/{pid}/ia/brouillon")
+    async def plan_ai_draft(pid: int, request: Request, s: Session = Depends(get_s)):
+        """Enregistrement à la volée du texte (dans le dossier de données, écriture atomique)."""
+        plan_or_404(s, pid)
+        text = (await request.body()).decode("utf-8")
+        if len(text) > 2_000_000:
+            raise HTTPException(413, "Texte trop long")
+        f = draft_file(pid)
+        tmp = f.with_suffix(".tmp")
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, f)
+        return {"enregistre": dt.datetime.now().strftime("%H:%M:%S")}
+
+    @app.post("/preparer/{pid}/ia/brouillon/vider")
+    def plan_ai_draft_reset(pid: int, s: Session = Depends(get_s)):
+        """Remet le modèle au propre ; l'ancien texte est gardé (un seul niveau) pour pouvoir le récupérer."""
+        plan_or_404(s, pid)
+        f, blank = draft_file(pid), AI_TEMPLATE.read_text(encoding="utf-8")
+        if f.exists() and f.read_text(encoding="utf-8").strip() != blank.strip():
+            os.replace(f, f.with_suffix(".precedent.txt"))
+        f.unlink(missing_ok=True)
+        return {"modele": blank}
+
+    @app.post("/preparer/{pid}/ia/brouillon/recuperer")
+    def plan_ai_draft_restore(pid: int, s: Session = Depends(get_s)):
+        plan_or_404(s, pid)
+        f = draft_file(pid)
+        prev = f.with_suffix(".precedent.txt")
+        if not prev.exists():
+            raise HTTPException(404, "Pas de brouillon précédent")
+        text = prev.read_text(encoding="utf-8")
+        if f.exists():
+            swap = f.with_suffix(".swap")
+            os.replace(f, swap)
+            os.replace(prev, f)
+            os.replace(swap, prev)
+        else:
+            os.replace(prev, f)
+        return {"modele": text}
+
+    @app.post("/preparer/{pid}/ia/apercu", response_class=HTMLResponse)
+    async def plan_ai_preview(pid: int, request: Request, s: Session = Depends(get_s)):
+        from ..ops import Ops
+        plan = plan_or_404(s, pid)
+        texte = (await request.form()).get("texte") or ""
+        before = S.compute_plan(plan)
+        try:
+            res = Ops(db).plan_import(pid, texte, simulation=True)
+        except W.WriteError as e:
+            return ai_render(request, plan, texte=texte, errors=getattr(e, "errors", None) or [str(e)], focus=True)
+        return ai_render(request, plan, texte=texte, res=res, before=before, focus=True)
+
+    @app.post("/preparer/{pid}/ia/importer")
+    async def plan_ai_import(pid: int, request: Request, s: Session = Depends(get_s)):
+        from ..ops import Ops
+        plan = plan_or_404(s, pid)
+        texte = (await request.form()).get("texte") or ""
+        try:
+            res = Ops(db).plan_import(pid, texte)
+        except W.WriteError as e:
+            return ai_render(request, plan, texte=texte, errors=getattr(e, "errors", None) or [str(e)], focus=True)
+        return back(page_url(plan), res["message"])
+
+    # utilisé par d'autres pages (accueil : « À faire bientôt »)
+    site.today = today

@@ -139,6 +139,20 @@ class RolesIn(BaseModel):
     simulation: bool = False
 
 
+class PlanIn(BaseModel):
+    nom: str
+    participants: int = Field(..., description="nombre de participants (au moins 1)")
+    lieu: str = ""
+    debut: Optional[str] = Field(None, description="AAAA-MM-JJ ou JJ/MM/AAAA")
+    fin: Optional[str] = None
+    simulation: bool = False
+
+
+class PlanImportIn(BaseModel):
+    donnees: Union[dict, str] = Field(..., description="Le JSON décrit dans /ia/guide_preparation.md (objet ou texte)")
+    simulation: bool = False
+
+
 class ImportIn(BaseModel):
     donnees: Union[dict, str] = Field(..., description="Le JSON décrit dans /ia/guide_ia.md (objet ou texte)")
     voyage: Optional[str] = Field("nouveau", description="« nouveau » ou l'id d'un voyage existant")
@@ -222,6 +236,23 @@ def install_api(app: FastAPI):
     @r.post("/import", summary="Importer un voyage complet (format du guide /ia/guide_ia.md)")
     def import_trip(b: ImportIn):
         return ops.import_trip(b.donnees, b.voyage, b.simulation)
+
+    @r.get("/projets", summary="Lister les voyages en préparation")
+    def list_plans():
+        return ops.list_plans()
+
+    @r.post("/projets", summary="Créer un voyage en préparation")
+    def create_plan(b: PlanIn):
+        return ops.create_plan(b.nom, b.participants, b.lieu, b.debut, b.fin, b.simulation)
+
+    @r.get("/projets/{projet}", summary="Tout sur un voyage en préparation (postes, offres, budget, prix par personne)")
+    def get_plan(projet: str):
+        return ops.plan(projet)
+
+    @r.post("/projets/{projet}/import",
+            summary="Ajouter ou modifier postes, offres, échéances… (format du guide /ia/guide_preparation.md)")
+    def import_plan(projet: str, b: PlanImportIn):
+        return ops.plan_import(projet, b.donnees, b.simulation)
 
     @r.post("/annuler", summary="Annuler la dernière action")
     def undo():

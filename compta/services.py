@@ -531,8 +531,8 @@ def _people_word(n: int) -> str:
 
 def plan_offer_text(o: M.PlanOffer, people: int) -> str:
     """Le prix d'une offre tel qu'il a été saisi, en clair : « 210,00 € par personne », « 600,00 € pour tout le
-    groupe », « 60,00 € pour 4 personnes (3 fois pour 10 personnes) », « 90,00 € pour 2 personnes × 5 nuits (5 fois
-    pour 10 personnes) »."""
+    groupe », « 60,00 € pour 4 personnes (il en faut 3 pour 10 personnes) », « 90,00 € pour 2 personnes ×
+    5 nuits (il en faut 5 pour 10 personnes) »."""
     times = ""
     if o.quantity > 1:
         times = f" × {o.quantity}" + (f" {o.quantity_label}" if o.quantity_label else "")
@@ -542,14 +542,105 @@ def plan_offer_text(o: M.PlanOffer, people: int) -> str:
         return f"{E.fmt(o.price)} pour tout le groupe{times}"
     cap = o.capacity or 1
     return (f"{E.fmt(o.price)} pour {_people_word(cap)}{times} "
-            f"({P.ceil_div(people, cap)} fois pour {_people_word(people)})")
+            f"(il en faut {P.ceil_div(people, cap)} pour {_people_word(people)})")
 
 
 def plan_summary(plan: M.Plan) -> dict:
     """Pour la carte d'un projet sur l'accueil : le calcul et les noms des postes pas encore choisis."""
     r = compute_plan(plan)
     names = {i.id: i.name for i in plan.items}
-    return dict(plan=plan, r=r, missing=[names[i] for i in r.empty])
+    from sqlalchemy.orm import object_session
+    s = object_session(plan)
+    launched = bool(plan.trip_id and s is not None and s.get(M.Trip, plan.trip_id) is not None)
+    return dict(plan=plan, r=r, missing=[names[i] for i in r.empty], launched=launched)
+
+
+def plan_and_list(names) -> str:
+    """« Hôtel », « Hôtel et Plongées », « Avion, Hôtel et Plongées »."""
+    names = list(names)
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " et " + names[-1] if names else ""
+
+
+def when_words(day: dt.date, today: dt.date) -> str:
+    """« en retard de 3 jours », « en retard d'un jour », « aujourd'hui », « demain », « dans 12 jours (15/01/2027) »."""
+    n = (day - today).days
+    if n < 0:
+        return "en retard d'un jour" if n == -1 else f"en retard de {-n} jours"
+    if n == 0:
+        return "aujourd'hui"
+    if n == 1:
+        return "demain"
+    return f"dans {n} jours ({day:%d/%m/%Y})"
+
+
+def plan_deadlines(plan: M.Plan, today: dt.date) -> list:
+    """Les échéances du projet, par date : [{d, offer, plan, counts, live, late, days, words}]. `counts` : pas faite,
+    et son offre est retenue ou encore en course (voir preparation.live_offers) ; `live` : l'offre est en course."""
+    live = P.live_offers(plan_offer(o) for o in plan.offers)
+    out = []
+    for o in plan.offers:
+        for d in o.deadlines:
+            out.append(dict(d=d, offer=o, plan=plan, counts=not d.done and o.id in live, live=o.id in live,
+                            late=d.date < today, days=(d.date - today).days, words=when_words(d.date, today)))
+    return sorted(out, key=lambda x: (x["d"].date, x["d"].id))
+
+
+UPCOMING_DAYS = 30
+DEADLINE_IDEAS = ("Option à confirmer", "Acompte à verser", "Reste à payer", "Prix garanti jusqu'à cette date")
+
+
+def upcoming(s, today: dt.date, days: int = UPCOMING_DAYS) -> list:
+    """Ce qui arrive, pour tous les projets et tous les voyages (carte « À faire bientôt » de l'accueil ; plus tard un
+    calendrier ou des rappels liront la même liste) :
+    - {"kind": "echeance", "date", "words", "late", d, offer, plan} : les échéances qui comptent, en retard ou dans
+      les `days` jours ;
+    - {"kind": "relance", "date": today, "trip", "count", "url", "words"} : les voyages ouverts qui ont des dates de
+      paiement et des personnes en retard (même règle que « À relancer aujourd'hui »).
+    Rangé par date (les relances avec les échéances du jour, avant elles)."""
+    out = []
+    for plan in s.query(M.Plan).order_by(M.Plan.id).all():
+        for x in plan_deadlines(plan, today):
+            if x["counts"] and x["days"] <= days:
+                out.append(dict(x, kind="echeance", date=x["d"].date))
+    for t in s.query(M.Trip).order_by(M.Trip.id).all():
+        if is_closed(t) or not has_pay_dates(t):
+            continue
+        n = len(late_accounts(t, compute_trip(t), today))
+        if n:
+            out.append(dict(kind="relance", date=today, trip=t, count=n, url=f"/v/{t.id}/argent#relances",
+                            words=f"{n} personne{'s' if n > 1 else ''} à relancer"))
+    return sorted(out, key=lambda x: (x["date"], 0 if x["kind"] == "relance" else 1))
+
+
+def plan_launch_lines(plan: M.Plan) -> list:
+    """Les dépenses prévues que « Lancer le voyage » créera : [{label, category, planned, note, offer, included}], une
+    par offre retenue (un forfait réparti : une par poste), dans l'ordre des postes. `included` : 0,00 € (« inclus ») :
+    rien à payer, aucune dépense n'est créée (une dépense à 0 compte comme un montant pas encore connu). La marge
+    n'est pas une dépense."""
+    r = compute_plan(plan)
+    names = {i.id: i.name for i in plan.items}
+    order = {i.id: n for n, i in enumerate(plan.items)}
+    out = []
+    for o in sorted((o for o in plan.offers if o.chosen), key=lambda o: min(order[i] for i in o.item_ids())):
+        ids, total = o.item_ids(), r.totals[o.id]
+        said = plan_offer_text(o, plan.people)
+        if o.counting != P.LOT:
+            said += f", pour {_people_word(plan.people)}"
+        extra = [o.note] if o.note else []
+        if len(ids) > 1 and o.split:
+            parts = P.split_total(plan_offer(o), total)
+            for i in ids:
+                out.append(dict(label=f"{o.label} ({names[i]})", category=names[i], planned=parts[i], offer=o,
+                                note="\n".join([said + f" ; part de {names[i]}", *extra])))
+        elif len(ids) > 1:
+            out.append(dict(label=o.label, category=names[ids[0]], planned=total, offer=o,
+                            note="\n".join([said, "Couvre " + " + ".join(names[i] for i in ids) + ".", *extra])))
+        else:
+            out.append(dict(label=o.label, category=names[ids[0]], planned=total, offer=o,
+                            note="\n".join([said, *extra])))
+    for x in out:
+        x["included"] = x["planned"] == 0
+    return out
 
 
 def everyone_expense(trip: M.Trip, expense: M.Expense) -> bool:
@@ -718,6 +809,8 @@ def who_label(trip: M.Trip, e: M.Expense) -> str:
     equal = len(set(shares.values())) <= 1
     ids = set(shares)
     # toujours le nombre de personnes ; le nom d'un groupe / d'une famille est dans la bulle (who_detail)
+    if not ids and e.for_all:
+        return "tout le monde"
     if len(ids) == 1:
         return next((p.name for p in trip.participants if p.id in ids), "1 pers.")
     return f"{len(ids)} pers." + ("" if equal else " (montants différents)")

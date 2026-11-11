@@ -22,7 +22,7 @@ from compta.web import create_app
 
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATES = ROOT / "compta" / "templates"
-FORBIDDEN = re.compile(r"\b(lots?|forfaitaires?|quote-parts?|ventilations?|scénarios?)\b", re.I)
+FORBIDDEN = re.compile(r"\b(lots?|forfaitaires?|quote-parts?|ventilations?|scénarios?|comptabilité)\b", re.I)
 
 
 def clean(t):
@@ -139,9 +139,9 @@ def test_reference_project_amounts_on_screen(screen):
     # le prix de chaque offre, en clair, et son total
     assert "210,00 € par personne" in offer_block(page, sc.offer("Transavia"))
     assert "2 100,00 € pour le groupe · 210,00 € par personne" in offer_block(page, sc.offer("Transavia"))
-    assert "60,00 € pour 4 personnes (3 fois pour 10 personnes)" in offer_block(page, sc.offer("Taxi"))
+    assert "60,00 € pour 4 personnes (il en faut 3 pour 10 personnes)" in offer_block(page, sc.offer("Taxi"))
     assert "180,00 € pour le groupe · 18,00 € par personne" in offer_block(page, sc.offer("Taxi"))
-    assert "90,00 € pour 2 personnes × 5 nuits (5 fois pour 10 personnes)" in offer_block(page, sc.offer("Hôtel X"))
+    assert "90,00 € pour 2 personnes × 5 nuits (il en faut 5 pour 10 personnes)" in offer_block(page, sc.offer("Hôtel X"))
     assert "2 250,00 € pour le groupe" in offer_block(page, sc.offer("Hôtel X"))
     assert "38,00 € par personne × 10 plongées" in offer_block(page, sc.offer("Club B"))
     assert "600,00 € pour tout le groupe" in offer_block(page, sc.offer("Minibus"))

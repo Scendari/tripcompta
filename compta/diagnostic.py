@@ -26,7 +26,9 @@ JOURNAL_LINES = 400
 # tables dont on donne le nombre de lignes (jamais le contenu)
 COUNTED = (("trips", "voyages"), ("participants", "participants"), ("families", "familles"),
            ("expenses", "dépenses"), ("movements", "versements et remboursements"), ("receipts", "justificatifs"),
-           ("subaccounts", "sous-comptes « Entre nous »"), ("withdrawals", "désistements"))
+           ("subaccounts", "sous-comptes « Entre nous »"), ("withdrawals", "désistements"),
+           ("plans", "voyages en préparation"), ("plan_items", "postes (en préparation)"),
+           ("plan_offers", "offres (en préparation)"), ("plan_deadlines", "échéances (en préparation)"))
 
 
 def _user_names() -> list[str]:

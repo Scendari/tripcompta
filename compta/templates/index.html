@@ -69,6 +69,7 @@
       {% if p.start %}{{ p.start|date }}{% if p.end %} → {{ p.end|date }}{% endif %} · {% endif %}{{ p.people }} personne{{ 's' if p.people > 1 }}{% if p.place %} · {{ p.place }}{% endif %}
     </div>
     <div class="trip-pills">
+      {% if x.launched %}<span class="pill du">✓ Voyage lancé</span>{% endif %}
       {% if not p.items %}<span class="pill grey">À compléter</span>
       {% else %}
         {% if x.r.chosen %}<span class="pill ok">{{ x.r.per_person|money }} par personne</span>{% endif %}
@@ -93,7 +94,7 @@
   <div class="grow">
     <h1>Mes voyages</h1>
     {% set n_real = cards|rejectattr('0.is_demo')|list|length %}
-    <p class="muted">{% if n_real %}{{ n_real }} voyage{{ 's' if n_real > 1 }}{% if n_real < cards|length %} (et le voyage d'exemple){% endif %}{% else %}Le voyage d'exemple{% endif %}. Clique sur un voyage pour l'ouvrir.</p>
+    <p class="muted">{% if n_real %}{{ n_real }} voyage{{ 's' if n_real > 1 }}{% if n_real < cards|length %} (et le voyage d'exemple){% endif %}. Clique sur un voyage pour l'ouvrir.{% elif cards %}Le voyage d'exemple. Clique sur un voyage pour l'ouvrir.{% else %}Pas encore de voyage lancé : tes voyages en préparation sont plus bas.{% endif %}</p>
   </div>
   <div class="row home-actions">
     <button type="button" class="btn" data-toggle-row="#nouveau" aria-expanded="false" aria-controls="nouveau">+ Nouveau voyage</button>
@@ -103,6 +104,37 @@
 </div>
 <div id="nouveau" class="home-panel" {{ '' if open_new else 'hidden' }}>{{ new_trip_form(false, true) }}</div>
 <div id="preparer" class="home-panel" {{ '' if open_plan else 'hidden' }}>{{ plan_form(true) }}</div>
+{% if soon %}
+<section class="card soon-card" id="a-faire" aria-labelledby="a-faire-h">
+  <h2 id="a-faire-h" class="section-title">À faire bientôt</h2>
+  <ul class="soon-list">
+  {% for y in soon %}
+    {% if y.kind == 'relance' %}
+    <li class="soon-row soon-relance">
+      <span class="soon-check" aria-hidden="true">🔔</span>
+      <span class="soon-when">Aujourd'hui</span>
+      <span class="soon-what"><a href="{{ y.url }}">Voyage {{ y.trip.name }} : {{ y.words }}</a></span>
+    </li>
+    {% else %}{% set d = y.d %}
+    <li class="soon-row">
+      <form method="post" action="/preparer/{{ y.plan.id }}/echeances/{{ d.id }}/fait?retour=accueil" class="inline plan-dl-done soon-check">
+        <input type="hidden" name="fait" value="1">
+        <label><input type="checkbox" data-autosubmit> Fait</label>
+        <noscript><button class="btn small ghost">OK</button></noscript>
+      </form>
+      <span class="soon-when{{ ' late' if y.late }}">{{ y.words|capfirst }}</span>
+      <span class="soon-what"><a href="/preparer/{{ y.plan.id }}#offre-{{ y.offer.id }}">{{ y.plan.name }}</a> · {{ y.offer.label }} · {{ d.label }}{% if d.amount is not none %} · <b>{{ d.amount|money }}</b>{% endif %}</span>
+    </li>
+    {% endif %}
+  {% endfor %}
+  </ul>
+</section>
+<script>
+document.querySelectorAll('#a-faire [data-autosubmit]').forEach(function (c) {
+  c.addEventListener('change', function () { c.form.requestSubmit ? c.form.requestSubmit() : c.form.submit(); });
+});
+</script>
+{% endif %}
 <div id="importer-panel" class="home-panel" {{ '' if open_import else 'hidden' }}>{{ import_form(false, true) }}</div>
 <script>
 // Accueil : un seul panneau ouvert à la fois (nouveau voyage / importer)

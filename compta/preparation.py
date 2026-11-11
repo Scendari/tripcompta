@@ -82,6 +82,7 @@ class Result:
     announced: Optional[int]
     reserve: Optional[int]     # None sans prix annoncé
     reserve_per_person: Optional[int]   # prix annoncé − prix par personne
+    above_margin: Optional[int]         # prix annoncé − prix avec la marge (None sans prix annoncé ou sans marge)
     what_if: dict              # offre non retenue -> WhatIf
 
 
@@ -197,4 +198,13 @@ def compute(people: int, items, offers, margin_kind: str = PERCENT, margin_value
                   chosen=chosen, budget=budget, per_person=ceil_div(budget, people),
                   empty=empty, by_item=by_item, margin=margin, price_with_margin=with_margin, announced=announced,
                   reserve=reserve, reserve_per_person=None if announced is None else announced - ceil_div(budget, people),
+                  above_margin=None if announced is None or not margin else announced - with_margin,
                   what_if=what_if)
+
+
+def live_offers(offers) -> set:
+    """Les offres encore « en course » : retenues, ou dont au moins un poste n'a encore aucune offre retenue. Leurs
+    échéances comptent ; celles des offres écartées ne comptent plus."""
+    offers = list(offers)
+    covered = {i for o in offers if o.chosen for i in o.items}
+    return {o.id for o in offers if o.chosen or any(i not in covered for i in o.items)}

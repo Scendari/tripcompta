@@ -1451,3 +1451,41 @@ tr.to-check > td:last-child { border-right: 2px solid var(--coral); }
 }
 .plan-steps { margin: .4rem 0 0; padding-left: 1.4rem; display: grid; gap: .4rem; }
 .plan-steps li::marker { font-weight: 700; color: var(--teal-strong); }
+/* Préparer un voyage : échéances, « À faire bientôt », lancement */
+.plan-deadlines { grid-column: 1 / -1; border-top: 1px dashed var(--border); padding-top: .45rem; margin-top: .1rem; }
+.plan-dl { list-style: none; margin: 0 0 .3rem; padding: 0; display: grid; gap: .3rem; }
+.plan-dl-row { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .7rem; font-size: .9rem; }
+.plan-dl-row.done .plan-dl-text { text-decoration: line-through; color: var(--muted); }
+.plan-dl-row.off .plan-dl-text { color: var(--muted); }
+.plan-dl-done label { display: inline-flex; align-items: center; gap: .3rem; font-weight: 500; margin: 0; font-size: .88rem; }
+.plan-dl-date { font-variant-numeric: tabular-nums; font-weight: 600; }
+.plan-dl-when, .soon-when { font-weight: 600; color: var(--ocean); font-size: .88rem; }
+.plan-dl-when.late, .soon-when.late { color: var(--err); }
+.plan-dl-edit, .plan-dl-add { font-size: .9rem; }
+.plan-dl-edit[open], .plan-dl-add[open] { flex-basis: 100%; }
+.plan-dl-edit > summary, .plan-dl-add > summary { cursor: pointer; list-style: none; display: inline-block; }
+.plan-dl-edit > summary::-webkit-details-marker, .plan-dl-add > summary::-webkit-details-marker { display: none; }
+.plan-dl-form { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 0 .8rem; align-items: end; margin-top: .4rem; padding: .6rem .7rem; background: var(--bg-2); border-radius: 9px; }
+.plan-dl-form .field { margin-bottom: .2rem; }
+.plan-dl-form .btn { margin-bottom: .25rem; }
+.plan-ideas { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .35rem; }
+.plan-ideas .chip { cursor: pointer; background: var(--card); color: var(--text); border-style: solid; font-size: .8rem; }
+.linklike.danger-text { font-size: .85rem; }
+.soon-card { margin-bottom: 1rem; }
+.plan-soon { margin-top: 1rem; }
+/* « À faire bientôt » : trois colonnes alignées (case « Fait », quand, quoi) ; en fenêtre étroite, « quoi » passe dessous */
+.soon-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: max-content max-content minmax(0, 1fr); gap: .5rem 1rem; align-items: baseline; }
+.soon-row { display: contents; }
+.soon-check { grid-column: 1; }
+.soon-when { grid-column: 2; }
+.soon-what { grid-column: 3; }
+.plan-launch-free { margin: .8rem 0 0; padding-left: 0; list-style: none; color: var(--muted); }
+.plan-launched { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem 1rem; border-color: var(--ok); background: var(--ok-bg); margin-bottom: 1rem; }
+.plan-launch-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; margin: 0 0 1rem; }
+.plan-launch-missing { margin: .8rem 0 0; padding-left: 0; list-style: none; color: var(--amber); font-weight: 600; }
+.plan-launch-table tfoot th { border-top: 2px solid var(--border); }
+@media (max-width: 720px) {
+  .plan-dl-form { grid-template-columns: minmax(0, 1fr); }
+  .soon-list { grid-template-columns: max-content minmax(0, 1fr); gap: .15rem .7rem; }
+  .soon-what { grid-column: 2; margin-bottom: .45rem; }
+}

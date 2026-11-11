@@ -1,0 +1,10 @@
+=== PRÉPARER LE VOYAGE ===
+Colle ici le devis, le mail ou les notes d'un prestataire (ou de plusieurs), et dis ce que tu veux en faire.
+Écris comme tu parles. Les lignes qui commencent par « Exemple : » sont là pour t'aider : remplace-les ou efface-les.
+Les dates : toujours avec l'année (15/01/2027).
+
+Exemple : Voici le devis du club A, à ajouter comme offre pour l'hôtel et les plongées.
+Exemple : Le taxi coûte 60 € pour 4 personnes, à ajouter au poste Taxi.
+Exemple : On sera finalement 12. Marge de 5 %.
+Exemple : L'option chez l'hôtel X est à confirmer avant le 15/01/2027, acompte de 500 € avant le 01/02/2027.
+-

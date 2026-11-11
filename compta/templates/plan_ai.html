@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}IA · {{ plan.name }} · Trip Compta{% endblock %}
+{% macro eur(x) %}{{ ((x or 0) * 100)|round|int|money }}{% endmacro %}
+{% block page %}
+<div class="plan-page">
+<div class="page-head">
+  <div class="grow">
+    <p class="plan-kicker">En préparation · {{ plan.name }}</p>
+    <h1>🤖 Ajouter des offres avec une IA</h1>
+    <p class="muted">Pour ce projet (n°{{ plan.id }}). Ça marche avec n'importe quelle IA (Claude, ChatGPT, Le Chat…) : tu colles un devis ou un mail de prestataire, l'IA te pose ses questions, puis te donne un bloc à recoller ici. Tu vois tout avant d'enregistrer.</p>
+  </div>
+  <a class="btn ghost small" href="/preparer/{{ plan.id }}">← Retour au projet</a>
+</div>
+
+<fieldset class="step">
+  <legend><span class="n">1</span> Colle le devis ou décris ce que tu veux</legend>
+  <p class="hint" style="margin-top:0">Écris comme tu parles. Pas besoin de redire ce qui est déjà dans le projet : son état actuel (postes, offres, prix) est joint automatiquement au message pour l'IA.</p>
+  <div class="field">
+    <label for="modele">Le devis, le mail ou ta demande</label>
+    <textarea id="modele" class="modele" rows="14" spellcheck="true" lang="fr">{{ draft if draft is not none else modele }}</textarea>
+    <div class="hint" id="modele-status" role="status" aria-live="polite">{% if draft_saved %}✓ Brouillon enregistré sur ton ordinateur ({{ draft_saved.strftime('%d/%m à %H:%M') }}).{% else %}Ce que tu écris est enregistré tout seul sur ton ordinateur.{% endif %}</div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn small ghost" id="modele-reset">Remettre le modèle au propre</button>
+    <button type="button" class="btn small ghost" id="modele-restore" {{ '' if has_prev else 'hidden' }}>Récupérer mon brouillon précédent</button>
+  </div>
+</fieldset>
+
+<fieldset class="step">
+  <legend><span class="n">2</span> Donne-le à l'IA</legend>
+  <p class="hint" style="margin-top:0">Le bouton copie <b>un seul message</b> : le numéro du projet, le mode d'emploi pour l'IA, l'état actuel du projet et ton texte. Colle-le dans ton IA.</p>
+  <p class="ai-privacy" role="note"><b>⚠️ Bon à savoir avant de copier :</b> ce message contient les noms des prestataires et leurs prix. Ne colle pas de données personnelles dont l'IA n'a pas besoin.</p>
+  <div class="row">
+    <button type="button" class="btn" id="copy-msg">Copier le message pour l'IA</button>
+    <button type="button" class="btn ghost" id="dl-msg">Télécharger le message</button>
+  </div>
+  <ul class="small" style="padding-left:1.2rem;line-height:1.7;margin-bottom:0">
+    <li>L'IA lit le <a href="/ia/guide_preparation.md">mode d'emploi pour l'IA</a> : comment l'application compte les prix, et le format attendu.</li>
+    <li>Elle te pose ses questions (« Ce prix est-il par personne ou pour la chambre ? »). Réponds-lui.</li>
+    <li>Elle te montre un récapitulatif puis un bloc qui commence par <code>{"projet_id": {{ plan.id }}</code>. Copie toute sa réponse.</li>
+  </ul>
+</fieldset>
+
+<fieldset class="step" id="apercu">
+  <legend><span class="n">3</span> Colle la réponse de l'IA</legend>
+  <form method="post" action="/preparer/{{ plan.id }}/ia/apercu">
+    <div class="field">
+      <label for="texte">Réponse de l'IA <span class="hint">(tu peux coller toute la réponse : je retrouve le bloc tout seul)</span></label>
+      <textarea id="texte" name="texte" rows="8" placeholder='{ "projet_id": {{ plan.id }}, … }' style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem">{{ texte }}</textarea>
+    </div>
+    <button class="btn">Voir ce qui changera (rien n'est enregistré)</button>
+  </form>
+
+  {% if errors %}
+  <div style="margin-top:1.2rem" id="a-corriger">
+    <h3>À corriger avant d'enregistrer</h3>
+    <ul class="alerts" id="errors">{% for e in errors %}<li class="error">{{ e }}</li>{% endfor %}</ul>
+    <p class="small">Copie ces messages à l'IA : elle corrigera et te redonnera le bloc complet.</p>
+    <button type="button" class="btn small ghost" id="copy-errors">Copier les messages pour l'IA</button>
+  </div>
+  {% endif %}
+
+  {% if res %}{% set a = res.apercu %}
+  <div style="margin-top:1.2rem" id="resultat">
+    <h3>Ce qui va changer</h3>
+    {% if res.actions %}<ul class="small changes" id="actions">{% for x in res.actions %}<li>{{ x }}</li>{% endfor %}</ul>
+    {% else %}<p class="muted">Rien à changer.</p>{% endif %}
+    <p id="avant-apres">Budget : {{ before.budget|money }} → <b>{{ eur(a.budget) }}</b> · prix par personne : {{ before.per_person|money }} → <b>{{ eur(a.par_personne) }}</b>{% if a.postes_pas_encore_choisis %} · <span class="warn-text">pas encore choisi : {{ a.postes_pas_encore_choisis|join(', ') }}</span>{% endif %}</p>
+    <form method="post" action="/preparer/{{ plan.id }}/ia/importer" style="margin-top:1rem">
+      <input type="hidden" name="texte" value="{{ texte }}">
+      <button class="btn">Enregistrer ces changements</button>
+      <span class="hint">Tout s'enregistre d'un coup ; le bouton « ↶ Défaire » du message qui suit les retire tout d'un coup.</span>
+    </form>
+  </div>
+  {% endif %}
+</fieldset>
+<p class="small muted">Pour les développeurs : API JSON sur <a href="/api/docs" target="_blank">/api/docs</a> (<code>POST /api/projets/{{ plan.id }}/import</code>), et des outils pour un connecteur MCP (voir la page « IA » d'un voyage).</p>
+</div>
+
+<script>
+(function () {
+  const PLAN = {{ plan.id }}, PLAN_NAME = {{ plan.name|tojson }};
+  const GUIDE = {{ guide|tojson }}, STATE = {{ state|tojson }}, blank = {{ modele|tojson }};
+  const KEY = "compta-ia-projet-" + PLAN + "-{{ plan.created.strftime('%Y%m%d%H%M%S%f') if plan.created else '' }}";
+  const SAVE_URL = "/preparer/" + PLAN + "/ia/brouillon";
+  const ta = document.getElementById("modele"), status = document.getElementById("modele-status");
+  const serverTime = {{ (draft_saved.timestamp() * 1000)|int if draft_saved else 0 }};
+  let pendingLocal = false;
+  try {
+    const local = JSON.parse(localStorage.getItem(KEY) || "null");
+    if (local && local.text && local.t > serverTime && local.text !== ta.value) { ta.value = local.text; pendingLocal = true; }
+  } catch (e) {}
+  let timer = null, dirty = false, saving = false;
+  ta.addEventListener("input", changed);
+  function changed() {
+    dirty = true;
+    try { localStorage.setItem(KEY, JSON.stringify({text: ta.value, t: Date.now()})); } catch (e) {}
+    status.textContent = "Modification en cours…";
+    clearTimeout(timer); timer = setTimeout(save, 700);
+  }
+  async function save() {
+    if (saving) { clearTimeout(timer); timer = setTimeout(save, 300); return; }
+    saving = true; dirty = false;
+    try {
+      const r = await fetch(SAVE_URL, {method: "PUT", body: ta.value, headers: {"Content-Type": "text/plain;charset=utf-8"}});
+      if (!r.ok) throw new Error(r.status);
+      const j = await r.json();
+      if (!dirty) status.textContent = "✓ Enregistré sur ton ordinateur à " + j.enregistre;
+    } catch (e) {
+      dirty = true;
+      status.textContent = "⚠ Pas pu enregistrer sur l'ordinateur (l'application est-elle arrêtée ?). Ton texte est gardé dans ce navigateur.";
+      clearTimeout(timer); timer = setTimeout(save, 5000);
+    } finally { saving = false; }
+  }
+  function flush() { if (dirty) { try { navigator.sendBeacon(SAVE_URL, new Blob([ta.value], {type: "text/plain;charset=utf-8"})); dirty = false; } catch (e) {} } }
+  window.addEventListener("pagehide", flush);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flush(); });
+  if (pendingLocal) { dirty = true; save(); }
+  const restoreBtn = document.getElementById("modele-restore");
+  document.getElementById("modele-reset").addEventListener("click", async () => {
+    if (!confirm("Remettre le modèle au propre ?\nTon texte actuel est gardé : tu pourras le récupérer avec « Récupérer mon brouillon précédent ».")) return;
+    clearTimeout(timer); dirty = false;
+    await fetch(SAVE_URL, {method: "PUT", body: ta.value, headers: {"Content-Type": "text/plain;charset=utf-8"}});
+    await fetch(SAVE_URL + "/vider", {method: "POST"});
+    ta.value = blank; try { localStorage.removeItem(KEY); } catch (e) {}
+    restoreBtn.hidden = false; status.textContent = "Modèle remis au propre. Ton ancien texte est gardé.";
+  });
+  restoreBtn.addEventListener("click", async () => {
+    clearTimeout(timer); if (dirty) await save();
+    const r = await fetch(SAVE_URL + "/recuperer", {method: "POST"});
+    if (!r.ok) { status.textContent = "Pas de brouillon précédent."; return; }
+    ta.value = (await r.json()).modele; dirty = false; try { localStorage.removeItem(KEY); } catch (e) {}
+    status.textContent = "✓ Brouillon précédent récupéré (le texte que tu viens de quitter est gardé à sa place).";
+  });
+  function message() {
+    return "Bonjour ! J'utilise l'application « Trip Compta » pour préparer un voyage de groupe (budget, offres des prestataires, prix par personne).\n"
+      + "Projet n°" + PLAN + " : « " + PLAN_NAME + " » (recopie \"projet_id\": " + PLAN + " en haut de ton bloc JSON).\n"
+      + "Lis d'abord le mode d'emploi ci-dessous. Pose-moi tes questions si quelque chose n'est pas clair (regroupées), "
+      + "puis donne-moi le récapitulatif et le bloc JSON à coller dans l'application.\n\n"
+      + "=== MODE D'EMPLOI POUR L'IA ===\n\n" + GUIDE
+      + "\n\n=== ÉTAT ACTUEL DU PROJET n°" + PLAN + " ===\n\n" + STATE
+      + "\n\n=== MON TEXTE ===\n\n" + ta.value + "\n";
+  }
+  window.iaMessage = message;
+  function copy(text, btn, done) {
+    const ok = () => { const old = btn.textContent; btn.textContent = done || "Copié ✓"; setTimeout(() => btn.textContent = old, 2500); };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(ok, () => fallback(text, ok));
+    else fallback(text, ok);
+  }
+  function fallback(text, ok) {
+    const t = document.createElement("textarea"); t.value = text; t.setAttribute("aria-hidden", "true");
+    t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select();
+    try { document.execCommand("copy"); ok(); } catch (e) {} t.remove();
+  }
+  function download(name, text) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([text], {type: "text/plain;charset=utf-8"}));
+    a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  document.getElementById("copy-msg").addEventListener("click", e => copy(message(), e.currentTarget, "Copié ✓ — colle-le dans ton IA"));
+  document.getElementById("dl-msg").addEventListener("click", () => download("message_pour_ia_projet_" + PLAN + ".txt", message()));
+  const ce = document.getElementById("copy-errors");
+  if (ce) ce.addEventListener("click", () => copy("L'application a refusé ces changements avec ces messages. Corrige et redonne-moi le bloc JSON complet (avec \"projet_id\": " + PLAN + ") :\n- "
+      + [...document.querySelectorAll("#errors li")].map(li => li.textContent).join("\n- "), ce));
+  {% if focus %}document.getElementById("{{ 'resultat' if res else 'apercu' }}").scrollIntoView();{% endif %}
+})();
+</script>
+{% endblock %}

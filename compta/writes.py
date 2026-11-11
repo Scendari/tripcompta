@@ -72,8 +72,11 @@ def add_participant(s, t: M.Trip, name, roles=(), companion: bool = False, phone
         raise WriteError(f"{name} est déjà dans la liste", "name")
     p = M.Participant(name=name, companion=bool(companion), phone=str(phone or "").strip(),
                       email=str(email or "").strip(), note=str(note or "").strip())
+    join_for_all = for_all_expenses(t)
     t.participants.append(p)
     s.flush()
+    for e in join_for_all:                     # « pour tout le monde » : le nouveau venu y entre
+        join_expense(e, p.id)
     S.set_roles(t, p, list(roles or []))
     if family and str(family).strip():
         S.set_family(s, t, p, str(family))
@@ -93,6 +96,23 @@ def join_group_expenses(t: M.Trip, added, before: dict) -> list:
         if x["pid"] in mine and x["kind"] == "groupes":
             join_expense(exps[x["eid"]], x["pid"]) and joined.append(exps[x["eid"]])
     return joined
+
+
+def for_all_expenses(t: M.Trip) -> list:
+    """Les dépenses « pour tout le monde » (voyage lancé depuis sa préparation) qu'un nouveau venu rejoint tout seul :
+    celles dont les parts sont encore simples (tous les participants, parts égales, aucun montant fixé). Une dépense
+    dont les parts ont été personnalisées depuis (montant fixé, parts changées…) perd ce caractère : la règle
+    habituelle s'applique alors (proposée à l'écran, « à vérifier » si les parts sont personnalisées)."""
+    ids = _ids(t)
+    out = []
+    for e in t.expenses:
+        if not e.for_all:
+            continue
+        if {x.participant_id for x in e.shares} == ids and all(x.weight == 1 and x.fixed is None for x in e.shares):
+            out.append(e)
+        else:
+            e.for_all = False
+    return out
 
 
 def join_expense(e: M.Expense, pid: int) -> bool:
@@ -123,7 +143,7 @@ def category_id(s, t: M.Trip, name) -> int:
 
 def check_expense(t: M.Trip, e: M.Expense | None = None, *, label, kind="depense", planned=None, actual=None,
                   payer_id=None, payments=(), weights=None, fixed=None, refund=None, refund_to_id=None,
-                  pending: bool = False, **_) -> None:
+                  pending: bool = False, for_all: bool = False, **_) -> None:
     """Refuse (WriteError) une dépense qui fausserait les comptes. Ne modifie rien : à appeler avant la copie
     « Défaire » ; save_expense le refait de toute façon."""
     label = _clean(label)
@@ -157,7 +177,9 @@ def check_expense(t: M.Trip, e: M.Expense | None = None, *, label, kind="depense
         raise WriteError(f"Les payeurs de « {label} » totalisent {E.fmt(sum(c for _, c in payments))}, plus que "
                          f"son montant ({E.fmt(best)}).")
     if weights is not None:
-        if not weights:
+        # personne : refusé, sauf une dépense « pour tout le monde » d'un voyage qui n'a encore aucun participant
+        # (voyage lancé depuis sa préparation)
+        if not weights and (t.participants or not (for_all or (e is not None and e.for_all))):
             raise WriteError("Pour qui est cette dépense ? Indique « tous » ou une liste de personnes.")
         for pid, w in weights.items():
             _member(t, pid, "Une des personnes de « Pour qui ? »")
@@ -184,7 +206,7 @@ def check_expense(t: M.Trip, e: M.Expense | None = None, *, label, kind="depense
 def save_expense(s, t: M.Trip, e: M.Expense | None = None, *, label, category=None, subcategory="",
                  kind="depense", planned=None, actual=None, tickets=None, date=None, payer_id=None, payments=(),
                  weights=None, fixed=None, refund=None, refund_to_id=None, note="", pending: bool = False,
-                 reviewed: bool = False) -> M.Expense:
+                 reviewed: bool = False, for_all: bool = False) -> M.Expense:
     """Crée (e=None) ou réécrit une dépense, avec toutes ses valeurs.
 
     - category : le nom de la catégorie (créée si besoin ; KEEP = celle qu'elle a déjà) ; subcategory : retenue pour les prochaines saisies ;
@@ -198,7 +220,7 @@ def save_expense(s, t: M.Trip, e: M.Expense | None = None, *, label, category=No
     label = _clean(label)
     check_expense(t, e, label=label, kind=kind, planned=planned, actual=actual, payer_id=payer_id,
                   payments=payments, weights=weights, fixed=fixed, refund=refund, refund_to_id=refund_to_id,
-                  pending=pending)
+                  pending=pending, for_all=for_all)
     if e is None:
         e = M.Expense(label=label)
         t.expenses.append(e)
@@ -236,6 +258,10 @@ def save_expense(s, t: M.Trip, e: M.Expense | None = None, *, label, category=No
         s.flush()
         for pid, w in weights.items():
             e.shares.append(M.ExpenseShare(participant_id=pid, weight=w, fixed=(fixed or {}).get(pid)))
+        # « pour tout le monde » : tant que personne n'est encore là, ou tant que tout le monde y est à parts égales
+        everyone = set(weights) == _ids(t) and all(w == 1 for w in weights.values()) and not any(
+            c is not None for c in (fixed or {}).values())
+        e.for_all = bool(e.for_all or for_all) and (not t.participants or everyone)
     if reviewed:
         e.checks.clear()
     s.flush()
@@ -654,3 +680,100 @@ def delete_offer(s, plan: M.Plan, offer: M.PlanOffer) -> str:
     plan.offers.remove(offer)
     s.flush()
     return label
+
+
+# ---------------------------------------------------------------- échéances d'une offre (côté prestataires)
+
+def check_deadline(plan: M.Plan, offer: M.PlanOffer, *, label, date, amount=None) -> None:
+    _plan_of(plan, offer, "Cette offre")
+    if not _clean(label):
+        raise WriteError("Dis ce qu'il faut faire (par exemple « Acompte à verser »).", "label")
+    if date is None:
+        raise WriteError("Indique la date de l'échéance.", "date")
+    if amount is not None and amount < 0:
+        raise WriteError("Le montant ne peut pas être négatif.", "amount")
+
+
+def save_deadline(s, plan: M.Plan, offer: M.PlanOffer, d: M.PlanDeadline | None = None, *, label, date,
+                  amount=None, done: bool = False) -> M.PlanDeadline:
+    """Crée (d=None) ou réécrit une échéance de cette offre : libellé, date (obligatoire), montant (facultatif)."""
+    check_deadline(plan, offer, label=label, date=date, amount=amount)
+    if d is not None and d.offer_id != offer.id:
+        raise WriteError("Cette échéance ne fait pas partie de cette offre.")
+    if d is None:
+        d = M.PlanDeadline(label=_clean(label, 200), date=date)
+        offer.deadlines.append(d)
+    d.label, d.date, d.amount, d.done = _clean(label, 200), date, amount, bool(done)
+    s.flush()
+    return d
+
+
+def _deadline_of(plan: M.Plan, deadline: M.PlanDeadline | None) -> M.PlanOffer:
+    offer = next((o for o in plan.offers if deadline is not None and o.id == deadline.offer_id), None)
+    if offer is None:
+        raise WriteError("Cette échéance ne fait pas partie de ce projet.")
+    return offer
+
+
+def set_deadline_done(s, plan: M.Plan, deadline: M.PlanDeadline, done: bool = True) -> M.PlanDeadline:
+    _deadline_of(plan, deadline)
+    deadline.done = bool(done)
+    s.flush()
+    return deadline
+
+
+def delete_deadline(s, plan: M.Plan, deadline: M.PlanDeadline) -> str:
+    offer = _deadline_of(plan, deadline)
+    label = deadline.label
+    offer.deadlines.remove(deadline)
+    s.flush()
+    return label
+
+
+# ---------------------------------------------------------------- lancer le voyage
+
+def launch_plan(s, plan: M.Plan, *, cashier: str = "asso", asso_name: str = "", holder: str = "",
+                diving: bool = False, today=None) -> M.Trip:
+    """Crée le voyage (ses comptes) à partir du projet : une dépense PRÉVUE par offre retenue (un forfait réparti :
+    une par poste), « pour tout le monde », y compris les participants qui seront ajoutés ensuite. Le projet garde
+    le lien (sens unique : modifier le projet ne change plus les comptes du voyage). cashier : « asso » ou « personne »
+    (holder : son nom, ajouté aux participants)."""
+    import datetime as _dt
+    if plan_trip(s, plan) is not None:
+        raise WriteError("Ce projet a déjà été lancé : son voyage existe.")
+    lines = S.plan_launch_lines(plan)
+    if not [x for x in lines if not x["included"]]:
+        raise WriteError("Retiens au moins une offre avant de lancer le voyage.")
+    holder = _clean(holder, 200)
+    if cashier == "personne" and not holder:
+        raise WriteError("Écris le nom de la personne qui tient la caisse", "cashier_name")
+    t = create_trip(s, plan.name, place=plan.place, start=plan.start, end=plan.end, diving=diving)
+    note = [f"Préparé pour {plan.people} personne{'s' if plan.people > 1 else ''}."]
+    if plan.announced is not None:
+        note.append(f"Prix annoncé : {E.fmt(plan.announced)} par personne.")
+    t.note = " ".join(note)
+    for x in lines:
+        if x["included"]:                    # inclus (0,00 €) : rien à payer, pas de dépense
+            continue
+        save_expense(s, t, label=x["label"], category=x["category"], planned=x["planned"], weights={},
+                     note=x["note"], for_all=True)
+    if cashier == "personne":
+        p = add_participant(s, t, holder, roles=[S.DIVER] if S.is_diving(t) else [])
+        t.cashier_id = p.id
+    elif _clean(asso_name):
+        S.set_trip_asso_name(t, str(asso_name), s)
+    plan.trip_id, plan.launched_on = t.id, today or _dt.date.today()
+    s.flush()
+    return t
+
+
+def plan_trip(s, plan: M.Plan) -> M.Trip | None:
+    """Le voyage créé à partir de ce projet, s'il existe encore."""
+    return s.get(M.Trip, plan.trip_id) if plan.trip_id else None
+
+
+def forget_trip(s, trip_id: int) -> None:
+    """Un voyage supprimé : les projets qui l'avaient lancé n'y mènent plus (et peuvent être relancés). Sans cela,
+    un voyage créé ensuite pourrait reprendre le même numéro et passer pour le leur."""
+    for p in s.query(M.Plan).filter(M.Plan.trip_id == trip_id).all():
+        p.trip_id, p.launched_on = None, None

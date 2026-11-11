@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Lancer le voyage · {{ plan.name }} · Trip Compta{% endblock %}
+{% block page %}
+<div class="plan-page">
+<div class="page-head">
+  <div class="grow">
+    <p class="plan-kicker">En préparation · {{ plan.name }}</p>
+    <h1>Lancer le voyage</h1>
+    <p class="muted">Trip Compta va créer le voyage « {{ plan.name }} » pour en tenir les comptes. Voici exactement ce qui sera créé.</p>
+  </div>
+  <a class="btn ghost small" href="/preparer/{{ plan.id }}">← Retour au projet</a>
+</div>
+
+<section class="card" aria-labelledby="depenses-h">
+  <h2 id="depenses-h" class="section-title">Les dépenses prévues</h2>
+  <p class="hint" style="margin-top:0">Une par offre retenue, en montant <b>prévu</b> : tu saisiras le vrai montant une fois payé. Elles seront pour tout le monde : les participants que tu ajouteras ensuite y seront comptés.</p>
+  <div class="table-wrap"><table class="plan-launch-table" id="lignes">
+    <thead><tr><th>Dépense</th><th>Catégorie</th><th class="num">Prévu</th></tr></thead>
+    <tbody>
+    {% for x in lines if not x.included %}<tr><td>{{ x.label }}</td><td>{{ x.category }}</td><td class="num">{{ x.planned|money }}</td></tr>{% endfor %}
+    </tbody>
+    <tfoot><tr><th colspan="2">Total prévu</th><th class="num" id="total-prevu">{{ lines|sum(attribute='planned')|money }}</th></tr></tfoot>
+  </table></div>
+  {% set free = lines|selectattr('included')|list %}
+  {% if free %}
+  <ul class="plan-launch-free" id="inclus">
+    {% for x in free %}<li>{{ x.label }} : inclus, rien à payer (aucune dépense créée).</li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% if missing %}
+  <ul class="plan-launch-missing" id="postes-sans-offre">
+    {% for name in missing %}<li>⚠️ {{ name }} n'a pas d'offre retenue : rien ne sera créé pour ce poste.</li>{% endfor %}
+  </ul>
+  {% endif %}
+  <p class="small muted" style="margin-bottom:0">Dans la note du voyage : « Préparé pour {{ plan.people }} personne{{ 's' if plan.people > 1 }}.{% if plan.announced is not none %} Prix annoncé : {{ plan.announced|money }} par personne.{% endif %} »{% if r.margin %} La marge ({{ r.margin|money }}) n'est pas une dépense : elle n'est pas créée.{% endif %}</p>
+</section>
+
+<form class="card home-form" method="post" action="/preparer/{{ plan.id }}/lancer" style="margin-top:1rem">
+  <fieldset class="home-ask">
+    <legend>Qui tient la caisse ?</legend>
+    <p class="hint">Celui ou celle qui reçoit l'argent des participants et paie les dépenses. Tu pourras le changer ensuite.</p>
+    <div class="choice">
+      <label><input type="radio" name="caisse" value="asso" checked> Une association ou un club</label>
+      <label><input type="radio" name="caisse" value="personne"> Une personne du voyage <span class="hint">(pas d'association)</span></label>
+    </div>
+    <div class="field" data-show-when="caisse=asso"><label for="asso_name">Son nom <span class="hint">(facultatif)</span></label>
+      <input type="text" id="asso_name" name="asso_name" value="{{ asso_default }}" placeholder="ex. Club de rando des Aravis" maxlength="100"></div>
+    <div class="field" data-show-when="caisse=personne"><label for="cashier_name">Son prénom et son nom</label>
+      <input type="text" id="cashier_name" name="cashier_name" placeholder="ex. Camille Durand" maxlength="200">
+      <div class="hint">Elle sera ajoutée aux participants.</div></div>
+  </fieldset>
+  <label class="home-check"><input type="checkbox" name="plongee" value="1" {{ 'checked' if diving_default }}> C'est un voyage de plongée <span class="hint">(ajoute les rôles Plongeur et Accompagnant, et les catégories de plongée)</span></label>
+  <p class="small muted">Le projet reste là, avec ses offres et ses échéances. Mais ensuite, le modifier ne changera plus les comptes du voyage.</p>
+  <div class="row home-btns"><a class="btn ghost" href="/preparer/{{ plan.id }}">Annuler</a><button class="btn">Lancer le voyage</button></div>
+</form>
+</div>
+{% endblock %}

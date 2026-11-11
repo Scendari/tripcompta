@@ -75,7 +75,8 @@ def test_everything_a_page_takes_from_site_exists():
         unknown = read - given - set(lent)
         assert not unknown, f"pages/{name}.py lit site.{sorted(unknown)} que personne ne donne"
     assert lent == {"_return_path": "general", "_restart_page": "reglages", "drafts": "ia",
-                    "_refused_files": "justificatifs", "_store_receipt": "justificatifs", "_send_rows": "envoyer"}
+                    "_refused_files": "justificatifs", "_store_receipt": "justificatifs", "_send_rows": "envoyer",
+                    "today": "preparation"}
 
 
 # ---------------------------------------------------------------- les adresses
