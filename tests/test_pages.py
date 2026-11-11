@@ -37,7 +37,7 @@ def test_every_page_module_is_installed_once():
     installed = [e.id for e in loop.iter.elts]
     assert sorted(imported) == MODULES
     assert sorted(installed) == MODULES and len(set(installed)) == len(installed)
-    assert len(MODULES) == 15
+    assert len(MODULES) == 16
     for name in MODULES:
         tree = ast.parse(source(name))
         assert [n.name for n in tree.body if isinstance(n, ast.FunctionDef)] == ["install"], name

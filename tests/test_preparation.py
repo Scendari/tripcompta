@@ -105,9 +105,12 @@ def test_what_if_at_ten(ref):
     r = ref.result()
     o2 = r.what_if[ref.o["O2"].id]
     assert (o2.budget, o2.delta, o2.empty, o2.lost) == (1003000, 110000, [], [])
+    assert (o2.per_person, o2.delta_per_person) == (100300, 11000)
     assert o2.replaces == [ref.o["O1"].id]
     o7 = r.what_if[ref.o["O7"].id]
     assert (o7.budget, o7.delta, o7.per_person, o7.empty) == (868000, -25000, 86800, [])
+    assert o7.delta_per_person == -2500
+    assert r.offer_per_person[ref.o["O3"].id] == 1800 and r.offer_per_person[ref.o["O7"].id] == 58000
     assert sorted(o7.replaces) == sorted([ref.o["O4"].id, ref.o["O5"].id])
     assert set(r.what_if) == {ref.o["O2"].id, ref.o["O7"].id}    # seulement les offres pas encore retenues
 
@@ -115,6 +118,8 @@ def test_what_if_at_ten(ref):
 def test_what_if_o7_at_nine(ref):
     o7 = ref.result(9).what_if[ref.o["O7"].id]
     assert (o7.budget, o7.delta, o7.per_person) == (789000, -45000, 87667)
+    assert o7.delta_per_person == 87667 - 92667
+    assert ref.result(9).offer_per_person[ref.o["O3"].id] == 2000      # 180,00 / 9
 
 
 def test_choosing_a_package_unchooses_what_it_replaces_and_nothing_comes_back(ref):
@@ -261,11 +266,12 @@ def test_margin(ref, n, kind, value, margin, price):
     assert (r.margin, r.price_with_margin) == (margin, price)
 
 
-@pytest.mark.parametrize("n, announced, reserve", [(10, 95000, 57000), (10, 88000, -13000), (9, 95000, 21000)])
-def test_announced_price_and_reserve(ref, n, announced, reserve):
+@pytest.mark.parametrize("n, announced, reserve, each", [(10, 95000, 57000, 5700), (10, 88000, -13000, -1300),
+                                                    (9, 95000, 21000, 95000 - 92667)])
+def test_announced_price_and_reserve(ref, n, announced, reserve, each):
     W.update_plan(ref.s, ref.plan, people=n, announced=announced)
     r = ref.result()
-    assert r.reserve == reserve and r.announced == announced
+    assert r.reserve == reserve and r.announced == announced and r.reserve_per_person == each
 
 
 def test_changing_one_field_keeps_the_others(ref):
@@ -390,8 +396,8 @@ def test_refusals(ref):
     _refused(W.save_plan, s, plan, name="X", people=3, start=dt.date(2027, 5, 10), end=dt.date(2027, 5, 1),
              match="avant")
     base = dict(label="Taxi", price=6000, counting=P.LOT, capacity=4, items=[it[TAXI].id])
-    _refused(W.save_offer, s, plan, **{**base, "capacity": 0}, match="au moins une place")
-    _refused(W.save_offer, s, plan, **{**base, "capacity": None}, match="au moins une place")
+    _refused(W.save_offer, s, plan, **{**base, "capacity": 0}, match="Au moins 1")
+    _refused(W.save_offer, s, plan, **{**base, "capacity": None}, match="Au moins 1")
     _refused(W.save_offer, s, plan, **{**base, "quantity": 0}, match="quantité")
     _refused(W.save_offer, s, plan, **{**base, "price": -1}, match="négatif")
     _refused(W.save_offer, s, plan, **{**base, "items": []}, match="au moins un poste")

@@ -291,7 +291,7 @@ de version Linux publiée) sont fabriquées par GitHub (voir « Publier une vers
 compta/
   engine.py       moteur de calcul pur (centimes, fractions exactes, arrondis, ajustements, désistements)
   preparation.py  calcul pur d'un voyage en préparation (postes, offres, offre retenue, budget, prix par
-                  personne, marge, réserve, « si tu retiens cette offre »), sans écran pour l'instant
+                  personne, marge, réserve, « si tu retiens cette offre ») ; ses pages : pages/preparation.py
   models.py       modèle SQLAlchemy / SQLite
   db.py           dossier de données, sauvegardes, « Défaire » / « Rétablir »
   services.py     pont base ↔ moteur, alertes
@@ -300,7 +300,7 @@ compta/
                   les formulaires et l'IA passent tous les deux par lui
   web.py          application FastAPI (pages Jinja2) : démarrage, dossier des voyages, garde-fous, erreurs,
                   ce que toutes les pages ont en commun (`render`, `back`, `refuse`…)
-  pages/          les pages, un module par domaine (voyages, participants, depenses, repartition, argent,
+  pages/          les pages, un module par domaine (voyages, preparation, participants, depenses, repartition, argent,
                   justificatifs, entre_nous, envoyer, ia, reglages, protection…) : chacun lit ses formulaires,
                   puis appelle writes.py ; web.py les installe dans l'ordre (pages/__init__.py)
   ops.py          opérations pour l'IA (noms, euros, simulation, erreurs-questions) : lit, puis appelle writes.py
@@ -331,6 +331,8 @@ tests/
   test_dates_paiement.py  dates de paiement : à jour / en retard / soldé à la main, relances, dates d'une personne
   test_preparation.py  voyage en préparation : montants à la main, une offre retenue par poste, forfaits,
                      refus, suppression d'un poste, défaire / rétablir
+  test_preparation_ecran.py, test_preparation_navigateur.py  ses écrans : montants affichés, refus, ordre des
+                     postes, mots interdits, fenêtre étroite (captures : tests/captures_preparation.py <dossier>)
   test_pages.py      les pages rangées par domaine : rien d'oublié, aucune adresse cachée par une autre
   test_guides.py     INSTALLER.md et README.md disent vrai : boutons cités, fichiers, dossiers, liens
   test_jeton.py      jeton de session : rien n'est lisible ni modifiable sans lui

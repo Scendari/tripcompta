@@ -43,7 +43,52 @@
 </form>
 {%- endmacro %}
 
-{% if cards %}
+{% macro plan_form(panel=false) -%}
+{% set u = 'pp' if panel else 'pf' %}
+<form class="card home-form{{ ' panel' if panel }}" method="post" action="/preparer">
+  <h2 class="home-h">Préparer un voyage</h2>
+  <p class="small muted" style="margin-top:0">Avant de lancer le voyage : note les postes de dépense, compare les offres, et trouve le prix par personne.</p>
+  <div class="field"><label for="plan_name_{{ u }}">Nom du projet</label>
+    <input type="text" id="plan_name_{{ u }}" name="name" placeholder="ex. Mer Rouge, printemps 2027" required maxlength="200"></div>
+  <div class="field"><label for="plan_people_{{ u }}">Nombre de participants</label>
+    <input type="number" id="plan_people_{{ u }}" name="people" min="1" step="1" inputmode="numeric" required placeholder="ex. 10" class="num-input">
+    <div class="hint">Une estimation suffit : tu pourras le changer à tout moment.</div></div>
+  <div class="field"><label for="plan_place_{{ u }}">Lieu <span class="hint">(facultatif)</span></label><input type="text" id="plan_place_{{ u }}" name="place" maxlength="200"></div>
+  <div class="home-pair">
+    <div class="field"><label for="plan_start_{{ u }}">Du <span class="hint">(facultatif)</span></label><input type="date" id="plan_start_{{ u }}" name="start" data-no-today></div>
+    <div class="field"><label for="plan_end_{{ u }}">Au <span class="hint">(facultatif)</span></label><input type="date" id="plan_end_{{ u }}" name="end" data-no-today></div>
+  </div>
+  <div class="row home-btns">{% if panel %}<button type="button" class="btn ghost" data-toggle-row="#preparer">Fermer</button>{% endif %}<button class="btn">Créer le projet</button></div>
+</form>
+{%- endmacro %}
+{% macro plan_card(x) %}
+  {% set p = x.plan %}
+  <a class="card trip-card plan-card" href="/preparer/{{ p.id }}">
+    <h3>{{ p.name }}</h3>
+    <div class="muted small">
+      {% if p.start %}{{ p.start|date }}{% if p.end %} → {{ p.end|date }}{% endif %} · {% endif %}{{ p.people }} personne{{ 's' if p.people > 1 }}{% if p.place %} · {{ p.place }}{% endif %}
+    </div>
+    <div class="trip-pills">
+      {% if not p.items %}<span class="pill grey">À compléter</span>
+      {% else %}
+        {% if x.r.chosen %}<span class="pill ok">{{ x.r.per_person|money }} par personne</span>{% endif %}
+        {% if x.missing %}<span class="pill doit">{{ x.missing|length }} poste{{ 's' if x.missing|length > 1 }} pas encore choisi{{ 's' if x.missing|length > 1 }}</span>{% endif %}
+      {% endif %}
+    </div>
+  </a>
+{% endmacro %}
+{% macro plans_section() %}
+<section class="plans-section" id="en-preparation" aria-labelledby="en-preparation-h">
+  <h2 id="en-preparation-h" class="section-title">En préparation</h2>
+  {% if plans %}
+  <div class="trip-grid">{% for x in plans %}{{ plan_card(x) }}{% endfor %}</div>
+  {% else %}
+  <p class="muted">Pas encore de voyage en préparation. « + Préparer un voyage » t'aide à comparer des prix et à trouver un prix par personne, avant de lancer le voyage.</p>
+  {% endif %}
+</section>
+{% endmacro %}
+
+{% if cards or plans %}
 <div class="page-head home-head">
   <div class="grow">
     <h1>Mes voyages</h1>
@@ -52,10 +97,12 @@
   </div>
   <div class="row home-actions">
     <button type="button" class="btn" data-toggle-row="#nouveau" aria-expanded="false" aria-controls="nouveau">+ Nouveau voyage</button>
+    <button type="button" class="btn ghost" data-toggle-row="#preparer" aria-expanded="false" aria-controls="preparer">+ Préparer un voyage</button>
     <button type="button" class="btn ghost" data-toggle-row="#importer-panel" aria-expanded="false" aria-controls="importer-panel">⤓ Importer un voyage</button>
   </div>
 </div>
 <div id="nouveau" class="home-panel" {{ '' if open_new else 'hidden' }}>{{ new_trip_form(false, true) }}</div>
+<div id="preparer" class="home-panel" {{ '' if open_plan else 'hidden' }}>{{ plan_form(true) }}</div>
 <div id="importer-panel" class="home-panel" {{ '' if open_import else 'hidden' }}>{{ import_form(false, true) }}</div>
 <script>
 // Accueil : un seul panneau ouvert à la fois (nouveau voyage / importer)
@@ -104,6 +151,8 @@ homeButtons();
 </div>
 {% elif closed_cards %}
 <p class="muted">Aucun voyage en cours. « + Nouveau voyage » en crée un ; tes voyages clôturés sont juste dessous.</p>
+{% elif not cards %}
+<p class="muted">Pas encore de voyage en cours. Quand un projet est prêt, « + Nouveau voyage » crée le voyage pour en tenir les comptes.</p>
 {% endif %}
 {% if closed_cards %}
 <details class="closed-trips" id="clotures"{{ ' open' if not open_cards }}>
@@ -113,6 +162,7 @@ homeButtons();
   </div>
 </details>
 {% endif %}
+{{ plans_section() }}
 {% else %}
 <div class="home-first">
   <div class="page-head"><div class="grow">
@@ -126,6 +176,10 @@ homeButtons();
     <div class="row home-btns"><button class="btn ghost">Ouvrir l'exemple Hendaye 2026</button></div>
   </form>
   {{ new_trip_form(true) }}
+  <details class="card home-form plan-first" id="preparer-premier"{{ ' open' if open_plan }}>
+    <summary>Pas encore prêt à lancer le voyage ? <b>Prépare-le d'abord</b> : compare des prix et trouve un prix par personne.</summary>
+    {{ plan_form(false) }}
+  </details>
   {{ import_form(true) }}
   <div class="card home-form" id="dossier-existant">
     <h2 class="home-h">Tes voyages sont déjà dans un dossier ?</h2>

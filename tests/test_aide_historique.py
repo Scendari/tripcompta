@@ -143,7 +143,7 @@ def test_help_page_covers_the_basics_in_plain_words(tmp_path):
     r = cl.get("/aide")
     assert r.status_code == 200
     page, seen = r.text, visible(r.text)
-    for anchor in ("premiers-pas", "mots", "astuces", "donnees", "probleme"):
+    for anchor in ("premiers-pas", "preparer", "mots", "astuces", "donnees", "probleme"):
         assert f'id="{anchor}"' in page and f'href="#{anchor}"' in page
     for word in ("La caisse", "La part", "Une avance", "Un versement", "Un remboursement", "Le reste à régler",
                  "Une remise, un supplément", "Un désistement", "Une famille", "Une étiquette", "Un justificatif",
@@ -163,7 +163,7 @@ def test_help_page_covers_the_basics_in_plain_words(tmp_path):
 def test_help_is_linked_and_survives_a_locked_folder(tmp_path):
     app, cl, tid, bruno = setup(tmp_path)
     assert 'href="/aide"' in cl.get("/").text
-    assert cl.get("/aide").text.count("<h2 ") == 5
+    assert cl.get("/aide").text.count("<h2 ") == 6
 
 
 def test_problem_screens_do_not_offer_missing_pages(tmp_path):

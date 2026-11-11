@@ -61,6 +61,7 @@ class WhatIf:
     budget: int
     delta: int                 # budget obtenu − budget actuel
     per_person: int
+    delta_per_person: int      # prix par personne obtenu − prix par personne actuel
     replaces: list             # offres retenues qu'elle écarterait
     empty: list                # postes sans offre retenue après ce choix
     lost: list                 # parmi eux, ceux qui avaient une offre retenue avant
@@ -70,6 +71,7 @@ class WhatIf:
 class Result:
     people: int
     totals: dict               # offre -> total pour N participants
+    offer_per_person: dict     # offre -> son total par personne (au centime supérieur)
     chosen: list               # offres retenues
     budget: int
     per_person: int
@@ -79,6 +81,7 @@ class Result:
     price_with_margin: int
     announced: Optional[int]
     reserve: Optional[int]     # None sans prix annoncé
+    reserve_per_person: Optional[int]   # prix annoncé − prix par personne
     what_if: dict              # offre non retenue -> WhatIf
 
 
@@ -109,7 +112,7 @@ def offer_total(o: Offer, people: int) -> int:
         return base
     if o.counting == LOT:
         if not o.capacity or o.capacity < 1:
-            raise ValueError("Un lot doit avoir au moins une place.")
+            raise ValueError("Un prix pour un nombre de personnes vaut pour au moins une personne.")
         return base * ceil_div(people, o.capacity)
     raise ValueError(f"Façon de compter inconnue : {o.counting}")
 
@@ -185,9 +188,13 @@ def compute(people: int, items, offers, margin_kind: str = PERCENT, margin_value
         after = [x for x in chosen if x not in gone] + [o.id]
         b = _budget(after, totals)
         left = _empty(items, offers, after)
-        what_if[o.id] = WhatIf(offer=o.id, budget=b, delta=b - budget, per_person=ceil_div(b, people),
+        pp = ceil_div(b, people)
+        what_if[o.id] = WhatIf(offer=o.id, budget=b, delta=b - budget, per_person=pp,
+                               delta_per_person=pp - ceil_div(budget, people),
                                replaces=gone, empty=left, lost=[i for i in left if i not in empty])
 
-    return Result(people=people, totals=totals, chosen=chosen, budget=budget, per_person=ceil_div(budget, people),
+    return Result(people=people, totals=totals, offer_per_person={k: ceil_div(v, people) for k, v in totals.items()},
+                  chosen=chosen, budget=budget, per_person=ceil_div(budget, people),
                   empty=empty, by_item=by_item, margin=margin, price_with_margin=with_margin, announced=announced,
-                  reserve=reserve, what_if=what_if)
+                  reserve=reserve, reserve_per_person=None if announced is None else announced - ceil_div(budget, people),
+                  what_if=what_if)

@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}{{ plan.name }} · En préparation · Trip Compta{% endblock %}
+{% block page %}
+<div class="plan-page">
+<div class="page-head">
+  <div class="grow">
+    <p class="plan-kicker">En préparation</p>
+    <h1>{{ plan.name }}</h1>
+    <p class="muted">{% if plan.start %}{{ plan.start|date }}{% if plan.end %} → {{ plan.end|date }}{% endif %}{% endif %}{% if plan.start and plan.place %} · {% endif %}{{ plan.place }}</p>
+    {% if plan.note %}<p class="plan-note">{{ plan.note }}</p>{% endif %}
+  </div>
+  <div class="row plan-head-actions">
+    <a class="btn ghost small" href="/">← Tous les voyages</a>
+    <button type="button" class="btn ghost small" data-toggle-row="#modifier" aria-expanded="false" aria-controls="modifier">Modifier</button>
+    <form method="post" action="/preparer/{{ plan.id }}/supprimer" class="inline"
+          data-confirm="Supprimer le projet « {{ plan.name }} » ? {% if plan.items or plan.offers %}Ses {{ plan.items|length }} poste{{ 's' if plan.items|length > 1 }} et ses {{ plan.offers|length }} offre{{ 's' if plan.offers|length > 1 }} partent avec lui. {% endif %}Tu pourras encore annuler juste après.">
+      <button class="btn ghost small danger-text">Supprimer le projet</button></form>
+  </div>
+</div>
+
+<form id="modifier" class="card plan-edit" method="post" action="/preparer/{{ plan.id }}/modifier" hidden>
+  <h2 class="home-h">Modifier le projet</h2>
+  <div class="field"><label for="e_name">Nom du projet</label><input type="text" id="e_name" name="name" value="{{ plan.name }}" required maxlength="200"></div>
+  <div class="field"><label for="e_place">Lieu <span class="hint">(facultatif)</span></label><input type="text" id="e_place" name="place" value="{{ plan.place }}" maxlength="200"></div>
+  <div class="home-pair">
+    <div class="field"><label for="e_start">Du</label><input type="date" id="e_start" name="start" value="{{ plan.start or '' }}" data-no-today></div>
+    <div class="field"><label for="e_end">Au</label><input type="date" id="e_end" name="end" value="{{ plan.end or '' }}" data-no-today></div>
+  </div>
+  <div class="field"><label for="e_note">Note <span class="hint">(facultatif : club, idées, contacts…)</span></label><textarea id="e_note" name="note" rows="3">{{ plan.note }}</textarea></div>
+  <div class="row"><button type="button" class="btn ghost" data-toggle-row="#modifier">Fermer</button><button class="btn">Enregistrer</button></div>
+</form>
+
+{# ------------------------------------------------------------ le résultat #}
+<section class="card plan-result" id="resultat" aria-label="Ce que ça donne">
+  <form class="plan-people" method="post" action="/preparer/{{ plan.id }}/participants">
+    <label for="people">Participants</label>
+    <input type="number" id="people" name="people" value="{{ plan.people }}" min="1" step="1" inputmode="numeric" required class="num-input">
+    <button class="btn small ghost">Recalculer</button>
+  </form>
+  <div class="plan-figures">
+    <div class="plan-figure">
+      <div class="label">Budget total</div>
+      {% if r.chosen %}<div class="value" id="budget">{{ r.budget|money }}</div>
+      {% else %}<p class="plan-sentence muted" id="budget">Aucune offre retenue pour l'instant.</p>{% endif %}
+      {% if missing and r.chosen %}<div class="plan-missing" id="budget-incomplet">Budget incomplet : il manque {{ missing|join(', ') }}</div>{% endif %}
+    </div>
+    <div class="plan-figure main-figure">
+      <div class="label">Prix par personne</div>
+      {% if not r.chosen %}<p class="plan-sentence muted" id="par-personne">Le prix par personne apparaîtra dès que tu auras retenu une offre.</p>
+      {% elif missing %}<p class="plan-sentence" id="par-personne">Pour l'instant, ça revient à <b>{{ r.per_person|money }}</b> par personne (sans {{ missing_ni }}).</p>
+      {% else %}<p class="plan-sentence" id="par-personne">Ça revient à <b>{{ r.per_person|money }}</b> par personne.</p>{% endif %}
+    </div>
+  </div>
+
+  <div class="plan-tools">
+    <form class="plan-tool" method="post" action="/preparer/{{ plan.id }}/marge" id="marge">
+      <fieldset>
+        <legend>Marge</legend>
+        <div class="choice small-choice">
+          <label><input type="radio" name="margin_kind" value="pourcent" {{ 'checked' if plan.margin_kind != 'euros' }}> en %</label>
+          <label><input type="radio" name="margin_kind" value="euros" {{ 'checked' if plan.margin_kind == 'euros' }}> en € par personne</label>
+        </div>
+        <div class="row">
+          <label class="sr-only" for="margin_value">Valeur de la marge</label>
+          <input type="text" id="margin_value" name="margin_value" value="{{ margin_input }}" inputmode="decimal" class="num-input" placeholder="ex. 5">
+          <button class="btn small ghost">Appliquer</button>
+        </div>
+      </fieldset>
+      {% if not r.chosen %}{# rien de retenu : pas de montant #}
+      {% elif not r.margin %}<p class="plan-out muted" id="avec-marge">Pas de marge pour l'instant.</p>
+      {% else %}<p class="plan-out" id="avec-marge">{{ "Pour l'instant, avec" if missing else "Avec" }} la marge : <b>{{ r.price_with_margin|money }}</b> par personne, soit {{ r.margin|money }} de marge.</p>{% endif %}
+    </form>
+
+    <form class="plan-tool" method="post" action="/preparer/{{ plan.id }}/prix-annonce" id="prix-annonce">
+      <fieldset>
+        <legend>Prix annoncé <span class="hint">(facultatif)</span></legend>
+        <p class="hint" style="margin:.1rem 0 .4rem">Le prix par personne que tu comptes annoncer aux participants.</p>
+        <div class="row">
+          <label class="sr-only" for="announced">Prix annoncé par personne, en euros</label>
+          <input type="text" id="announced" name="announced" value="{{ plan.announced|amount_input }}" inputmode="decimal" class="num-input" placeholder="ex. 950">
+          <button class="btn small ghost">Appliquer</button>
+        </div>
+      </fieldset>
+      {% if not r.chosen %}{# rien de retenu : pas de montant #}
+      {% elif r.announced is none %}
+      <p class="plan-out muted" id="reserve">Pas de prix annoncé. Repère{{ " pour l'instant" if missing }} : {{ 'avec ta marge, ' if r.margin }}{{ r.price_with_margin|money }} par personne.</p>
+      {% elif r.reserve >= 0 %}
+      <p class="plan-out{{ '' if missing else ' ok-text' }}" id="reserve">{{ "Pour l'instant, à" if missing else "À" }} ce prix, il te reste <b>{{ r.reserve|money }}</b> de côté ({{ r.reserve_per_person|money }} par personne).</p>
+      {% else %}
+      <p class="plan-alert" id="reserve" role="alert">⚠️ À ce prix, il manque {{ 'déjà ' if missing }}<b>{{ (-r.reserve)|money }}</b> ({{ (-r.reserve_per_person)|money }} par personne).</p>
+      {% endif %}
+    </form>
+  </div>
+</section>
+
+{# ------------------------------------------------------------ les postes #}
+<div class="section-head plan-items-head"><h2>Les postes</h2></div>
+{% if not plan.items %}
+<div class="card plan-empty" id="premiers-pas">
+  <h3>Pour commencer, trois étapes</h3>
+  <ol class="plan-steps">
+    <li><b>Ajoute tes postes</b> : ce qu'il faut payer pour ce voyage (transport, hébergement, activités…).</li>
+    <li><b>Ajoute les offres</b> que tu as reçues pour chaque poste, avec leur prix.</li>
+    <li><b>Retiens une offre par poste</b> : Trip Compta calcule le budget et le prix par personne.</li>
+  </ol>
+</div>
+{% endif %}
+
+{% for row in rows %}
+{% set it = row.item %}
+<section class="card plan-item" id="poste-{{ it.id }}" aria-labelledby="poste-{{ it.id }}-h">
+  <div class="plan-item-head">
+    <h3 id="poste-{{ it.id }}-h">{{ it.name }}</h3>
+    <div class="plan-item-chosen">
+      {% if not row.got.offer %}<span class="pill doit">pas encore choisi</span>
+      {% elif row.with_names %}<span class="pill ok">compris dans {{ row.chosen }}{% if row.got.amount is not none %} · {{ row.got.amount|money }}{% endif %}</span>
+      {% else %}<span class="pill ok">{{ row.chosen }} · {{ row.got.amount|money }}</span>{% endif %}
+    </div>
+    <div class="row plan-item-tools">
+      <form method="post" action="/preparer/{{ plan.id }}/postes/{{ it.id }}/monter" class="inline"><button class="iconbtn" title="Monter « {{ it.name }} »" aria-label="Monter « {{ it.name }} »" {{ 'disabled' if loop.first }}>↑</button></form>
+      <form method="post" action="/preparer/{{ plan.id }}/postes/{{ it.id }}/descendre" class="inline"><button class="iconbtn" title="Descendre « {{ it.name }} »" aria-label="Descendre « {{ it.name }} »" {{ 'disabled' if loop.last }}>↓</button></form>
+      <details class="plan-rename">
+        <summary class="btn ghost small">Renommer</summary>
+        <form method="post" action="/preparer/{{ plan.id }}/postes/{{ it.id }}/renommer" class="row">
+          <label class="sr-only" for="rename-{{ it.id }}">Nouveau nom du poste</label>
+          <input type="text" id="rename-{{ it.id }}" name="name" value="{{ it.name }}" required maxlength="200">
+          <button class="btn small">OK</button>
+        </form>
+      </details>
+      <form method="post" action="/preparer/{{ plan.id }}/postes/{{ it.id }}/supprimer" class="inline" data-confirm="{{ row.confirm }}"><button class="btn ghost small danger-text">Supprimer</button></form>
+    </div>
+  </div>
+
+  {% if not row.offers %}<p class="muted small" style="margin:.2rem 0 .6rem">Pas encore d'offre pour ce poste.</p>{% endif %}
+  <ul class="plan-offers">
+  {% for x in row.offers %}
+    {% set o = x.o %}
+    <li class="plan-offer{{ ' chosen' if o.chosen }}" id="offre-{{ o.id }}{% if x.first_item != it.id %}-{{ it.id }}{% endif %}">
+      <div class="plan-offer-main">
+        <div class="plan-offer-name"><b>{{ o.label }}</b>{% if o.chosen %} <span class="pill ok">✓ Retenue</span>{% endif %}
+          {% if x.others %}<span class="muted small"> · couvre aussi {{ x.others|join(', ') }}</span>{% endif %}</div>
+        {% if o.note %}<div class="muted small">{{ o.note }}</div>{% endif %}
+        <div class="plan-offer-price">{{ x.text }}</div>
+        <div class="plan-offer-total">{{ x.total|money }} pour le groupe · <b>{{ x.each|money }}</b> par personne</div>
+        {% if not o.chosen and x.w %}
+        {% if x.lost %}
+        <div class="plan-whatif">Si tu la retiens : {% if x.replaces %}remplace {{ x.replaces|join(' et ') }}, et {% endif %}<span class="warn-text">{{ x.lost_text }} (le budget serait incomplet).</span></div>
+        {% else %}
+        <div class="plan-whatif">Si tu la retiens :
+          <b class="{{ 'up-text' if x.w.delta > 0 else 'down-text' if x.w.delta < 0 }}">{{ x.w.delta|money_sign }} au total, {{ x.w.delta_per_person|money_sign }} par personne</b>{% if x.replaces %} · remplace {{ x.replaces|join(' et ') }}{% endif %}
+        </div>
+        {% endif %}
+        {% endif %}
+      </div>
+      <div class="row plan-offer-actions">
+        {% if o.chosen %}
+        <form method="post" action="/preparer/{{ plan.id }}/offres/{{ o.id }}/ne-plus-retenir" class="inline"><button class="btn ghost small">Ne plus retenir</button></form>
+        {% else %}
+        <form method="post" action="/preparer/{{ plan.id }}/offres/{{ o.id }}/retenir" class="inline"><button class="btn small">Retenir</button></form>
+        {% endif %}
+        <a class="btn ghost small" href="/preparer/{{ plan.id }}/offres/{{ o.id }}/modifier">Modifier</a>
+        <form method="post" action="/preparer/{{ plan.id }}/offres/{{ o.id }}/supprimer" class="inline" data-confirm="Supprimer l'offre « {{ o.label }} » ?"><button class="btn ghost small danger-text">Supprimer</button></form>
+      </div>
+    </li>
+  {% endfor %}
+  </ul>
+  <a class="btn ghost small" href="/preparer/{{ plan.id }}/offres/nouvelle?poste={{ it.id }}">+ Ajouter une offre</a>
+</section>
+{% endfor %}
+
+<section class="card plan-add" id="ajout-poste" aria-labelledby="ajout-poste-h">
+  <h3 id="ajout-poste-h">+ Ajouter un poste</h3>
+  <form method="post" action="/preparer/{{ plan.id }}/postes" class="row">
+    <label class="sr-only" for="new_item">Nom du poste</label>
+    <input type="text" id="new_item" name="name" placeholder="ex. Avion, Hôtel, Plongées…" required maxlength="200" {{ 'autofocus' if not plan.items }}>
+    <button class="btn">Ajouter</button>
+  </form>
+  {% if suggestions %}
+  <div class="plan-suggest"><span class="muted small">Idées :</span>
+    {% for name in suggestions %}<form method="post" action="/preparer/{{ plan.id }}/postes" class="inline"><input type="hidden" name="name" value="{{ name }}"><button class="chip">{{ name }}</button></form>{% endfor %}
+  </div>
+  {% endif %}
+</section>
+</div>
+{% endblock %}

@@ -36,6 +36,12 @@ def install(site):
             with db.Session() as s:
                 if not s.get(M.Trip, int(m.group(1))):
                     path = "/"
+        m = re.match(r"/preparer/(\d+)", path)
+        if m:               # voyage en préparation : sa page (formulaire d'offre compris), ou l'accueil s'il n'existe plus
+            path = f"/preparer/{m.group(1)}"
+            with db.Session() as s:
+                if not s.get(M.Plan, int(m.group(1))):
+                    path = "/"
         return path
 
     @app.post("/annuler")

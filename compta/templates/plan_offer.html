@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Modifier une offre' if offer else 'Nouvelle offre' }} · {{ plan.name }} · Trip Compta{% endblock %}
+{% block page %}
+<div class="plan-page">
+<div class="page-head">
+  <div class="grow">
+    <p class="plan-kicker">En préparation · {{ plan.name }}</p>
+    <h1>{{ 'Modifier l\'offre « ' ~ offer.label ~ ' »' if offer else 'Nouvelle offre' }}</h1>
+    <p class="muted">Calculé pour {{ plan.people }} personne{{ 's' if plan.people > 1 }}.</p>
+  </div>
+  <a class="btn ghost small" href="/preparer/{{ plan.id }}{% if offer %}#offre-{{ offer.id }}{% elif item_id %}#poste-{{ item_id }}{% endif %}">← Retour au projet</a>
+</div>
+
+<form class="card plan-offer-form" method="post" action="/preparer/{{ plan.id }}/offres{% if offer %}/{{ offer.id }}{% endif %}"
+      data-preview="/preparer/{{ plan.id }}/offres/apercu" data-preview-target="#apercu">
+  <div class="field"><label for="label">Prestataire</label>
+    <input type="text" id="label" name="label" value="{{ offer.label if offer else '' }}" placeholder="ex. Transavia, Hôtel des Dunes, Location de vélos…" required maxlength="200" {{ 'autofocus' if not offer }}></div>
+
+  <div class="home-pair">
+    <div class="field"><label for="price">Prix (€)</label>
+      <input type="text" id="price" name="price" value="{{ offer.price|amount_input if offer else '' }}" inputmode="decimal" placeholder="ex. 210" required class="num-input">
+      <div class="hint">0 si c'est inclus.</div></div>
+  </div>
+
+  <fieldset class="field">
+    <legend>Comment ce prix se compte</legend>
+    <div class="plan-count">
+      <label><input type="radio" name="counting" value="personne" {{ 'checked' if counting == 'personne' }}> par personne</label>
+      <label><input type="radio" name="counting" value="groupe" {{ 'checked' if counting == 'groupe' }}> pour tout le groupe</label>
+      <label><input type="radio" name="counting" value="nombre" {{ 'checked' if counting == 'nombre' }}> pour un nombre de personnes</label>
+    </div>
+    <div class="field plan-capacity" data-show-when="counting=nombre">
+      <label for="capacity">Ce prix vaut pour combien de personnes ?</label>
+      <input type="number" id="capacity" name="capacity" value="{{ offer.capacity if offer and offer.capacity else 4 }}" min="1" step="1" inputmode="numeric" class="num-input">
+      <div class="hint">Par exemple un taxi de 4 places, une chambre de 2. Trip Compta compte combien il en faut pour tout le groupe.</div>
+    </div>
+  </fieldset>
+
+  <div class="home-pair">
+    <div class="field"><label for="quantity">Combien de fois ?</label>
+      <input type="number" id="quantity" name="quantity" value="{{ offer.quantity if offer else 1 }}" min="1" step="1" inputmode="numeric" class="num-input"></div>
+    <div class="field"><label for="quantity_label">de quoi ? <span class="hint">(facultatif)</span></label>
+      <input type="text" id="quantity_label" name="quantity_label" value="{{ offer.quantity_label if offer else '' }}" placeholder="nuits, jours, plongées…" maxlength="50"></div>
+  </div>
+
+  <fieldset class="field" id="postes-couverts">
+    <legend>Postes couverts par cette offre</legend>
+    <p class="hint" style="margin:.1rem 0 .4rem">Coche plusieurs postes pour une offre qui regroupe tout (« activités + hébergement »).</p>
+    <div class="plan-checks">
+      {% for it in plan.items %}
+      <label><input type="checkbox" name="items" value="{{ it.id }}" data-name="{{ it.name }}" {{ 'checked' if it.id in checked }}> {{ it.name }}</label>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <fieldset class="field plan-split" id="repartir" {{ '' if checked|length > 1 else 'hidden' }}>
+    <legend>Répartir entre les postes <span class="hint">(facultatif)</span></legend>
+    <p class="hint" style="margin:.1rem 0 .4rem">Pour savoir combien chaque poste coûte dans cette offre. Sans répartition, elle compte comme un seul bloc.</p>
+    {% set split = offer.split if offer else '' %}
+    <div class="choice small-choice">
+      <label><input type="radio" name="split" value="" {{ 'checked' if not split }}> pas de répartition</label>
+      <label><input type="radio" name="split" value="montant" {{ 'checked' if split == 'montant' }}> en euros</label>
+      <label><input type="radio" name="split" value="pourcent" {{ 'checked' if split == 'pourcent' }}> en %</label>
+    </div>
+    <div class="plan-shares" data-show-when-split>
+      {% for it in plan.items %}
+      <div class="field plan-share" data-item="{{ it.id }}" {{ '' if it.id in checked else 'hidden' }}>
+        <label for="share_{{ it.id }}">{{ it.name }} <span class="share-unit"></span></label>
+        <input type="text" id="share_{{ it.id }}" name="share_{{ it.id }}" value="{{ share_input.get(it.id, '') }}" inputmode="decimal" class="num-input">
+      </div>
+      {% endfor %}
+      <p class="plan-left" id="reste-a-repartir" aria-live="polite"></p>
+    </div>
+  </fieldset>
+
+  <div class="field"><label for="note">Note <span class="hint">(facultatif : ce qui est compris, conditions, contact…)</span></label>
+    <textarea id="note" name="note" rows="2">{{ offer.note if offer else '' }}</textarea></div>
+
+  <div class="preview plan-preview" id="apercu" aria-live="polite"></div>
+  {% if offer %}<p class="small muted">{% if offer.chosen %}Cette offre est retenue.{% else %}Cette offre n'est pas retenue : tu pourras la retenir depuis la page du projet.{% endif %}</p>{% endif %}
+  <div class="row"><a class="btn ghost" href="/preparer/{{ plan.id }}">Annuler</a><button class="btn">{{ 'Enregistrer' if offer else 'Ajouter l\'offre' }}</button></div>
+</form>
+</div>
+<script>
+// Répartition : visible dès que deux postes sont cochés ; un champ par poste coché ; ce qu'il reste à répartir
+(function () {
+  var form = document.querySelector('.plan-offer-form'); if (!form) return;
+  var box = document.getElementById('repartir'), shares = form.querySelector('[data-show-when-split]');
+  var left = document.getElementById('reste-a-repartir');
+  function num(v) { v = String(v || '').replace(/[\s  €%]/g, '').replace(',', '.'); var n = parseFloat(v); return isNaN(n) ? 0 : n; }
+  function fmt(n) { return n.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+  function update() {
+    var ticked = [].slice.call(form.querySelectorAll('input[name=items]:checked')).map(function (c) { return c.value; });
+    box.hidden = ticked.length < 2;
+    var mode = (form.querySelector('input[name=split]:checked') || {}).value || '';
+    shares.hidden = !mode || box.hidden;
+    form.querySelectorAll('.plan-share').forEach(function (d) {
+      var on = ticked.indexOf(d.dataset.item) >= 0;
+      d.hidden = !on; d.querySelector('input').disabled = !on || shares.hidden;
+      d.querySelector('.share-unit').textContent = mode === 'pourcent' ? '(%)' : '(€)';
+    });
+    if (shares.hidden) { left.textContent = ''; return; }
+    var total = mode === 'pourcent' ? 100 : num(form.querySelector('#price').value), sum = 0;
+    form.querySelectorAll('.plan-share:not([hidden]) input').forEach(function (i) { sum += num(i.value); });
+    var rest = Math.round((total - sum) * 100) / 100, unit = mode === 'pourcent' ? ' %' : ' €';
+    left.className = 'plan-left ' + (rest === 0 ? 'ok-text' : 'warn-text');
+    left.textContent = rest === 0 ? '✓ Tout est réparti.'
+      : rest > 0 ? 'Il reste ' + fmt(rest) + unit + ' à répartir.' : 'C\'est ' + fmt(-rest) + unit + ' de trop.';
+  }
+  form.addEventListener('input', update); form.addEventListener('change', update); update();
+})();
+</script>
+{% endblock %}

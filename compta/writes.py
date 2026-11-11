@@ -411,14 +411,12 @@ def _people(people) -> int:
     return people
 
 
-def save_plan(s, plan: M.Plan | None = None, *, name, people=1, place="", start=None, end=None, note="",
-              margin_kind=P.PERCENT, margin_value=0, announced=None) -> M.Plan:
-    """Crée (plan=None) ou réécrit un voyage en préparation. margin_value : centièmes de % (500 = 5 %) pour
-    « pourcent », centimes par personne pour « euros » ; announced : prix annoncé par personne (centimes) ou None."""
-    name = _clean(name, 200)
-    if not name:
+def check_plan(*, name, people=1, place="", start=None, end=None, note="", margin_kind=P.PERCENT, margin_value=0,
+               announced=None) -> None:
+    """Refuse (WriteError) un projet impossible. Ne modifie rien : à appeler avant la copie « Défaire »."""
+    if not _clean(name, 200):
         raise WriteError("Donne un nom au projet", "name")
-    people = _people(people)
+    _people(people)
     if margin_kind not in P.MARGIN_KINDS:
         raise WriteError("Marge : en pourcentage ou en euros par personne.", "margin_kind")
     if margin_value is None or margin_value < 0:
@@ -427,6 +425,16 @@ def save_plan(s, plan: M.Plan | None = None, *, name, people=1, place="", start=
         raise WriteError("Le prix annoncé ne peut pas être négatif.", "announced")
     if start and end and end < start:
         raise WriteError("La date de retour est avant la date de départ.", "end")
+
+
+def save_plan(s, plan: M.Plan | None = None, *, name, people=1, place="", start=None, end=None, note="",
+              margin_kind=P.PERCENT, margin_value=0, announced=None) -> M.Plan:
+    """Crée (plan=None) ou réécrit un voyage en préparation, avec toutes ses valeurs (update_plan : seulement
+    certaines). margin_value : centièmes de % (500 = 5 %) pour « pourcent », centimes par personne pour « euros » ;
+    announced : prix annoncé par personne (centimes) ou None."""
+    check_plan(name=name, people=people, place=place, start=start, end=end, note=note, margin_kind=margin_kind,
+               margin_value=margin_value, announced=announced)
+    name = _clean(name, 200)
     if plan is None:
         plan = M.Plan(name=name)
         s.add(plan)
@@ -443,12 +451,17 @@ PLAN_FIELDS = ("name", "people", "place", "start", "end", "note", "margin_kind",
 def update_plan(s, plan: M.Plan, **fields) -> M.Plan:
     """Change seulement les champs donnés (« et si on était 9 ? ») ; les autres gardent leur valeur. Mêmes refus que
     save_plan, qui fait l'écriture."""
+    return save_plan(s, plan, **plan_values(plan, **fields))
+
+
+def plan_values(plan: M.Plan, **fields) -> dict:
+    """Les valeurs du projet, avec ces champs changés (pour check_plan avant d'écrire)."""
     unknown = set(fields) - set(PLAN_FIELDS)
     if unknown:
-        raise TypeError(f"update_plan : champ inconnu {sorted(unknown)}")
+        raise TypeError(f"champ inconnu {sorted(unknown)}")
     values = {k: getattr(plan, k) for k in PLAN_FIELDS}
     values.update(fields)
-    return save_plan(s, plan, **values)
+    return values
 
 
 def delete_plan(s, plan: M.Plan) -> str:
@@ -551,11 +564,11 @@ def check_offer(plan: M.Plan, *, label, price, counting=P.GROUP, quantity=1, cap
     if price is None or price < 0:
         raise WriteError("Le prix ne peut pas être négatif (0 si c'est inclus).", "price")
     if counting not in P.COUNTINGS:
-        raise WriteError("Compte le prix par personne, pour le groupe ou par lot.", "counting")
+        raise WriteError("Compte le prix par personne, pour tout le groupe ou pour un nombre de personnes.", "counting")
     if not isinstance(quantity, int) or quantity < 1:
         raise WriteError("La quantité doit être d'au moins 1.", "quantity")
     if counting == P.LOT and (not isinstance(capacity, int) or capacity < 1):
-        raise WriteError("Un lot doit avoir au moins une place (un taxi de 4 places, une chambre de 2…).",
+        raise WriteError("Ce prix vaut pour combien de personnes ? Au moins 1 (un taxi de 4 places, une chambre de 2…).",
                          "capacity")
     ids, seen = [], set()
     for x in items or ():

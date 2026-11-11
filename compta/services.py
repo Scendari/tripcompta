@@ -492,6 +492,66 @@ def compute_plan(plan: M.Plan, people: int | None = None) -> P.Result:
                      plan.margin_kind, plan.margin_value, plan.announced)
 
 
+PLAN_SUGGESTIONS = ("Transport aller", "Hébergement", "Repas", "Activités", "Transport sur place",
+                    "Transport retour", "Assurance")       # postes proposés d'un clic
+
+
+def plan_percent(v: int, sign: bool = True) -> str:
+    """Centièmes de % -> « 5 % », « 5,5 % », « 33,33 % » (sign=False : sans « % », pour un champ de saisie)."""
+    whole, rest = divmod(int(v or 0), 100)
+    out = str(whole) + (f",{rest:02d}".rstrip("0") if rest else "")
+    return out + " %" if sign else out
+
+
+def plan_amount_input(c) -> str:
+    """Centimes -> texte d'un champ de saisie : « 210 », « 12,50 » ; None -> vide."""
+    if c is None:
+        return ""
+    euros, cents = divmod(int(c), 100)
+    return str(euros) + (f",{cents:02d}" if cents else "")
+
+
+def plan_ni_list(names) -> str:
+    """« Taxi », « Taxi ni Hôtel », « Taxi, Hôtel ni Repas » (après « sans »)."""
+    names = list(names)
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " ni " + names[-1] if names else ""
+
+
+def plan_lost_text(names) -> str:
+    """« Plongées n'aurait plus d'offre », « Plongées et Hôtel n'auraient plus d'offre »."""
+    names = list(names)
+    if len(names) == 1:
+        return f"{names[0]} n'aurait plus d'offre"
+    return ", ".join(names[:-1]) + " et " + names[-1] + " n'auraient plus d'offre"
+
+
+def _people_word(n: int) -> str:
+    return f"{n} personne{'s' if n > 1 else ''}"
+
+
+def plan_offer_text(o: M.PlanOffer, people: int) -> str:
+    """Le prix d'une offre tel qu'il a été saisi, en clair : « 210,00 € par personne », « 600,00 € pour tout le
+    groupe », « 60,00 € pour 4 personnes (3 fois pour 10 personnes) », « 90,00 € pour 2 personnes × 5 nuits (5 fois
+    pour 10 personnes) »."""
+    times = ""
+    if o.quantity > 1:
+        times = f" × {o.quantity}" + (f" {o.quantity_label}" if o.quantity_label else "")
+    if o.counting == P.PER_PERSON:
+        return f"{E.fmt(o.price)} par personne{times}"
+    if o.counting == P.GROUP:
+        return f"{E.fmt(o.price)} pour tout le groupe{times}"
+    cap = o.capacity or 1
+    return (f"{E.fmt(o.price)} pour {_people_word(cap)}{times} "
+            f"({P.ceil_div(people, cap)} fois pour {_people_word(people)})")
+
+
+def plan_summary(plan: M.Plan) -> dict:
+    """Pour la carte d'un projet sur l'accueil : le calcul et les noms des postes pas encore choisis."""
+    r = compute_plan(plan)
+    names = {i.id: i.name for i in plan.items}
+    return dict(plan=plan, r=r, missing=[names[i] for i in r.empty])
+
+
 def everyone_expense(trip: M.Trip, expense: M.Expense) -> bool:
     ids = {p.id for p in trip.participants}
     shares = {s.participant_id: s.weight for s in expense.shares}

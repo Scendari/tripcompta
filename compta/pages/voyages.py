@@ -39,7 +39,8 @@ def install(site):
             cards.append((t, r))
         q = request.query_params
         stored = S.asso_name(s)
-        return render(request, "index.html", cards=cards, data_dir=db.home,
+        plans = [S.plan_summary(p) for p in s.query(M.Plan).order_by(M.Plan.created.desc(), M.Plan.id.desc()).all()]
+        return render(request, "index.html", cards=cards, plans=plans, data_dir=db.home, open_plan=q.get("preparer") == "1",
                       asso_default="" if stored == "l'asso" else stored,
                       diving_default=bool(trips) and any(S.is_diving(t_) for t_ in trips[:1] if not t_.is_demo),
                       open_new=q.get("nouveau") == "1", open_import=q.get("importer") == "1")
