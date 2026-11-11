@@ -7,6 +7,7 @@ import json
 import sqlite3
 import tarfile
 import zipfile
+import sys
 from pathlib import Path
 
 import pytest
@@ -113,11 +114,16 @@ def test_release_info_and_sums():
 
 def test_install_location():
     assert U.install_location(frozen=False) is None                       # code source : rien à remplacer
+    from pathlib import PurePosixPath
+
+    def where(path, system):                                    # le système où l'on tourne : chemin réel ; un autre : tel quel
+        return (Path(path).resolve(), Path) if sys.platform == system else (PurePosixPath(path), PurePosixPath)
+    app, P = where("/Applications/Trip Compta.app", "darwin")
     mac = U.install_location("/Applications/Trip Compta.app/Contents/MacOS/Trip Compta", "darwin", True)
-    assert mac == (Path("/Applications/Trip Compta.app").resolve(), str(Path("Contents/MacOS/Trip Compta")))
+    assert mac == (app, str(P("Contents/MacOS/Trip Compta")))
     assert U.install_location("/tmp/x/Trip Compta", "darwin", True) is None   # pas dans un .app
     lin = U.install_location("/opt/apps/Trip Compta/Trip Compta", "linux", True)
-    assert lin == (Path("/opt/apps/Trip Compta").resolve(), "Trip Compta")
+    assert lin == (where("/opt/apps/Trip Compta", "linux")[0], "Trip Compta")
 
 
 def test_clean_args():
