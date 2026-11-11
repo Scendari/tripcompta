@@ -30,7 +30,7 @@ import threading
 import time
 import urllib.request
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from . import paths as PATHS
 from . import signature as SIG
@@ -450,8 +450,12 @@ def install_location(executable: str | None = None, system: str | None = None, f
     frozen = getattr(sys, "frozen", False) if frozen is None else frozen
     if not frozen:
         return None
-    exe = Path(executable or sys.executable).resolve()
     system = system or sys.platform
+    raw = executable or sys.executable
+    if system == sys.platform:
+        exe = Path(raw).resolve()
+    else:                                         # essais : un chemin d'un autre système, lu tel quel
+        exe = PureWindowsPath(raw) if system == "win32" else PurePosixPath(raw)
     if system == "darwin":
         app = exe.parents[2] if len(exe.parents) > 2 else None
         if app is None or app.suffix != ".app":

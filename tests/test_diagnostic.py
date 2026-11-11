@@ -72,7 +72,8 @@ def test_diagnostic_hides_the_person(tmp_path, monkeypatch):
     text = DIAG.anonymize(f"dossier : {folder}\nFile \"{home}/app/web.py\", line 3\nsession marguerite.duras ouverte",
                           home=home, users=["marguerite.duras"])
     assert "marguerite" not in text
-    assert "dossier : ~/Mon Drive/TripCompta" in text and 'File "~/app/web.py"' in text
+    sep = os.sep                                                 # Windows : le chemin garde ses « \\ », c'est naturel
+    assert f"dossier : ~{sep}Mon Drive{sep}TripCompta" in text and 'File "~/app/web.py"' in text
     assert "session (session) ouverte" in text
     # les valeurs jointes aux erreurs de la base peuvent contenir un nom ou un montant : retirées
     err = ("sqlalchemy.exc.IntegrityError: (sqlite3.IntegrityError) NOT NULL constraint failed: expenses.label\n"
