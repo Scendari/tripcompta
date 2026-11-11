@@ -403,7 +403,7 @@ def test_meal_field_label_and_ok_on_every_day(screen):
     assert page.count('<h2 id="repas-h" class="section-title">Enveloppe repas</h2>') == 1
     for d in range(1, 8):
         block = re.search(rf'id="jour-{d}"(.*?)</form>', page, re.S).group(1)
-        assert ">OK</button>" in block and "hidden" not in block.split('name="amount"')[1].split("</button>")[0]
+        assert '<button class="btn small ghost">OK</button>' in block       # visible, jamais caché
         assert "disabled" not in block
 
 

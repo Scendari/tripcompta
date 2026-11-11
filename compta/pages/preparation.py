@@ -187,11 +187,13 @@ def install(site):
                                 replaces=[labels[x] for x in w.replaces] if w else [],
                                 lost=[names[i] for i in w.lost] if w else [],
                                 lost_text=S.plan_lost_text([names[i] for i in w.lost]) if w and w.lost else "")
+        parts = {o.id: P.split_total(S.plan_offer(o), r.totals[o.id]) for o in plan.offers}   # forfaits répartis
         rows = []
         for it in plan.items:
             got = r.by_item[it.id]
-            mine = [dict(offers[o.id], first_item=offers[o.id]["items"][0],
-                         others=[names[i] for i in offers[o.id]["items"] if i != it.id])
+            mine = [dict(offers[o.id], first_item=offers[o.id]["items"][0], first_name=names[offers[o.id]["items"][0]],
+                         others=[names[i] for i in offers[o.id]["items"] if i != it.id],
+                         part=parts[o.id].get(it.id) if parts[o.id] else None)
                     for o in plan.offers if it.id in offers[o.id]["items"]]
             alone = [x["o"].label for x in mine if len(x["items"]) == 1]
             kept = [x["o"].label for x in mine if len(x["items"]) > 1]

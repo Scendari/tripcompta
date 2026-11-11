@@ -698,7 +698,10 @@ def plan_program(plan: M.Plan) -> list:
         if ln.item_id not in names:
             return ""
         got = r.by_item.get(ln.item_id) or {}
-        return f"{names[ln.item_id]} : {labels.get(got.get('offer')) or 'pas encore choisi'}"
+        label = labels.get(got.get("offer"))
+        if label and E.sort_key(label) == E.sort_key(names[ln.item_id]):
+            return names[ln.item_id]                   # l'offre porte le nom du poste : « Taxi », pas « Taxi : Taxi »
+        return f"{names[ln.item_id]} : {label or 'pas encore choisi'}"
 
     out = []
     for d in range(1, n + 1):

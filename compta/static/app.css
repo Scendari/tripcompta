@@ -329,7 +329,7 @@ textarea.modele { width: 100%; min-height: 26rem; font-size: .95rem; line-height
 .roles-grid .center { display: flex; justify-content: center; }
 .tabs { display: flex; flex-wrap: wrap; gap: .3rem; border-bottom: 1px solid var(--border); margin-bottom: .2rem; }
 .tabs a { padding: .5rem .9rem; border-radius: 8px 8px 0 0; color: var(--text); text-decoration: none; font-weight: 600; border: 1px solid transparent; margin-bottom: -1px; }
-.tabs a.on { background: var(--card); border-color: var(--border); border-bottom-color: var(--card); color: var(--accent); }
+.tabs a.on { background: var(--card); border-color: var(--border); border-bottom-color: var(--card); color: var(--teal-strong); }   /* la couleur des liens : lisible en clair comme en sombre */
 .tabs a:not(.on):hover { background: var(--bg-2); }
 ul.changes { padding-left: 1.2rem; line-height: 1.7; }
 /* « Arrêter » : à part, à droite, pour ne pas le confondre avec « Défaire » */
@@ -1470,7 +1470,6 @@ tr.to-check > td:last-child { border-right: 2px solid var(--coral); }
 .plan-dl-form .btn { margin-bottom: .25rem; }
 .plan-ideas { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .35rem; }
 .plan-ideas .chip { cursor: pointer; background: var(--card); color: var(--text); border-style: solid; font-size: .8rem; }
-.linklike.danger-text { font-size: .85rem; }
 .soon-card { margin-bottom: 1rem; }
 .plan-soon { margin-top: 1rem; }
 /* « À faire bientôt » : trois colonnes alignées (case « Fait », quand, quoi) ; en fenêtre étroite, « quoi » passe dessous */
@@ -1517,3 +1516,42 @@ tr.to-check > td:last-child { border-right: 2px solid var(--coral); }
 .plan-line-more { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 0 .8rem; margin-top: .5rem; }
 .plan-line-more .plan-line-note { grid-column: 1 / -1; }
 .plan-line-more select { width: 100%; }
+
+/* Préparer un voyage, finitions : un seul style pour les actions secondaires (Modifier, Supprimer, Renommer, ↑ ↓,
+   plus de détails…) : même taille, même ligne de base, zone cliquable d'au moins 28 px ; « Supprimer » en rouge */
+.act { display: inline-flex; align-items: center; justify-content: center; min-height: 28px; padding: 0 .4rem; margin: 0;
+       background: none; border: 1px solid transparent; border-radius: 7px; font: inherit; font-size: .88rem; font-weight: 500;
+       line-height: 1.2; color: var(--teal-strong); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.act:hover { background: var(--bg-2); }
+.act:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
+.act.danger { color: var(--err); }
+.act.arrow { min-width: 28px; padding: 0; text-decoration: none; font-size: 1rem; border-color: var(--border); }
+.act:disabled { opacity: .35; cursor: default; background: none; }
+summary.act { list-style: none; }
+details > summary.act { display: flex; width: max-content; }     /* pas de ligne de texte autour : même hauteur qu'un bouton */
+.act-pair { display: inline-flex; align-items: center; gap: .25rem; white-space: nowrap; }
+summary.act::-webkit-details-marker { display: none; }
+.plan-item-tools, .plan-offer-actions, .plan-line-actions { align-items: center; gap: .25rem; }
+.plan-item-tools > form, .act-pair > form, .plan-line-actions > form, .plan-dl-row > form.inline { display: inline-flex; }
+.plan-people label { margin: 0; line-height: 1.2; }
+/* forfait : en entier sous son premier poste, une ligne courte sous les autres */
+.plan-offer-short { display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem .6rem; padding: .5rem .85rem; font-size: .92rem; }
+/* programme : actions d'une ligne toujours à droite (grand écran), toujours dessous (fenêtre étroite) */
+.plan-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+.plan-line-cont { display: block; }
+.plan-line-edit[open] { grid-column: 1 / -1; }
+.plan-line-actions { justify-content: flex-end; flex-wrap: wrap; }
+.plan-line-actions .plan-line-edit[open] { flex-basis: 100%; }
+/* repas d'un jour : le « € » sur la ligne du chiffre ; jour sans repas : champ atténué et phrase */
+.plan-day-meal .euro { font-size: 1rem; line-height: 1; color: var(--muted); }
+.plan-meal-input.off { opacity: .55; }
+.plan-day-nomeal { margin: .2rem 0 0; }
+/* ajout rapide : champ plus bas, « plus de détails » nettement détaché */
+.plan-quick input[name=text] { padding-top: .4rem; padding-bottom: .4rem; }
+.plan-line-details { margin-top: .45rem; }
+@media (max-width: 720px) {
+  .plan-line { grid-template-columns: minmax(0, 1fr); }
+  .plan-line-actions { justify-content: flex-start; margin-left: -.4rem; }
+}
+.plan-line:has(.plan-line-edit[open]) { grid-template-columns: minmax(0, 1fr); }   /* formulaire ouvert : toute la largeur */
+.plan-line-actions:has(.plan-line-edit[open]) { justify-content: flex-start; }

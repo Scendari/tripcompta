@@ -189,6 +189,18 @@ def main(out: Path):
         page.click("button:has-text('Voir ce qui changera')")
         page.wait_for_selector("#resultat")
         shot("30-page-ia-programme")
+
+        # ---- thème sombre et fenêtre étroite, regardés à chaque fois (tranche 5)
+        page.goto(base + f"{sc.url}/programme")
+        page.locator(".plan-line-edit summary").first.click()
+        page.locator(".plan-line-edit[open]").first.screenshot(path=str(out / "31-ligne-programme-modifier-ouvert.png"))
+        print(out / "31-ligne-programme-modifier-ouvert.png")
+        dark = browser.new_context(viewport={"width": 1280, "height": 900}, color_scheme="dark", locale="fr-FR",
+                                   device_scale_factor=2).new_page()
+        for name, url in (("32-sombre-accueil", "/"), ("33-sombre-projet", sc.url), ("34-sombre-programme", f"{sc.url}/programme"),
+                          ("35-sombre-ia-projet", f"{sc.url}/ia"), ("36-sombre-ia-voyage", f"/v/{tid}/ia")):
+            shot(name, url, full=False, pg=dark)
+        shot("37-projet-fenetre-etroite-finitions", sc.url, pg=narrow)
         srv.should_exit = True
         browser.close()
 

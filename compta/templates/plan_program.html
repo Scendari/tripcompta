@@ -66,12 +66,13 @@
     <form method="post" action="/preparer/{{ plan.id }}/jours/{{ d }}/repas" class="row plan-day-meal">
       <label><input type="checkbox" name="on" value="1" {{ 'checked' if x.meal_on }} data-autosubmit> Repas</label>
       <label class="sr-only" for="meal-{{ d }}">Montant des repas du jour {{ d }}, par personne</label>
-      <input type="text" id="meal-{{ d }}" name="amount" value="{{ x.meal_amount|amount_input }}" placeholder="{{ plan.meal_per_day|amount_input }}" inputmode="decimal" class="num-input plan-meal-input{{ ' changed' if x.changed }}">
-      <span class="small muted">€</span>
+      <input type="text" id="meal-{{ d }}" name="amount" value="{{ x.meal_amount|amount_input }}" placeholder="{{ plan.meal_per_day|amount_input }}" inputmode="decimal" class="num-input plan-meal-input{{ ' changed' if x.changed }}{{ ' off' if not x.meal_on }}">
+      <span class="euro" aria-hidden="true">€</span>
       <button class="btn small ghost">OK</button>
     </form>
     {% endif %}
   </div>
+  {% if plan.meal_per_day is not none and not x.meal_on %}<p class="plan-day-nomeal muted small">Aucun repas compté ce jour-là.</p>{% endif %}
   {% if x.lines or x.after %}
   <ul class="plan-lines">
     {% for y in x.lines %}{% set ln = y.line %}
@@ -85,14 +86,14 @@
       </div>
       <div class="row plan-line-actions">
         <details class="plan-line-edit">
-          <summary class="linklike small">Modifier</summary>
+          <summary class="act">Modifier</summary>
           <form method="post" action="/preparer/{{ plan.id }}/programme/{{ ln.id }}">
             <div class="field"><label for="text-l{{ ln.id }}">Ce qu'on fait</label><input type="text" id="text-l{{ ln.id }}" name="text" value="{{ ln.text }}" required></div>
             {{ line_form(plan, ln, d, 'l' ~ ln.id) }}
             <button class="btn small">Enregistrer</button>
           </form>
         </details>
-        <form method="post" action="/preparer/{{ plan.id }}/programme/{{ ln.id }}/supprimer" class="inline" data-confirm="Supprimer « {{ ln.text }} » du programme ?"><button class="linklike small danger-text">Supprimer</button></form>
+        <form method="post" action="/preparer/{{ plan.id }}/programme/{{ ln.id }}/supprimer" class="inline" data-confirm="Supprimer « {{ ln.text }} » du programme ?"><button class="act danger">Supprimer</button></form>
       </div>
     </li>
     {% endfor %}
@@ -105,11 +106,11 @@
     <input type="hidden" name="day" value="{{ d }}" data-quick-day>
     <div class="row">
       <label class="sr-only" for="text-d{{ d }}">Ajouter au jour {{ d }}</label>
-      <input type="text" id="text-d{{ d }}" name="text" placeholder="Ajouter : ce qu'on fait ce jour-là (Entrée)" required>
+      <input type="text" id="text-d{{ d }}" name="text" placeholder="Ajouter une ligne (Entrée)" required>
       <button class="btn small ghost">Ajouter</button>
     </div>
     <details class="plan-line-details">
-      <summary class="linklike small">plus de détails</summary>
+      <summary class="act">plus de détails</summary>
       {{ line_form(plan, None, d, 'd' ~ d) }}
     </details>
   </form>

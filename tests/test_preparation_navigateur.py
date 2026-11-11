@@ -315,3 +315,74 @@ def test_day_meal_by_keyboard_and_edit_from_programme(site, browser):
     page.locator("#jour-4 button:has-text('OK')").click()             # rendu à l'enveloppe pour les autres essais
     pw.expect(page.locator(".flash")).to_contain_text("Jour 4 : repas comptés")
     assert not page.errors, page.errors
+
+
+def test_finishing_touches(site, browser):
+    """Tranche 5 : le forfait en entier une seule fois, « Taxi » seul, un jour sans repas le dit, mêmes montants ; et
+    les alignements mesurés : les quatre actions d'un poste à la même hauteur, Modifier et Supprimer de même taille et
+    sur la même ligne, partout."""
+    from test_ux import _contrast
+    site.post(f"{site.url}/programme", dict(day="3", text="Transfert", item=str(site.item("Taxi"))))
+    page = new_page(browser)
+    page.goto(site.base + site.url)
+    fa = site.offer("Forfait Club A")
+    assert page.locator(f"#offre-{fa}").count() == 1 and page.locator(f"#offre-{fa} .plan-deadlines").count() == 1
+    short = page.locator(f"#offre-{fa}-{site.item('Plongées')}")
+    assert short.count() == 1 and short.locator(".plan-deadlines, button").count() == 0
+    text = short.inner_text().replace(" ", " ").replace("\xa0", " ")
+    assert "Forfait Club A" in text and "✓ Retenue" in text and "580,00 € par personne" in text and "voir sous Hôtel" in text
+    short.locator("a:has-text('voir sous Hôtel')").click()
+    assert page.url.endswith(f"#offre-{fa}")
+    # mesures
+    def box(loc):
+        return loc.evaluate("e => { const r = e.getBoundingClientRect(); return [Math.round(r.height), Math.round(r.top)] }")
+    tools = page.locator(f"#poste-{site.item('Avion')} .plan-item-tools")
+    heights = {box(tools.locator(sel).first)[0] for sel in ("button[aria-label^='Monter']", "button[aria-label^='Descendre']",
+                                                           "summary:has-text('Renommer')", "button:has-text('Supprimer')")}
+    assert len(heights) == 1 and heights.pop() >= 28
+    def same_size_and_line(scope):
+        m, s = scope.locator(".act:has-text('Modifier')").first, scope.locator(".act.danger:has-text('Supprimer')").first
+        fm, fs = (x.evaluate("e => getComputedStyle(e).fontSize") for x in (m, s))
+        assert fm == fs and abs(box(m)[1] - box(s)[1]) <= 1 and box(m)[0] >= 28 and box(s)[0] >= 28
+    same_size_and_line(page.locator(f"#offre-{site.offer('Air France')} .plan-offer-actions"))
+    same_size_and_line(page.locator(".plan-dl-row").first)
+    page.goto(site.base + f"{site.url}/programme")
+    same_size_and_line(page.locator("#jour-2 .plan-line").first)
+    assert "Taxi" in page.locator("#jour-3").inner_text() and "Taxi : Taxi" not in page.locator("#jour-3").inner_text()
+    # un jour décoché le dit
+    site.post(f"{site.url}/jours/7/repas", {})
+    page.goto(site.base + f"{site.url}/programme")
+    assert "Aucun repas compté ce jour-là." in page.locator("#jour-7").inner_text()
+    assert "Aucun repas compté" not in page.locator("#jour-6").inner_text()
+    site.post(f"{site.url}/jours/7/repas", dict(on="1"))
+    # l'onglet actif reste lisible en thème sombre (ici et sur la page IA d'un voyage)
+    dark = browser.new_context(viewport={"width": 1280, "height": 900}, color_scheme="dark").new_page()
+    for url in (f"{site.url}/programme", site.url):
+        dark.goto(site.base + url)
+        tab = dark.locator(".tabs a.on")
+        fg, bg = tab.evaluate("e => [getComputedStyle(e).color, getComputedStyle(e).backgroundColor]")
+        rgb = lambda c: tuple(int(x) for x in re.findall(r"\d+", c)[:3])                     # noqa: E731
+        assert _contrast(rgb(fg), rgb(bg)) >= 4.5, (url, fg, bg)
+    assert not page.errors, page.errors
+
+
+def test_reference_amounts_unchanged(site, browser):
+    """Les finitions ne changent aucun montant : retenues d'origine, 7 jours, enveloppe 35,00 €, jours 1 et 7 sans repas,
+    jour 4 à 50,00 € : 10 830,00 € et 1 083,00 € par personne (brief de la tranche 4)."""
+    site.choose("Hôtel X")
+    site.choose("Club B")
+    site.post(f"{site.url}/jours/1/repas", {})
+    site.post(f"{site.url}/jours/7/repas", {})
+    site.post(f"{site.url}/jours/4/repas", dict(on="1", amount="50"))
+    try:
+        page = new_page(browser)
+        page.goto(site.base + site.url)
+        sp = lambda s: s.replace("\u202f", " ").replace("\xa0", " ")                              # noqa: E731
+        assert sp(page.locator("#budget").inner_text()) == "10 830,00 €"
+        assert "1 083,00 €" in sp(page.locator("#par-personne").inner_text())
+        assert "dont repas : 1 900,00 €" in sp(page.locator("#dont-repas").inner_text())
+    finally:                                                    # remis comme avant pour les autres essais
+        site.choose("Forfait Club A")
+        for d in (1, 7):
+            site.post(f"{site.url}/jours/{d}/repas", dict(on="1"))
+        site.post(f"{site.url}/jours/4/repas", dict(on="1", amount=""))
