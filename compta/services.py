@@ -489,7 +489,14 @@ def compute_plan(plan: M.Plan, people: int | None = None) -> P.Result:
     """Budget, prix par personne, marge et « si tu retiens » d'un voyage en préparation (people : un autre nombre
     de participants que celui du projet, pour comparer)."""
     return P.compute(people or plan.people, [i.id for i in plan.items], [plan_offer(o) for o in plan.offers],
-                     plan.margin_kind, plan.margin_value, plan.announced)
+                     plan.margin_kind, plan.margin_value, plan.announced, plan_meals(plan))
+
+
+def plan_meals(plan: M.Plan) -> P.Meals:
+    """L'enveloppe repas d'un projet, pour le calcul."""
+    return P.Meals(per_day=plan.meal_per_day, days=plan.duration,
+                   off={d.day for d in plan.day_meals if not d.meal_on},
+                   amounts={d.day: d.meal_amount for d in plan.day_meals if d.meal_amount is not None})
 
 
 PLAN_SUGGESTIONS = ("Transport aller", "Hébergement", "Repas", "Activités", "Transport sur place",
@@ -638,8 +645,72 @@ def plan_launch_lines(plan: M.Plan) -> list:
         else:
             out.append(dict(label=o.label, category=names[ids[0]], planned=total, offer=o,
                             note="\n".join([said, *extra])))
+    meal = plan_meal_line(plan, r)
+    if meal:
+        out.append(meal)
     for x in out:
         x["included"] = x["planned"] == 0
+    return out
+
+
+def plan_meals_said(plan: M.Plan, r: P.Result | None = None) -> str:
+    """« 35,00 € par personne et par jour, 5 jours sur 7 (jour 4 : 50,00 €), pour 10 personnes »."""
+    r = r or compute_plan(plan)
+    m = plan_meals(plan)
+    changed = [f"jour {d} : {E.fmt(a)}" for d, a in sorted(m.amounts.items()) if d not in m.off and d <= (m.days or 0)]
+    return (f"{E.fmt(m.per_day)} par personne et par jour, {r.meals_days} jour{'s' if r.meals_days > 1 else ''} "
+            f"sur {m.days}" + (f" ({' ; '.join(changed)})" if changed else "") + f", pour {_people_word(plan.people)}")
+
+
+def plan_meal_line(plan: M.Plan, r: P.Result) -> dict | None:
+    """La dépense prévue « Repas (enveloppe) » du lancement ; None si l'enveloppe ne fait rien."""
+    if not r.meals_total:
+        return None
+    return dict(label="Repas (enveloppe)", category="Repas", planned=r.meals_total, offer=None,
+                note=plan_meals_said(plan, r))
+
+
+def plan_day_date(plan: M.Plan, day: int):
+    """La vraie date du jour `day` (Jour 1 = départ), ou None sans date de départ."""
+    return plan.start + dt.timedelta(days=day - 1) if plan.start else None
+
+
+def time_text(hhmm: str) -> str:
+    """« 09:30 » -> « 9 h 30 » ; « 14:00 » -> « 14 h »."""
+    if not hhmm:
+        return ""
+    h, m = hhmm.split(":")
+    return f"{int(h)} h" + (f" {m}" if m != "00" else "")
+
+
+def plan_program(plan: M.Plan) -> list:
+    """Le programme jour par jour, de Jour 1 au dernier jour (même vide) : [{day, date, lines, after, meal_on,
+    meal_amount, changed}]. `lines` : les lignes qui commencent ce jour-là (sans heure d'abord, dans l'ordre de saisie,
+    puis par heure), chacune avec `item_text` (« Avion : Transavia ») ; `after` : les périodes commencées avant et qui
+    durent encore ce jour-là (rappel)."""
+    n = plan.duration or 0
+    r = compute_plan(plan)
+    names = {i.id: i.name for i in plan.items}
+    labels = {o.id: o.label for o in plan.offers}
+    meals = {d.day: d for d in plan.day_meals}
+
+    def item_text(ln):
+        if ln.item_id not in names:
+            return ""
+        got = r.by_item.get(ln.item_id) or {}
+        return f"{names[ln.item_id]} : {labels.get(got.get('offer')) or 'pas encore choisi'}"
+
+    out = []
+    for d in range(1, n + 1):
+        mine = [ln for ln in plan.lines if ln.day == d]
+        mine.sort(key=lambda ln: (bool(ln.time), ln.time or "", ln.id))
+        row = meals.get(d)
+        out.append(dict(day=d, date=plan_day_date(plan, d),
+                        lines=[dict(line=ln, item_text=item_text(ln), time_text=time_text(ln.time)) for ln in mine],
+                        after=[ln for ln in plan.lines if ln.day < d <= (ln.until or 0)],
+                        meal_on=row.meal_on if row else True,
+                        meal_amount=row.meal_amount if row else None,
+                        changed=bool(row and row.meal_amount is not None)))
     return out
 
 

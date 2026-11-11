@@ -555,7 +555,7 @@ def test_projects_are_in_the_daily_backup_and_come_back_with_it(db):
 def test_structure_number_and_tables(db):
     con = sqlite3.connect(db.path)
     try:
-        assert con.execute("PRAGMA user_version").fetchone()[0] == SCHEMA == 4
+        assert con.execute("PRAGMA user_version").fetchone()[0] == SCHEMA == 5
         names = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     finally:
         con.close()

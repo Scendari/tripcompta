@@ -123,10 +123,11 @@ def install(site):
         f = await request.form()
         fields = dict(name=f.get("name"), place=f.get("place") or "", start=S.parse_date(f.get("start")),
                       end=S.parse_date(f.get("end")), note=f.get("note") or "")
+        home = f"/preparer/{pid}/programme" if f.get("retour") == "programme" else page_url(plan)   # l'onglet d'où l'on vient
         _, err = write(s, f"modification du voyage en préparation « {plan.name} »",
-                       lambda: W.update_plan(s, plan, **fields), page_url(plan, "modifier"),
+                       lambda: W.update_plan(s, plan, **fields), home + "#modifier",
                        check=lambda: W.check_plan(**W.plan_values(plan, **fields)))
-        return err or back(page_url(plan), "Projet modifié")
+        return err or back(home, "Projet modifié")
 
     @app.post("/preparer/{pid}/supprimer")
     def plan_delete(pid: int, s: Session = Depends(get_s)):
@@ -551,6 +552,97 @@ def install(site):
         except W.WriteError as e:
             return ai_render(request, plan, texte=texte, errors=getattr(e, "errors", None) or [str(e)], focus=True)
         return back(page_url(plan), res["message"])
+
+    # ------------------------------------------------------------------ programme du séjour et enveloppe repas
+    def prog_url(plan, anchor: str = "") -> str:
+        return f"/preparer/{plan.id}/programme" + (f"#{anchor}" if anchor else "")
+
+    @app.get("/preparer/{pid}/programme", response_class=HTMLResponse)
+    def program_page(pid: int, request: Request, s: Session = Depends(get_s)):
+        plan = plan_or_404(s, pid)
+        r = S.compute_plan(plan)
+        return render(request, "plan_program.html", plan=plan, r=r, days=S.plan_program(plan),
+                      meal_said=S.plan_meals_said(plan, r) if r.meals_days and plan.meal_per_day is not None else "",
+                      meals_item=next((i.name for i in plan.items if E.sort_key(i.name) == E.sort_key("Repas")), None),
+                      trip_made=W.plan_trip(s, plan))
+
+    @app.post("/preparer/{pid}/duree")
+    async def program_days(pid: int, request: Request, s: Session = Depends(get_s)):
+        plan = plan_or_404(s, pid)
+        n = number(await request.form(), "days", "le nombre de jours du séjour")
+        _, err = write(s, f"« {plan.name} » : séjour de {n} jour{'s' if n > 1 else ''}",
+                       lambda: W.update_plan(s, plan, days=n), prog_url(plan, "sejour"),
+                       check=lambda: W.check_plan(**W.plan_values(plan, days=n)))
+        return err or back(prog_url(plan, "sejour"), f"Le séjour dure {n} jour{'s' if n > 1 else ''}")
+
+    @app.post("/preparer/{pid}/repas")
+    async def program_meals(pid: int, request: Request, s: Session = Depends(get_s)):
+        plan = plan_or_404(s, pid)
+        value = euros(await request.form(), "meal_per_day")
+        label = f"« {plan.name} » : enveloppe repas " + (f"de {E.fmt(value)} par jour" if value is not None else "retirée")
+        _, err = write(s, label, lambda: W.update_plan(s, plan, meal_per_day=value), prog_url(plan, "repas"),
+                       check=lambda: W.check_plan(**W.plan_values(plan, meal_per_day=value)))
+        return err or back(prog_url(plan, "repas"), f"Enveloppe repas : {E.fmt(value)} par personne et par jour"
+                           if value is not None else "Enveloppe repas retirée")
+
+    @app.post("/preparer/{pid}/jours/{day}/repas")
+    async def program_day_meal(pid: int, day: int, request: Request, s: Session = Depends(get_s)):
+        plan = plan_or_404(s, pid)
+        f = await request.form()
+        on, amount = bool(f.get("on")), euros(f, "amount")
+        said = ("repas comptés" + (f" à {E.fmt(amount)}" if amount is not None else "")) if on else "pas de repas compté"
+        _, err = write(s, f"« {plan.name} », jour {day} : {said}", lambda: W.set_day_meal(s, plan, day, on, amount),
+                       prog_url(plan, f"jour-{day}"), check=lambda: W.check_day_meal(plan, day, amount))
+        return err or back(prog_url(plan, f"jour-{day}"), f"Jour {day} : {said}")
+
+    def line_values(plan, f) -> dict:
+        day = number(f, "day", "le jour")
+        until = number(f, "until", "jusqu'à quel jour", empty=0) or None
+        item = number(f, "item", "le poste", empty=0) or None
+        return dict(day=day, until=until, time=f.get("time") or "", text=f.get("text") or "", note=f.get("note") or "",
+                    item_id=item)
+
+    def line_or_404(plan, lid: int) -> M.PlanLine:
+        ln = next((x for x in plan.lines if x.id == lid), None)
+        if ln is None:
+            raise HTTPException(404, "Cette ligne du programme n'existe pas (ou plus).")
+        return ln
+
+    @app.post("/preparer/{pid}/programme")
+    async def line_add(pid: int, request: Request, s: Session = Depends(get_s)):
+        plan = plan_or_404(s, pid)
+        f = await request.form()
+        back_to = prog_url(plan, f"jour-{f.get('day')}" if str(f.get("day") or "").isdigit() else "")
+        try:
+            v = line_values(plan, f)
+        except FormError as e:
+            return refuse(back_to, str(e), e.field)
+        text = " ".join(str(v["text"]).split())
+        ln, err = write(s, f"programme, jour {v['day']} : « {text} » ajouté", lambda: W.save_plan_line(s, plan, **v),
+                        back_to, check=lambda: W.check_line(plan, **{k: v[k] for k in ("day", "text", "until", "time", "item_id")}))
+        return err or back(prog_url(plan, f"jour-{ln.day}"), f"Jour {ln.day} : « {ln.text} » ajouté")
+
+    @app.post("/preparer/{pid}/programme/{lid}")
+    async def line_edit(pid: int, lid: int, request: Request, s: Session = Depends(get_s)):
+        plan = plan_or_404(s, pid)
+        ln = line_or_404(plan, lid)
+        f = await request.form()
+        back_to = prog_url(plan, f"jour-{ln.day}")
+        try:
+            v = line_values(plan, f)
+        except FormError as e:
+            return refuse(back_to, str(e), e.field)
+        _, err = write(s, f"programme : « {ln.text} » modifié", lambda: W.save_plan_line(s, plan, ln, **v), back_to,
+                       check=lambda: W.check_line(plan, **{k: v[k] for k in ("day", "text", "until", "time", "item_id")}))
+        return err or back(prog_url(plan, f"jour-{ln.day}"), f"« {ln.text} » modifié")
+
+    @app.post("/preparer/{pid}/programme/{lid}/supprimer")
+    def line_delete(pid: int, lid: int, s: Session = Depends(get_s)):
+        plan = plan_or_404(s, pid)
+        ln = line_or_404(plan, lid)
+        day = ln.day
+        text, _ = write(s, f"programme : « {ln.text} » supprimé", lambda: W.delete_plan_line(s, plan, ln), prog_url(plan))
+        return back(prog_url(plan, f"jour-{day}"), f"« {text} » supprimé du programme")
 
     # utilisé par d'autres pages (accueil : « À faire bientôt »)
     site.today = today

@@ -147,6 +147,48 @@ def main(out: Path):
         page.wait_for_selector("#resultat")
         shot("21-page-ia-du-projet")
         shot("22-projet-echeances-fenetre-etroite", sc.url, pg=narrow)
+
+        # ---- tranche 4 : programme du séjour et enveloppe repas
+        sc.create(name="Week-end au lac", people="6", place="")
+        shot("23-programme-vide", f"{sc.url}/programme", full=False)
+        sc.post(f"{sc.url}/duree", dict(days="3"))
+        for d, txt in ((1, "Arrivée et pique-nique"), (2, "Randonnée"), (3, "Retour")):
+            sc.post(f"{sc.url}/programme", dict(day=str(d), text=txt))
+        shot("28-programme-sans-dates", f"{sc.url}/programme")
+        sc.reference()
+        sc.post(f"{sc.url}/modifier", dict(name="Mer Rouge 2027", place="Hurghada", start="2027-05-01", end="2027-05-07"))
+        sc.post(f"{sc.url}/repas", dict(meal_per_day="35"))
+        sc.post(f"{sc.url}/jours/1/repas", {})
+        sc.post(f"{sc.url}/jours/7/repas", {})
+        sc.post(f"{sc.url}/jours/4/repas", dict(on="1", amount="50"))
+        lines = [dict(day="1", text="Vol aller Paris → Hurghada", time="7h30", item=str(sc.item("Avion"))),
+                 dict(day="1", text="Taxi jusqu'à l'hôtel", time="14h", item=str(sc.item("Taxi"))),
+                 dict(day="2", until="6", text="Deux plongées chaque matin", item=str(sc.item("Plongées")),
+                      note="Rendez-vous au club à 8 h"),
+                 dict(day="2", text="Installation et briefing"), dict(day="3", text="Après-midi libre"),
+                 dict(day="4", text="Dîner au restaurant du port", note="Repas plus cher ce soir-là"),
+                 dict(day="5", text="Excursion en minibus", item=str(sc.item("Minibus"))),
+                 dict(day="6", text="Journée sans plongée avant le vol"), dict(day="7", text="Vol retour", time="10h")]
+        for x in lines:
+            sc.post(f"{sc.url}/programme", x)
+        shot("24-programme-7-jours", f"{sc.url}/programme")
+        page.goto(base + f"{sc.url}/programme")
+        page.locator("#repas").screenshot(path=str(out / "25-enveloppe-repas.png"))
+        page.locator("#jour-4").screenshot(path=str(out / "25b-jour-4-repas-change.png"))
+        print(out / "25-enveloppe-repas.png")
+        page.goto(base + sc.url)
+        page.locator("#resultat").screenshot(path=str(out / "26-carte-dont-repas.png"))
+        print(out / "26-carte-dont-repas.png")
+        shot("27-confirmation-lancement-repas", f"{sc.url}/lancer")
+        shot("29-programme-fenetre-etroite", f"{sc.url}/programme", pg=narrow)
+        page.goto(base + f"{sc.url}/ia")
+        page.fill("#texte", json.dumps({"projet_id": sc.pid, "programme": [
+            {"jour": 3, "heure": "18h", "texte": "Apéritif au coucher du soleil"},
+            {"jour": 5, "texte": "Snorkeling l'après-midi", "note": "Masques fournis par le club"}],
+            "repas": {"montants": {"5": 40}}}, ensure_ascii=False))
+        page.click("button:has-text('Voir ce qui changera')")
+        page.wait_for_selector("#resultat")
+        shot("30-page-ia-programme")
         srv.should_exit = True
         browser.close()
 

@@ -38,7 +38,7 @@ def install(site):
                     path = "/"
         m = re.match(r"/preparer/(\d+)", path)
         if m:               # voyage en préparation : sa page (formulaire d'offre compris), ou l'accueil s'il n'existe plus
-            path = f"/preparer/{m.group(1)}"
+            path = f"/preparer/{m.group(1)}" + ("/programme" if path.startswith(f"/preparer/{m.group(1)}/programme") else "")
             with db.Session() as s:
                 if not s.get(M.Plan, int(m.group(1))):
                     path = "/"

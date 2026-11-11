@@ -7,4 +7,6 @@ Exemple : Voici le devis du club A, à ajouter comme offre pour l'hôtel et les 
 Exemple : Le taxi coûte 60 € pour 4 personnes, à ajouter au poste Taxi.
 Exemple : On sera finalement 12. Marge de 5 %.
 Exemple : L'option chez l'hôtel X est à confirmer avant le 15/01/2027, acompte de 500 € avant le 01/02/2027.
+Exemple : Le séjour dure 7 jours : jour 1 vol aller à 7h30, jours 2 à 6 plongées le matin, jour 7 retour.
+Exemple : Enveloppe repas de 35 € par jour, sauf le jour 1 et le jour 7 ; 50 € le jour 4 (restaurant).
 -

@@ -10,7 +10,8 @@ de pour cent : 500 = 5 %, 3333 = 33,33 %, 10000 = 100 %.
 Règles :
 - total d'une offre pour N participants : « par personne » prix × quantité × N ; « pour le groupe » prix × quantité ;
   « par lot » (taxi de 4 places, chambre de 2) prix × quantité × plafond(N / capacité) ;
-- budget = somme des totaux des offres retenues ; les postes sans offre retenue sont « pas encore choisis » ;
+- budget = somme des totaux des offres retenues, plus l'enveloppe repas (par personne et par jour, sur les jours où
+  elle compte, × participants) ; les postes sans offre retenue sont « pas encore choisis » ;
 - prix par personne = budget / N, arrondi au centime supérieur ;
 - marge totale = budget × pourcentage arrondi au centime le plus proche (un demi-centime : au-dessus), ou euros par
   personne × N ; prix avec marge = (budget + marge totale) / N, arrondi au centime supérieur ;
@@ -55,6 +56,25 @@ class Offer:
 
 
 @dataclass
+class Meals:
+    """Enveloppe repas : `per_day` centimes par personne et par jour (None : pas d'enveloppe), sur `days` jours (None :
+    durée inconnue) ; `off` : les jours où elle ne compte pas ; `amounts` : {jour: centimes} pour un jour changé."""
+    per_day: Optional[int] = None
+    days: Optional[int] = None
+    off: set = field(default_factory=set)
+    amounts: dict = field(default_factory=dict)
+
+
+def meals_per_person(m: Optional[Meals]) -> tuple:
+    """(repas par personne, jours comptés) : la somme, sur les jours comptés, du montant du jour (le sien s'il a été
+    changé, sinon celui de l'enveloppe). Sans enveloppe ou sans durée : (0, 0)."""
+    if m is None or m.per_day is None or not m.days:
+        return 0, 0
+    counted = [d for d in range(1, m.days + 1) if d not in m.off]
+    return sum(m.amounts.get(d, m.per_day) for d in counted), len(counted)
+
+
+@dataclass
 class WhatIf:
     """Ce que donnerait le choix d'une offre pas encore retenue."""
     offer: int
@@ -84,6 +104,9 @@ class Result:
     reserve_per_person: Optional[int]   # prix annoncé − prix par personne
     above_margin: Optional[int]         # prix annoncé − prix avec la marge (None sans prix annoncé ou sans marge)
     what_if: dict              # offre non retenue -> WhatIf
+    meals_per_person: int = 0  # enveloppe repas, par personne (comprise dans le budget)
+    meals_total: int = 0       # … pour tout le groupe
+    meals_days: int = 0        # jours où elle compte
 
 
 # ---------------------------------------------------------------- arrondis
@@ -151,15 +174,18 @@ def replaced_by(o: Offer, offers, chosen) -> list:
 
 
 def compute(people: int, items, offers, margin_kind: str = PERCENT, margin_value: int = 0,
-            announced: Optional[int] = None) -> Result:
+            announced: Optional[int] = None, meals: Optional[Meals] = None) -> Result:
     """`items` : les postes du projet, dans l'ordre (identifiants) ; `offers` : [Offer]. Les offres retenues sont
-    celles marquées `chosen` (une seule par poste : c'est le chemin d'écriture qui y veille)."""
+    celles marquées `chosen` (une seule par poste : c'est le chemin d'écriture qui y veille). `meals` : l'enveloppe
+    repas, qui entre dans le budget (budget = offres retenues + repas × participants)."""
     if people < 1:
         raise ValueError("Il faut au moins une personne.")
     items, offers = list(items), list(offers)
     totals = {o.id: offer_total(o, people) for o in offers}
     chosen = [o.id for o in offers if o.chosen]
-    budget = _budget(chosen, totals)
+    meal_each, meal_days = meals_per_person(meals)
+    meal_total = meal_each * people
+    budget = _budget(chosen, totals) + meal_total
     empty = _empty(items, offers, chosen)
 
     by_item = {i: {"offer": None, "amount": None, "with": []} for i in items}
@@ -187,7 +213,7 @@ def compute(people: int, items, offers, margin_kind: str = PERCENT, margin_value
             continue
         gone = replaced_by(o, offers, chosen)
         after = [x for x in chosen if x not in gone] + [o.id]
-        b = _budget(after, totals)
+        b = _budget(after, totals) + meal_total
         left = _empty(items, offers, after)
         pp = ceil_div(b, people)
         what_if[o.id] = WhatIf(offer=o.id, budget=b, delta=b - budget, per_person=pp,
@@ -199,7 +225,7 @@ def compute(people: int, items, offers, margin_kind: str = PERCENT, margin_value
                   empty=empty, by_item=by_item, margin=margin, price_with_margin=with_margin, announced=announced,
                   reserve=reserve, reserve_per_person=None if announced is None else announced - ceil_div(budget, people),
                   above_margin=None if announced is None or not margin else announced - with_margin,
-                  what_if=what_if)
+                  what_if=what_if, meals_per_person=meal_each, meals_total=meal_total, meals_days=meal_days)
 
 
 def live_offers(offers) -> set:

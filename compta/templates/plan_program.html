@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% from "_plan_tabs.html" import plan_head %}
+{% block title %}Programme · {{ plan.name }} · Trip Compta{% endblock %}
+{% macro line_form(plan, ln, d, u) %}
+  <div class="plan-line-more">
+    <div class="field"><label for="time-{{ u }}">Heure <span class="hint">(facultatif)</span></label>
+      <input type="text" id="time-{{ u }}" name="time" value="{{ ln.time if ln else '' }}" placeholder="ex. 9h30" class="num-input" maxlength="10"></div>
+    <div class="field"><label for="day-{{ u }}">Jour</label>
+      <select id="day-{{ u }}" name="day">{% for x in range(1, plan.duration + 1) %}<option value="{{ x }}" {{ 'selected' if x == (ln.day if ln else d) }}>Jour {{ x }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="until-{{ u }}">Jusqu'au jour <span class="hint">(une période)</span></label>
+      <select id="until-{{ u }}" name="until"><option value="">—</option>{% for x in range(1, plan.duration + 1) %}<option value="{{ x }}" {{ 'selected' if ln and ln.until == x }}>Jour {{ x }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="item-{{ u }}">Poste <span class="hint">(facultatif)</span></label>
+      <select id="item-{{ u }}" name="item"><option value="">aucun</option>{% for it in plan.items %}<option value="{{ it.id }}" {{ 'selected' if ln and ln.item_id == it.id }}>{{ it.name }}</option>{% endfor %}</select></div>
+    <div class="field plan-line-note"><label for="note-{{ u }}">Note <span class="hint">(facultatif)</span></label>
+      <input type="text" id="note-{{ u }}" name="note" value="{{ ln.note if ln else '' }}"></div>
+  </div>
+{% endmacro %}
+{% block page %}
+<div class="plan-page">
+{{ plan_head(plan, 'programme') }}
+
+<section class="card plan-stay" id="sejour" aria-labelledby="sejour-h">
+  <h2 id="sejour-h" class="section-title">Le séjour</h2>
+  {% if plan.start and plan.end %}
+  <p style="margin:0">Du <b>{{ days[0].date|longdate }}</b> au <b>{{ days[-1].date|longdate }}</b> : <b>{{ plan.duration }} jour{{ 's' if plan.duration > 1 }}</b> <span class="muted small">(calculé avec les dates ; pour le changer : « Modifier » le projet)</span></p>
+  {% else %}
+  <form method="post" action="/preparer/{{ plan.id }}/duree" class="row plan-days-form">
+    <label for="days">Le séjour dure</label>
+    <input type="number" id="days" name="days" value="{{ plan.days or '' }}" min="1" step="1" inputmode="numeric" class="num-input" required placeholder="ex. 7">
+    <span>jours</span>
+    <button class="btn small ghost">{{ 'Changer' if plan.days else 'Valider' }}</button>
+  </form>
+  <p class="hint" style="margin:.4rem 0 0">{% if plan.start %}Départ le {{ plan.start|longdate }}.{% else %}Ajoute une date de départ (« Modifier » le projet) pour voir la date de chaque jour.{% endif %}</p>
+  {% endif %}
+</section>
+
+<section class="card plan-meal-card" id="repas" aria-labelledby="repas-h">
+  <h2 id="repas-h" class="section-title">Enveloppe repas</h2>
+  <form method="post" action="/preparer/{{ plan.id }}/repas" class="row plan-days-form">
+    <label for="meal_per_day">Montant :</label>
+    <input type="text" id="meal_per_day" name="meal_per_day" value="{{ plan.meal_per_day|amount_input }}" inputmode="decimal" class="num-input" placeholder="ex. 35">
+    <span>€ par personne et par jour</span>
+    <button class="btn small ghost">Appliquer</button>
+  </form>
+  {% if plan.meal_per_day is none %}
+  <p class="hint" style="margin:.4rem 0 0">Un montant moyen par jour, pour les repas. Laisse vide si tu n'en veux pas. Tu pourras ensuite le retirer de certains jours, ou le changer sur un jour.</p>
+  {% elif not plan.duration %}
+  <p class="plan-missing" style="margin:.4rem 0 0">Indique d'abord la durée du séjour : l'enveloppe se compte par jour.</p>
+  {% else %}
+  <p class="plan-out" id="repas-resultat">{{ r.meals_days }} jour{{ 's' if r.meals_days > 1 }} compté{{ 's' if r.meals_days > 1 }} : <b>{{ r.meals_per_person|money }}</b> par personne, <b>{{ r.meals_total|money }}</b> pour {{ plan.people }} personne{{ 's' if plan.people > 1 }}. Compris dans le budget.</p>
+  {% endif %}
+  {% if meals_item and plan.meal_per_day is not none %}<p class="hint" style="margin:.3rem 0 0">Le poste « {{ meals_item }} » et ses offres comptent aussi, en plus de cette enveloppe.</p>{% endif %}
+</section>
+
+{% if trip_made %}<p class="small muted">Voyage lancé : modifier le programme ne change pas les comptes du voyage.</p>{% endif %}
+
+{% if not plan.duration %}
+<div class="card plan-empty"><p style="margin:0">Indique la durée du séjour pour voir les jours.</p></div>
+{% endif %}
+
+{% for x in days %}{% set d = x.day %}
+<section class="card plan-day" id="jour-{{ d }}" aria-labelledby="jour-{{ d }}-h">
+  <div class="plan-day-head">
+    <h3 id="jour-{{ d }}-h">Jour {{ d }}{% if x.date %} <span class="plan-day-date">· {{ x.date|longdate }}</span>{% endif %}</h3>
+    {% if plan.meal_per_day is not none %}
+    <form method="post" action="/preparer/{{ plan.id }}/jours/{{ d }}/repas" class="row plan-day-meal">
+      <label><input type="checkbox" name="on" value="1" {{ 'checked' if x.meal_on }} data-autosubmit> Repas</label>
+      <label class="sr-only" for="meal-{{ d }}">Montant des repas du jour {{ d }}, par personne</label>
+      <input type="text" id="meal-{{ d }}" name="amount" value="{{ x.meal_amount|amount_input }}" placeholder="{{ plan.meal_per_day|amount_input }}" inputmode="decimal" class="num-input plan-meal-input{{ ' changed' if x.changed }}">
+      <span class="small muted">€</span>
+      <button class="btn small ghost">OK</button>
+    </form>
+    {% endif %}
+  </div>
+  {% if x.lines or x.after %}
+  <ul class="plan-lines">
+    {% for y in x.lines %}{% set ln = y.line %}
+    <li class="plan-line">
+      <div class="plan-line-main">
+        {% if ln.time %}<span class="plan-line-time">{{ y.time_text }}</span>{% endif %}
+        <span class="plan-line-text">{{ ln.text }}</span>
+        {% if ln.until %}<span class="pill du">Jours {{ ln.day }} à {{ ln.until }}</span>{% endif %}
+        {% if y.item_text %}<span class="plan-line-item muted small">· {{ y.item_text }}</span>{% endif %}
+        {% if ln.note %}<div class="muted small">{{ ln.note }}</div>{% endif %}
+      </div>
+      <div class="row plan-line-actions">
+        <details class="plan-line-edit">
+          <summary class="linklike small">Modifier</summary>
+          <form method="post" action="/preparer/{{ plan.id }}/programme/{{ ln.id }}">
+            <div class="field"><label for="text-l{{ ln.id }}">Ce qu'on fait</label><input type="text" id="text-l{{ ln.id }}" name="text" value="{{ ln.text }}" required></div>
+            {{ line_form(plan, ln, d, 'l' ~ ln.id) }}
+            <button class="btn small">Enregistrer</button>
+          </form>
+        </details>
+        <form method="post" action="/preparer/{{ plan.id }}/programme/{{ ln.id }}/supprimer" class="inline" data-confirm="Supprimer « {{ ln.text }} » du programme ?"><button class="linklike small danger-text">Supprimer</button></form>
+      </div>
+    </li>
+    {% endfor %}
+    {% for ln in x.after %}
+    <li class="plan-line plan-line-cont muted small">↳ suite : {{ ln.text }} (jours {{ ln.day }} à {{ ln.until }})</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  <form method="post" action="/preparer/{{ plan.id }}/programme" class="plan-quick">
+    <input type="hidden" name="day" value="{{ d }}" data-quick-day>
+    <div class="row">
+      <label class="sr-only" for="text-d{{ d }}">Ajouter au jour {{ d }}</label>
+      <input type="text" id="text-d{{ d }}" name="text" placeholder="Ajouter : ce qu'on fait ce jour-là (Entrée)" required>
+      <button class="btn small ghost">Ajouter</button>
+    </div>
+    <details class="plan-line-details">
+      <summary class="linklike small">plus de détails</summary>
+      {{ line_form(plan, None, d, 'd' ~ d) }}
+    </details>
+  </form>
+</section>
+{% endfor %}
+</div>
+<script>
+// « Repas » : enregistré dès qu'on coche ou décoche. « plus de détails » : le jour choisi remplace celui du bloc.
+document.querySelectorAll('[data-autosubmit]').forEach(function (c) {
+  c.addEventListener('change', function () { c.form.requestSubmit ? c.form.requestSubmit() : c.form.submit(); });
+});
+document.querySelectorAll('.plan-quick').forEach(function (f) {
+  var hidden = f.querySelector('[data-quick-day]'), sel = f.querySelector('select[name=day]');
+  var det = f.querySelector('details');
+  function sync() { hidden.disabled = det.open; sel.disabled = !det.open; }
+  det.addEventListener('toggle', sync); sync();
+});
+</script>
+{% endblock %}

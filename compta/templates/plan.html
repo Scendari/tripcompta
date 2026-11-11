@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_plan_tabs.html" import plan_head %}
 {% block title %}{{ plan.name }} · En préparation · Trip Compta{% endblock %}
 {% macro deadline_box(x, it) %}
 {% set o = x.o %}{% set ds = deadlines.get(o.id, []) %}{% set u = o.id ~ '-' ~ it.id %}
@@ -44,22 +45,8 @@
 {% endmacro %}
 {% block page %}
 <div class="plan-page">
-<div class="page-head">
-  <div class="grow">
-    <p class="plan-kicker">En préparation</p>
-    <h1>{{ plan.name }}</h1>
-    <p class="muted">{% if plan.start %}{{ plan.start|date }}{% if plan.end %} → {{ plan.end|date }}{% endif %}{% endif %}{% if plan.start and plan.place %} · {% endif %}{{ plan.place }}</p>
-    {% if plan.note %}<p class="plan-note">{{ plan.note }}</p>{% endif %}
-  </div>
-  <div class="row plan-head-actions">
-    <a class="btn ghost small" href="/">← Tous les voyages</a>
-    <a class="btn ghost small" href="/preparer/{{ plan.id }}/ia">🤖 IA</a>
-    <button type="button" class="btn ghost small" data-toggle-row="#modifier" aria-expanded="false" aria-controls="modifier">Modifier</button>
-    <form method="post" action="/preparer/{{ plan.id }}/supprimer" class="inline"
-          data-confirm="Supprimer le projet « {{ plan.name }} » ? {% if plan.items or plan.offers %}Ses {{ plan.items|length }} poste{{ 's' if plan.items|length > 1 }} et ses {{ plan.offers|length }} offre{{ 's' if plan.offers|length > 1 }} partent avec lui. {% endif %}Tu pourras encore annuler juste après.">
-      <button class="btn ghost small danger-text">Supprimer le projet</button></form>
-  </div>
-</div>
+{{ plan_head(plan, 'postes') }}
+{% set counted = r.chosen or r.meals_total %}{# quelque chose compte dans le budget : offres retenues ou repas #}
 
 {% if trip_made %}
 <div class="card plan-launched" id="voyage-lance" role="note">
@@ -73,17 +60,7 @@
 </div>
 {% endif %}
 
-<form id="modifier" class="card plan-edit" method="post" action="/preparer/{{ plan.id }}/modifier" hidden>
-  <h2 class="home-h">Modifier le projet</h2>
-  <div class="field"><label for="e_name">Nom du projet</label><input type="text" id="e_name" name="name" value="{{ plan.name }}" required maxlength="200"></div>
-  <div class="field"><label for="e_place">Lieu <span class="hint">(facultatif)</span></label><input type="text" id="e_place" name="place" value="{{ plan.place }}" maxlength="200"></div>
-  <div class="home-pair">
-    <div class="field"><label for="e_start">Du</label><input type="date" id="e_start" name="start" value="{{ plan.start or '' }}" data-no-today></div>
-    <div class="field"><label for="e_end">Au</label><input type="date" id="e_end" name="end" value="{{ plan.end or '' }}" data-no-today></div>
-  </div>
-  <div class="field"><label for="e_note">Note <span class="hint">(facultatif : club, idées, contacts…)</span></label><textarea id="e_note" name="note" rows="3">{{ plan.note }}</textarea></div>
-  <div class="row"><button type="button" class="btn ghost" data-toggle-row="#modifier">Fermer</button><button class="btn">Enregistrer</button></div>
-</form>
+
 
 {# ------------------------------------------------------------ le résultat #}
 <section class="card plan-result" id="resultat" aria-label="Ce que ça donne">
@@ -95,13 +72,14 @@
   <div class="plan-figures">
     <div class="plan-figure">
       <div class="label">Budget total</div>
-      {% if r.chosen %}<div class="value" id="budget">{{ r.budget|money }}</div>
+      {% if counted %}<div class="value" id="budget">{{ r.budget|money }}</div>
       {% else %}<p class="plan-sentence muted" id="budget">Aucune offre retenue pour l'instant.</p>{% endif %}
-      {% if missing and r.chosen %}<div class="plan-missing" id="budget-incomplet">Budget incomplet : il manque {{ missing|join(', ') }}</div>{% endif %}
+      {% if r.meals_total %}<div class="plan-meals" id="dont-repas">dont repas : {{ r.meals_total|money }} · <a href="/preparer/{{ plan.id }}/programme#repas">voir le programme</a></div>{% endif %}
+      {% if missing and counted %}<div class="plan-missing" id="budget-incomplet">Budget incomplet : il manque {{ missing|join(', ') }}</div>{% endif %}
     </div>
     <div class="plan-figure main-figure">
       <div class="label">Prix par personne</div>
-      {% if not r.chosen %}<p class="plan-sentence muted" id="par-personne">Le prix par personne apparaîtra dès que tu auras retenu une offre.</p>
+      {% if not counted %}<p class="plan-sentence muted" id="par-personne">Le prix par personne apparaîtra dès que tu auras retenu une offre.</p>
       {% elif missing %}<p class="plan-sentence" id="par-personne">Pour l'instant, ça revient à <b>{{ r.per_person|money }}</b> par personne (sans {{ missing_ni }}).</p>
       {% else %}<p class="plan-sentence" id="par-personne">Ça revient à <b>{{ r.per_person|money }}</b> par personne.</p>{% endif %}
     </div>
@@ -121,7 +99,7 @@
           <button class="btn small ghost">Appliquer</button>
         </div>
       </fieldset>
-      {% if not r.chosen %}{# rien de retenu : pas de montant #}
+      {% if not counted %}{# rien de retenu : pas de montant #}
       {% elif not r.margin %}<p class="plan-out muted" id="avec-marge">Pas de marge pour l'instant.</p>
       {% else %}<p class="plan-out" id="avec-marge">{{ "Pour l'instant, avec" if missing else "Avec" }} la marge : <b>{{ r.price_with_margin|money }}</b> par personne, soit {{ r.margin|money }} de marge.</p>{% endif %}
     </form>
@@ -136,7 +114,7 @@
           <button class="btn small ghost">Appliquer</button>
         </div>
       </fieldset>
-      {% if not r.chosen %}{# rien de retenu : pas de montant #}
+      {% if not counted %}{# rien de retenu : pas de montant #}
       {% elif r.announced is none %}
       <p class="plan-out muted" id="reserve">Pas de prix annoncé. Repère{{ " pour l'instant" if missing }} : {{ 'avec ta marge, ' if r.margin }}{{ r.price_with_margin|money }} par personne.</p>
       {% elif r.reserve >= 0 %}
@@ -144,7 +122,7 @@
       {% else %}
       <p class="plan-alert" id="reserve" role="alert">⚠️ À ce prix, il manque {{ 'déjà ' if missing }}<b>{{ (-r.reserve)|money }}</b> ({{ (-r.reserve_per_person)|money }} par personne).</p>
       {% endif %}
-      {% if r.chosen and r.above_margin is not none %}
+      {% if counted and r.above_margin is not none %}
       <p class="plan-out small" id="ecart-marge">{% if r.above_margin > 0 %}C'est {{ r.above_margin|money }} de plus que le prix avec ta marge ({{ r.price_with_margin|money }}).{% elif r.above_margin < 0 %}C'est {{ (-r.above_margin)|money }} de moins que le prix avec ta marge ({{ r.price_with_margin|money }}).{% else %}C'est exactement le prix avec ta marge.{% endif %}</p>
       {% endif %}
     </form>

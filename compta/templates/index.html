@@ -72,7 +72,7 @@
       {% if x.launched %}<span class="pill du">✓ Voyage lancé</span>{% endif %}
       {% if not p.items %}<span class="pill grey">À compléter</span>
       {% else %}
-        {% if x.r.chosen %}<span class="pill ok">{{ x.r.per_person|money }} par personne</span>{% endif %}
+        {% if x.r.chosen or x.r.meals_total %}<span class="pill ok">{{ x.r.per_person|money }} par personne</span>{% endif %}
         {% if x.missing %}<span class="pill doit">{{ x.missing|length }} poste{{ 's' if x.missing|length > 1 }} pas encore choisi{{ 's' if x.missing|length > 1 }}</span>{% endif %}
       {% endif %}
     </div>

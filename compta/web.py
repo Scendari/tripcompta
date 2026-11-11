@@ -24,7 +24,7 @@ from . import engine as E
 from . import journal
 from . import models as M
 from . import services as S
-from .db import (Database, DamagedDatabaseError, DataUnavailableError, NewerDatabaseError, human_when,
+from .db import (Database, DamagedDatabaseError, DataUnavailableError, NewerDatabaseError, human_when, long_date,
                  stored_version)
 
 HERE = Path(__file__).parent
@@ -56,6 +56,7 @@ def _amount_input(c):
 templates.env.filters["money"] = E.fmt
 templates.env.filters["money_sign"] = lambda c: E.fmt(c, sign=True)
 templates.env.filters["date"] = _date
+templates.env.filters["longdate"] = lambda d: long_date(d) if d else ""     # « samedi 1er mai 2027 »
 templates.env.filters["amount_input"] = _amount_input
 templates.env.tests["contains"] = lambda seq, x: x in (seq or ())
 templates.env.globals["ROLES"] = S.ROLES

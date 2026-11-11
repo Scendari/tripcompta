@@ -38,6 +38,18 @@ pourcentages (somme 100).
 Le budget = la somme des offres retenues ; le prix par personne = budget / N, arrondi au centime au-dessus. La
 marge (en % du budget, ou en euros par personne) s'ajoute pour donner le prix avec la marge.
 
+## Le programme du séjour et l'enveloppe repas
+
+- **Durée** : un nombre de jours. Avec une date de départ ET une date de retour, elle est calculée (ne la donne pas).
+  Les jours s'appellent Jour 1, Jour 2… (Jour 1 = le jour du départ).
+- **Programme** : une ligne par chose qu'on fait, rattachée à un jour (`jour`), avec si besoin une période
+  (`jusqu_au`), une heure (`heure`, « 9h30 »), une note et un poste (`poste`, le nom d'un poste qui existe, pour
+  l'affichage seulement). Le cas courant : une ligne par jour.
+- **Enveloppe repas** : un montant moyen par personne et par jour (`par_jour`). Elle compte tous les jours, sauf
+  ceux de `jours_sans` ; un jour peut avoir un autre montant (`montants`, `{"4": 50}`, `null` pour revenir à
+  l'enveloppe ; 0 compte pour 0). Repas = somme des jours comptés × participants, ajoutée au budget. Elle est
+  indépendante d'un poste « Repas » avec des offres : les deux comptent.
+
 ## Le bloc JSON
 
 Recopie `"projet_id"` (donné dans le message). Ne mets que ce qui change : ce qui existe déjà (voir « état actuel
@@ -63,7 +75,14 @@ du projet ») n'est pas à redonner. Les montants en euros (210, « 210,00 », 1
                    {"libelle": "Acompte à verser", "date": "2027-02-01", "montant": 1000}]}
   ],
   "retenir": ["Forfait Club A"],
-  "echeances": [{"offre": "Transavia", "libelle": "Prix garanti jusqu'à cette date", "date": "2027-01-10"}]
+  "echeances": [{"offre": "Transavia", "libelle": "Prix garanti jusqu'à cette date", "date": "2027-01-10"}],
+  "duree": 7,
+  "programme": [
+    {"jour": 1, "heure": "7h30", "texte": "Vol aller", "poste": "Avion"},
+    {"jour": 2, "jusqu_au": 6, "texte": "Plongées le matin", "note": "2 plongées par jour"},
+    {"jour": 7, "texte": "Retour"}
+  ],
+  "repas": {"par_jour": 35, "jours_sans": [1, 7], "montants": {"4": 50}}
 }
 ```
 
@@ -78,6 +97,9 @@ Règles :
 - `retenue: true` retient l'offre ; `retenir` retient des offres déjà là.
 - Les échéances : dans l'offre (`echeances`) ou à part (`echeances` avec `offre`). Une échéance déjà là (même
   libellé, même date) n'est pas ajoutée deux fois.
+- `duree`, `programme`, `repas` : facultatifs. Une ligne de programme déjà là (même jour, même texte) n'est pas
+  ajoutée deux fois. Une ligne doit tomber dans le séjour (du jour 1 au dernier jour), et on ne peut pas raccourcir
+  le séjour si des lignes sont au-delà.
 - Ce que tu ne peux pas faire : supprimer, ou lancer le voyage (l'organisateur le fait à l'écran).
 - Tout est appliqué d'un coup, ou rien si un point est refusé.
 

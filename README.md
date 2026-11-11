@@ -292,7 +292,8 @@ compta/
   engine.py       moteur de calcul pur (centimes, fractions exactes, arrondis, ajustements, désistements)
   preparation.py  calcul pur d'un voyage en préparation (postes, offres, offre retenue, budget, prix par
                   personne, marge, réserve, « si tu retiens cette offre », offres en course) ; ses pages :
-                  pages/preparation.py (échéances, lancer le voyage, IA : static/ia/guide_preparation.md)
+                  pages/preparation.py (échéances, programme, enveloppe repas, lancer le voyage, IA :
+                  static/ia/guide_preparation.md)
   models.py       modèle SQLAlchemy / SQLite
   db.py           dossier de données, sauvegardes, « Défaire » / « Rétablir »
   services.py     pont base ↔ moteur, alertes
@@ -336,6 +337,8 @@ tests/
                      postes, mots interdits, fenêtre étroite (captures : tests/captures_preparation.py <dossier>)
   test_preparation_lancer.py  échéances et « À faire bientôt » (date fixée), « Lancer le voyage » (dépenses prévues
                      à la main), IA du projet (même projet à l'écran et par l'IA), API, MCP, diagnostic
+  test_preparation_programme.py  programme du séjour (jours, dates, périodes, ordre, poste rattaché) et enveloppe
+                     repas (montants à la main, budget, lancement, IA)
   test_pages.py      les pages rangées par domaine : rien d'oublié, aucune adresse cachée par une autre
   test_guides.py     INSTALLER.md et README.md disent vrai : boutons cités, fichiers, dossiers, liens
   test_jeton.py      jeton de session : rien n'est lisible ni modifiable sans lui

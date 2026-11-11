@@ -28,6 +28,10 @@ def site(tmp_path_factory):
     for offer, label, day in (("Forfait Club A", "Option à confirmer", "2027-01-08"),
                               ("Transavia", "Reste à payer", "2027-01-22"), ("Hôtel X", "Acompte", "2027-01-15")):
         sc.post(f"{sc.url}/offres/{sc.offer(offer)}/echeances", dict(label=label, date=day))
+    sc.post(f"{sc.url}/duree", dict(days="7"))
+    sc.post(f"{sc.url}/repas", dict(meal_per_day="35"))
+    sc.post(f"{sc.url}/programme", dict(day="2", until="5", text="Plongées le matin", time="8h30",
+                                        item=str(sc.item("Plongées"))))
     sc.create(name="Projet vide", people="4", place="")
     empty_url = sc.url
     sc.url, sc.pid = "/preparer/1", 1
@@ -64,7 +68,8 @@ def new_page(browser, width=1366, height=900):
 
 
 def urls(sc):
-    return ["/", sc.url, sc.empty_url, f"{sc.url}/lancer", f"{sc.url}/ia", f"{sc.url}/offres/nouvelle?poste={sc.item('Taxi')}",
+    return ["/", sc.url, sc.empty_url, f"{sc.url}/lancer", f"{sc.url}/ia", f"{sc.url}/programme",
+            f"{sc.empty_url}/programme", f"{sc.url}/offres/nouvelle?poste={sc.item('Taxi')}",
             f"{sc.url}/offres/{sc.offer('Taxi')}/modifier", f"{sc.url}/offres/{sc.offer('Forfait Club A')}/modifier"]
 
 
@@ -254,4 +259,59 @@ def test_deadline_checkbox_and_ideas(site, browser):
     assert row.count() == 1 and "line-through" in row.locator(".plan-dl-text").evaluate("e => getComputedStyle(e).textDecorationLine")
     row.locator("input[type=checkbox]").uncheck()                    # décocher : de nouveau à faire
     pw.expect(page.locator(".flash")).to_contain_text("de nouveau à faire")
+    assert not page.errors, page.errors
+
+
+def test_programme_quick_add_and_meal_box(site, browser):
+    page = new_page(browser)
+    page.goto(site.base + f"{site.url}/programme")
+    field = page.locator("#text-d3")
+    field.fill("Visite du village")
+    field.press("Enter")                                            # Entrée ajoute la ligne (le cas courant)
+    page.wait_for_url(re.compile(r"/programme\?.*#jour-3$"))
+    assert "Jour 3 : « Visite du village » ajouté" in page.locator(".flash").inner_text()
+    assert "Visite du village" in page.locator("#jour-3").inner_text()
+    # « plus de détails » : l'heure et la période
+    block = page.locator("#jour-6")
+    block.locator("summary:has-text('plus de détails')").click()
+    block.locator("input[name=text]").fill("Bateau")
+    block.locator("input[name=time]").fill("14h")
+    block.locator("select[name=until]").select_option("7")
+    block.locator("button:has-text('Ajouter')").click()
+    pw.expect(page.locator(".flash")).to_contain_text("Jour 6 : « Bateau » ajouté")
+    assert "14 h Bateau Jours 6 à 7" in page.locator("#jour-6").inner_text().replace("\n", " ")
+    assert "suite : Bateau (jours 6 à 7)" in page.locator("#jour-7").inner_text()
+    # la case « Repas » s'enregistre seule
+    page.locator("#jour-1 input[name=on]").uncheck()
+    pw.expect(page.locator(".flash")).to_contain_text("Jour 1 : pas de repas compté")
+    assert "6 jours comptés : 210,00 € par personne" in page.locator("#repas").inner_text().replace("\u202f", " ").replace("\xa0", " ")
+    page.locator("#jour-1 input[name=on]").check()
+    pw.expect(page.locator(".flash")).to_contain_text("Jour 1 : repas comptés")
+    assert not page.errors, page.errors
+
+
+def test_day_meal_by_keyboard_and_edit_from_programme(site, browser):
+    page = new_page(browser)
+    page.goto(site.base + f"{site.url}/programme")
+    page.fill("#meal-4", "50")
+    page.locator("#jour-4 button:has-text('OK')").click()
+    pw.expect(page.locator(".flash")).to_contain_text("Jour 4 : repas comptés à 50,00")
+    box = page.locator("#jour-4 input[name=on]")
+    box.focus()
+    page.keyboard.press("Space")                                     # décocher au clavier
+    pw.expect(page.locator(".flash")).to_contain_text("Jour 4 : pas de repas compté")
+    assert page.input_value("#meal-4") == "50" and page.locator("#jour-4 button:has-text('OK')").is_visible()
+    page.locator("#jour-4 input[name=on]").focus()
+    page.keyboard.press("Space")                                     # recocher : le montant du jour revient
+    pw.expect(page.locator(".flash")).to_contain_text("Jour 4 : repas comptés à 50,00")
+    # « Modifier » depuis le programme : le panneau s'ouvre sur place, on revient au programme
+    page.click(".page-head button:has-text('Modifier')")
+    assert page.locator("#modifier").is_visible()
+    page.fill("#e_place", "Hurghada, Égypte")
+    page.click("#modifier button:has-text('Enregistrer')")
+    pw.expect(page.locator(".flash")).to_contain_text("Projet modifié")
+    assert "/programme" in page.url and "Hurghada, Égypte" in page.locator(".page-head").inner_text()
+    page.fill("#meal-4", "")
+    page.locator("#jour-4 button:has-text('OK')").click()             # rendu à l'enveloppe pour les autres essais
+    pw.expect(page.locator(".flash")).to_contain_text("Jour 4 : repas comptés")
     assert not page.errors, page.errors

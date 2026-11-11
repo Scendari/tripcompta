@@ -1063,7 +1063,9 @@ COUNTING_NAMES = {P.PER_PERSON: "par personne", P.GROUP: "pour le groupe", P.LOT
 SPLIT_WORDS = {"euros": P.AMOUNTS, "montant": P.AMOUNTS, "montants": P.AMOUNTS, "pourcent": P.PERCENT,
                "pourcentage": P.PERCENT, "pourcentages": P.PERCENT, "%": P.PERCENT}
 PLAN_KEYS = {"projet_id", "nom", "lieu", "debut", "fin", "note", "participants", "marge", "prix_annonce", "postes",
-             "renommer_postes", "offres", "retenir", "echeances"}
+             "renommer_postes", "offres", "retenir", "echeances", "duree", "programme", "repas"}
+LINE_KEYS = {"jour", "jusqu_au", "heure", "texte", "note", "poste"}
+MEAL_KEYS = {"par_jour", "jours_sans", "jours_avec", "montants"}
 OFFER_KEYS = {"prestataire", "prix", "compte", "pour_combien", "quantite", "de_quoi", "postes", "repartition", "note",
               "retenue", "echeances"}
 
@@ -1133,7 +1135,16 @@ def plan_detail(plan: M.Plan, today: dt.date | None = None) -> dict:
         prix_avec_marge=to_euros(r.price_with_margin), reserve=to_euros(r.reserve),
         a_faire=[dict(date=x["d"].date.isoformat(), quand=x["words"], offre=x["offer"].label, libelle=x["d"].label,
                       montant=to_euros(x["d"].amount)) for x in S.plan_deadlines(plan, today) if x["counts"]],
-        voyage_lance=plan.trip_id if plan.trip_id else None)
+        voyage_lance=plan.trip_id if plan.trip_id else None,
+        duree=plan.duration, duree_calculee_avec_les_dates=bool(plan.start and plan.end),
+        programme=[dict(jour=ln.day, jusqu_au=ln.until, heure=ln.time or None, texte=ln.text, note=ln.note or None,
+                        poste=names.get(ln.item_id)) for ln in sorted(plan.lines, key=lambda x: (x.day, bool(x.time),
+                                                                                                 x.time, x.id))],
+        repas=dict(par_jour=to_euros(plan.meal_per_day),
+                   jours_sans=sorted(d.day for d in plan.day_meals if not d.meal_on),
+                   montants={str(d.day): to_euros(d.meal_amount) for d in plan.day_meals
+                             if d.meal_on and d.meal_amount is not None},
+                   jours_comptes=r.meals_days, par_personne=to_euros(r.meals_per_person), total=to_euros(r.meals_total)))
 
 
 def plan_summary_row(plan: M.Plan) -> dict:
@@ -1198,6 +1209,13 @@ def plan_apply(s, plan: M.Plan, data) -> dict:
             fields["margin_kind"], fields["margin_value"] = kind, euros(m.get("valeur") or 0, "valeur de la marge")
         if "prix_annonce" in data:
             fields["announced"] = euros(data["prix_annonce"], "prix annoncé", allow_none=True)
+        if "duree" in data:
+            fields["days"] = _whole(data["duree"], "durée du séjour (en jours)")
+        rep = data.get("repas")
+        if rep is not None and not isinstance(rep, dict):
+            raise OpsError("Repas : donne {\"par_jour\": …, \"jours_sans\": […], \"montants\": {jour: …}}.")
+        if rep and "par_jour" in rep:
+            fields["meal_per_day"] = euros(rep["par_jour"], "enveloppe repas", allow_none=True)
         if fields:
             W.update_plan(s, plan, **fields)
             actions.append("Projet : " + ", ".join(_said(k, v) for k, v in fields.items()))
@@ -1245,6 +1263,14 @@ def plan_apply(s, plan: M.Plan, data) -> dict:
             _add_deadline(s, plan, o, d, actions)
         attempt(f"Échéance {n}", deadline)
 
+    for n, x in enumerate(data.get("programme") or [], 1):
+        where = f"Programme {n}" + (f" ({x.get('texte')})" if isinstance(x, dict) and x.get("texte") else "")
+        attempt(where, lambda x=x: _add_line(s, plan, x, actions))
+
+    rep = data.get("repas") if isinstance(data.get("repas"), dict) else None
+    if rep:
+        attempt("Repas", lambda: _apply_meals(s, plan, rep, actions))
+
     if errors:
         err = OpsError(errors[0] if len(errors) == 1 else f"{len(errors)} points à corriger.")
         err.errors = errors
@@ -1260,6 +1286,10 @@ def _said(k, v) -> str:
         return "valeur de la marge"
     if k == "announced":
         return f"prix annoncé {E.fmt(v)}" if v is not None else "prix annoncé retiré"
+    if k == "days":
+        return f"séjour de {v} jour{'s' if v > 1 else ''}"
+    if k == "meal_per_day":
+        return f"enveloppe repas de {E.fmt(v)} par jour" if v is not None else "enveloppe repas retirée"
     return {"name": "nom", "place": "lieu", "note": "note", "start": "date de début", "end": "date de fin",
             "margin_kind": "marge"}.get(k, k)
 
@@ -1336,3 +1366,53 @@ def _apply_offer(s, plan: M.Plan, x, ensure_item, actions):
         if not isinstance(d, dict):
             raise OpsError("chaque échéance est {\"libelle\": …, \"date\": …, \"montant\": …}")
         _add_deadline(s, plan, o, d, actions)
+
+
+
+def _add_line(s, plan: M.Plan, x, actions):
+    if not isinstance(x, dict):
+        raise OpsError("chaque ligne est {\"jour\": …, \"texte\": …}")
+    unknown = set(x) - LINE_KEYS
+    if unknown:
+        raise OpsError("champs inconnus : " + ", ".join(sorted(unknown)))
+    day = _whole(x.get("jour"), "jour") if x.get("jour") not in (None, "") else None
+    if day is None:
+        raise OpsError("indique le jour (1 pour le premier jour du séjour)")
+    until = _whole(x["jusqu_au"], "jusqu'au jour") if x.get("jusqu_au") not in (None, "") else None
+    item_id = None
+    if x.get("poste"):
+        it = _plan_item(plan, x["poste"])
+        if it is None:
+            raise OpsError(f"pas de poste « {x['poste']} » dans ce projet")
+        item_id = it.id
+    text = " ".join(str(x.get("texte") or "").split())
+    if any(ln.day == day and E.sort_key(ln.text) == E.sort_key(text) for ln in plan.lines):
+        return                                   # déjà dans le programme : rien en double
+    ln = W.save_plan_line(s, plan, day=day, until=until, time=x.get("heure") or "", text=text,
+                          note=x.get("note") or "", item_id=item_id)
+    actions.append(f"Programme, jour {ln.day}" + (f" à {ln.until}" if ln.until else "")
+                   + (f", {S.time_text(ln.time)}" if ln.time else "") + f" : « {ln.text} »")
+
+
+def _apply_meals(s, plan: M.Plan, rep: dict, actions):
+    unknown = set(rep) - MEAL_KEYS
+    if unknown:
+        raise OpsError("champs inconnus : " + ", ".join(sorted(unknown)))
+    current = {d.day: d for d in plan.day_meals}
+
+    def day_of(v):
+        return _whole(v, "jour")
+    for v in rep.get("jours_sans") or []:
+        d = day_of(v)
+        W.set_day_meal(s, plan, d, False, current[d].meal_amount if d in current else None)
+        actions.append(f"Repas : pas comptés le jour {d}")
+    for v in rep.get("jours_avec") or []:
+        d = day_of(v)
+        W.set_day_meal(s, plan, d, True, current[d].meal_amount if d in current else None)
+        actions.append(f"Repas : comptés le jour {d}")
+    for k, v in (rep.get("montants") or {}).items():
+        d = day_of(k)
+        amount = euros(v, f"montant des repas du jour {d}", allow_none=True)
+        row = next((x for x in plan.day_meals if x.day == d), None)
+        W.set_day_meal(s, plan, d, row.meal_on if row else True, amount)
+        actions.append(f"Repas du jour {d} : " + (E.fmt(amount) if amount is not None else "comme l'enveloppe"))

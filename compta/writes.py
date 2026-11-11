@@ -438,7 +438,7 @@ def _people(people) -> int:
 
 
 def check_plan(*, name, people=1, place="", start=None, end=None, note="", margin_kind=P.PERCENT, margin_value=0,
-               announced=None) -> None:
+               announced=None, days=None, meal_per_day=None) -> None:
     """Refuse (WriteError) un projet impossible. Ne modifie rien : à appeler avant la copie « Défaire »."""
     if not _clean(name, 200):
         raise WriteError("Donne un nom au projet", "name")
@@ -451,15 +451,21 @@ def check_plan(*, name, people=1, place="", start=None, end=None, note="", margi
         raise WriteError("Le prix annoncé ne peut pas être négatif.", "announced")
     if start and end and end < start:
         raise WriteError("La date de retour est avant la date de départ.", "end")
+    if days is not None and (not isinstance(days, int) or isinstance(days, bool) or days < 1):
+        raise WriteError("Le séjour dure au moins un jour.", "days")
+    if meal_per_day is not None and meal_per_day < 0:
+        raise WriteError("L'enveloppe repas ne peut pas être négative.", "meal_per_day")
 
 
 def save_plan(s, plan: M.Plan | None = None, *, name, people=1, place="", start=None, end=None, note="",
-              margin_kind=P.PERCENT, margin_value=0, announced=None) -> M.Plan:
+              margin_kind=P.PERCENT, margin_value=0, announced=None, days=None, meal_per_day=None) -> M.Plan:
     """Crée (plan=None) ou réécrit un voyage en préparation, avec toutes ses valeurs (update_plan : seulement
     certaines). margin_value : centièmes de % (500 = 5 %) pour « pourcent », centimes par personne pour « euros » ;
     announced : prix annoncé par personne (centimes) ou None."""
     check_plan(name=name, people=people, place=place, start=start, end=end, note=note, margin_kind=margin_kind,
-               margin_value=margin_value, announced=announced)
+               margin_value=margin_value, announced=announced, days=days, meal_per_day=meal_per_day)
+    if plan is not None:
+        check_duration(plan, start, end, days)
     name = _clean(name, 200)
     if plan is None:
         plan = M.Plan(name=name)
@@ -467,17 +473,39 @@ def save_plan(s, plan: M.Plan | None = None, *, name, people=1, place="", start=
     plan.name, plan.people, plan.place, plan.start, plan.end = name, people, _clean(place, 200), start, end
     plan.note = str(note or "").strip()
     plan.margin_kind, plan.margin_value, plan.announced = margin_kind, int(margin_value), announced
+    plan.days, plan.meal_per_day = days, meal_per_day
+    s.flush()
+    for d in [d for d in plan.day_meals if plan.duration is None or d.day > plan.duration]:
+        plan.day_meals.remove(d)             # jours qui n'existent plus : leur réglage de repas disparaît
     s.flush()
     return plan
 
 
-PLAN_FIELDS = ("name", "people", "place", "start", "end", "note", "margin_kind", "margin_value", "announced")
+def _duration(start, end, days):
+    return max((end - start).days + 1, 1) if start and end else days
+
+
+def check_duration(plan: M.Plan, start, end, days) -> None:
+    """Refuse de raccourcir le séjour (durée, ou dates) en laissant des lignes du programme au-delà du dernier jour."""
+    n = _duration(start, end, days)
+    beyond = sorted({x for ln in plan.lines for x in (ln.day, ln.until) if x and (n is None or x > n)})
+    if beyond:
+        which = ", ".join(f"jour {d}" for d in beyond)
+        raise WriteError(f"Le programme a des lignes au {which} : déplace-les ou supprime-les avant de raccourcir "
+                         f"le séjour.", "end" if start and end else "days")
+
+
+PLAN_FIELDS = ("name", "people", "place", "start", "end", "note", "margin_kind", "margin_value", "announced", "days",
+               "meal_per_day")
 
 
 def update_plan(s, plan: M.Plan, **fields) -> M.Plan:
     """Change seulement les champs donnés (« et si on était 9 ? ») ; les autres gardent leur valeur. Mêmes refus que
     save_plan, qui fait l'écriture."""
-    return save_plan(s, plan, **plan_values(plan, **fields))
+    values = plan_values(plan, **fields)
+    if "days" in fields and values["start"] and values["end"]:
+        raise WriteError("La durée vient des dates de départ et de retour : change plutôt ces dates.", "days")
+    return save_plan(s, plan, **values)
 
 
 def plan_values(plan: M.Plan, **fields) -> dict:
@@ -565,6 +593,9 @@ def delete_plan_item(s, plan: M.Plan, item: M.PlanItem) -> list:
         o.split = ""
         for ln in o.links:
             ln.share = None
+    for ln in plan.lines:                    # une ligne du programme rattachée au poste : détachée, pas supprimée
+        if ln.item_id == item.id:
+            ln.item_id = None
     s.flush()
     plan.items.remove(item)
     s.flush()
@@ -777,3 +808,93 @@ def forget_trip(s, trip_id: int) -> None:
     un voyage créé ensuite pourrait reprendre le même numéro et passer pour le leur."""
     for p in s.query(M.Plan).filter(M.Plan.trip_id == trip_id).all():
         p.trip_id, p.launched_on = None, None
+
+
+
+# ---------------------------------------------------------------- programme du séjour et enveloppe repas
+
+def clean_time(value) -> str:
+    """« 9h », « 9 h 30 », « 09:30 », « 14h05 » -> « 09:30 » ; vide -> « » ; autre chose : refusé."""
+    import re
+    v = str(value or "").strip().lower()
+    if not v:
+        return ""
+    m = re.fullmatch(r"(\d{1,2})\s*(?:h|:)\s*(\d{2})?\s*", v) or re.fullmatch(r"(\d{1,2})()", v)
+    if not m or int(m.group(1)) > 23 or (m.group(2) and int(m.group(2)) > 59):
+        raise WriteError(f"Heure illisible : « {value} ». Exemple : 9h30 ou 14:00", "time")
+    return f"{int(m.group(1)):02d}:{int(m.group(2) or 0):02d}"
+
+
+def _days_word(n) -> str:
+    return f"{n} jour{'s' if n > 1 else ''}"
+
+
+def check_line(plan: M.Plan, *, day, text, until=None, time="", item_id=None) -> str:
+    """Refuse (WriteError) une ligne de programme impossible. Ne modifie rien. Renvoie l'heure nettoyée."""
+    if not _clean(text):
+        raise WriteError("Écris ce qu'on fait ce jour-là.", "text")
+    n = plan.duration
+    if not n:
+        raise WriteError("Indique d'abord la durée du séjour.", "day")
+    if not isinstance(day, int) or day < 1 or day > n:
+        raise WriteError(f"Choisis un jour entre 1 et {n} : le séjour dure {_days_word(n)}.", "day")
+    if until is not None:
+        if not isinstance(until, int) or until < day:
+            raise WriteError("« Jusqu'au jour » ne peut pas être avant le jour de départ de la ligne.", "until")
+        if until > n:
+            raise WriteError(f"Le séjour dure {_days_word(n)} : « jusqu'au jour » va au plus au jour {n}.", "until")
+    if item_id is not None and item_id not in {i.id for i in plan.items}:
+        raise WriteError("Ce poste ne fait pas partie de ce projet.", "item")
+    return clean_time(time)
+
+
+def save_plan_line(s, plan: M.Plan, line: M.PlanLine | None = None, *, day, text, until=None, time="", note="",
+                   item_id=None) -> M.PlanLine:
+    """Crée (line=None) ou réécrit une ligne du programme : jour (et jusqu'au jour pour une période), heure, texte,
+    note, poste rattaché (pour l'affichage seulement)."""
+    if line is not None:
+        _plan_of(plan, line, "Cette ligne du programme")
+    hour = check_line(plan, day=day, text=text, until=until, time=time, item_id=item_id)
+    if line is None:
+        line = M.PlanLine(day=day, text=_clean(text))
+        plan.lines.append(line)
+    line.day, line.until = day, (until if until and until != day else None)
+    line.time, line.text, line.note, line.item_id = hour, _clean(text), str(note or "").strip(), item_id
+    s.flush()
+    return line
+
+
+def delete_plan_line(s, plan: M.Plan, line: M.PlanLine) -> str:
+    _plan_of(plan, line, "Cette ligne du programme")
+    text = line.text
+    plan.lines.remove(line)
+    s.flush()
+    return text
+
+
+def check_day_meal(plan: M.Plan, day, amount=None) -> None:
+    n = plan.duration
+    if not n:
+        raise WriteError("Indique d'abord la durée du séjour.", "day")
+    if not isinstance(day, int) or day < 1 or day > n:
+        raise WriteError(f"Choisis un jour entre 1 et {n} : le séjour dure {_days_word(n)}.", "day")
+    if amount is not None and amount < 0:
+        raise WriteError("Le montant des repas ne peut pas être négatif.", "amount")
+
+
+def set_day_meal(s, plan: M.Plan, day, on: bool = True, amount=None) -> M.PlanDay | None:
+    """L'enveloppe repas pour un jour : comptée ou non (`on`), au montant de l'enveloppe ou à un autre (`amount`,
+    centimes par personne ; None : celui de l'enveloppe). Revenir au réglage par défaut retire la ligne."""
+    check_day_meal(plan, day, amount)
+    row = next((d for d in plan.day_meals if d.day == day), None)
+    if on and amount is None:
+        if row is not None:
+            plan.day_meals.remove(row)
+        s.flush()
+        return None
+    if row is None:
+        row = M.PlanDay(day=day)
+        plan.day_meals.append(row)
+    row.meal_on, row.meal_amount = bool(on), amount
+    s.flush()
+    return row

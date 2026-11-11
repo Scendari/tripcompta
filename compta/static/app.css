@@ -1489,3 +1489,31 @@ tr.to-check > td:last-child { border-right: 2px solid var(--coral); }
   .soon-list { grid-template-columns: max-content minmax(0, 1fr); gap: .15rem .7rem; }
   .soon-what { grid-column: 2; margin-bottom: .45rem; }
 }
+/* Préparer un voyage : onglets, programme du séjour, enveloppe repas */
+.plan-tabs { margin: 0 0 1rem; }
+.plan-meals { margin-top: .25rem; font-size: .92rem; color: var(--muted); }
+.plan-stay, .plan-meal-card { margin-bottom: 1rem; }
+.plan-days-form { gap: .5rem; }
+.plan-days-form label { font-weight: 600; margin: 0; }
+.plan-day { margin-top: .7rem; }
+.plan-day-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem 1rem; }
+.plan-day-head h3 { margin: 0; font-size: 1.05rem; }
+.plan-day-date { font-weight: 500; color: var(--muted); }
+.plan-day-meal { gap: .35rem; }
+.plan-day-meal label { display: inline-flex; gap: .3rem; align-items: center; font-weight: 500; margin: 0; }
+.plan-day-meal .num-input { width: 6rem; }
+.plan-meal-input.changed { border-color: var(--teal); font-weight: 600; }
+.plan-lines { list-style: none; padding: 0; margin: .6rem 0 .3rem; display: grid; gap: .35rem; }
+.plan-line { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .2rem .8rem; padding: .35rem 0; border-top: 1px solid var(--border); }
+.plan-line:first-child { border-top: 0; }
+.plan-line-time { font-weight: 700; font-variant-numeric: tabular-nums; margin-right: .3rem; }
+.plan-line-cont { border-top: 0; padding: 0 0 0 .2rem; }
+.plan-line-edit[open], .plan-line-details[open] { flex-basis: 100%; }
+.plan-line-edit > summary, .plan-line-details > summary { cursor: pointer; list-style: none; display: inline-block; }
+.plan-line-edit > summary::-webkit-details-marker, .plan-line-details > summary::-webkit-details-marker { display: none; }
+.plan-line-edit form { margin-top: .4rem; padding: .6rem .7rem; background: var(--bg-2); border-radius: 9px; }
+.plan-quick { margin-top: .5rem; }
+.plan-quick input[name=text] { flex: 1; min-width: 12rem; }
+.plan-line-more { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 0 .8rem; margin-top: .5rem; }
+.plan-line-more .plan-line-note { grid-column: 1 / -1; }
+.plan-line-more select { width: 100%; }

@@ -28,7 +28,8 @@ COUNTED = (("trips", "voyages"), ("participants", "participants"), ("families", 
            ("expenses", "dépenses"), ("movements", "versements et remboursements"), ("receipts", "justificatifs"),
            ("subaccounts", "sous-comptes « Entre nous »"), ("withdrawals", "désistements"),
            ("plans", "voyages en préparation"), ("plan_items", "postes (en préparation)"),
-           ("plan_offers", "offres (en préparation)"), ("plan_deadlines", "échéances (en préparation)"))
+           ("plan_offers", "offres (en préparation)"), ("plan_deadlines", "échéances (en préparation)"),
+           ("plan_lines", "lignes de programme (en préparation)"))
 
 
 def _user_names() -> list[str]:

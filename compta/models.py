@@ -395,12 +395,26 @@ class Plan(Base):
     announced: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # prix annoncé par personne (centimes)
     trip_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)    # id de Trip, une fois lancé
     launched_on: Mapped[Optional[dt.date]] = mapped_column(Date, nullable=True)   # jour du lancement
+    days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)       # durée du séjour, sans les deux dates
+    meal_per_day: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)   # enveloppe repas (centimes par
+    #                                                                            personne et par jour) ; vide : aucune
     created: Mapped[dt.datetime] = mapped_column(DateTime, default=now)
 
     items: Mapped[list["PlanItem"]] = relationship(
         back_populates="plan", cascade="all, delete-orphan", order_by="(PlanItem.position, PlanItem.id)")
     offers: Mapped[list["PlanOffer"]] = relationship(
         back_populates="plan", cascade="all, delete-orphan", order_by="PlanOffer.id")
+    lines: Mapped[list["PlanLine"]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan", order_by="(PlanLine.day, PlanLine.id)")
+    day_meals: Mapped[list["PlanDay"]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan", order_by="PlanDay.day")
+
+    @property
+    def duration(self) -> Optional[int]:
+        """Nombre de jours du séjour : calculé avec les dates de départ ET de retour, sinon celui saisi."""
+        if self.start and self.end:
+            return max((self.end - self.start).days + 1, 1)
+        return self.days
 
 
 class PlanItem(Base):
@@ -447,6 +461,32 @@ class PlanOfferItem(Base):
     item_id: Mapped[int] = mapped_column(ForeignKey("plan_items.id"))
     share: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     offer: Mapped[PlanOffer] = relationship(back_populates="links")
+
+
+class PlanLine(Base):
+    """Une ligne du programme du séjour : ce qu'on fait tel jour (ou du jour `day` au jour `until`)."""
+    __tablename__ = "plan_lines"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("plans.id"))
+    day: Mapped[int] = mapped_column(Integer)
+    until: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)       # période : jusqu'au jour…
+    time: Mapped[str] = mapped_column(String(5), default="")                   # « 09:30 » ; vide : sans heure
+    text: Mapped[str] = mapped_column(Text)
+    note: Mapped[str] = mapped_column(Text, default="")
+    item_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)     # poste rattaché (affichage seulement)
+    plan: Mapped[Plan] = relationship(back_populates="lines")
+
+
+class PlanDay(Base):
+    """Réglage de l'enveloppe repas pour un jour : pas comptée ce jour-là, ou un autre montant. Un jour sans ligne
+    ici suit l'enveloppe."""
+    __tablename__ = "plan_days"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("plans.id"))
+    day: Mapped[int] = mapped_column(Integer)
+    meal_on: Mapped[bool] = mapped_column(Boolean, default=True)
+    meal_amount: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)   # centimes par personne ; vide : l'enveloppe
+    plan: Mapped[Plan] = relationship(back_populates="day_meals")
 
 
 class PlanDeadline(Base):
