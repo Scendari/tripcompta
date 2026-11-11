@@ -713,3 +713,16 @@ def test_home_page_says_to_move_the_app_into_applications(tmp_path):
     from compta.ops import Ops
     tid = Ops(app.state.db).create_trip("x")["voyage_id"]
     assert 'id="hors-applications"' not in c.get(f"/v/{tid}").text      # seulement sur l'accueil
+
+
+def test_auto_check_state_says_what_really_happens(monkeypatch):
+    """Le diagnostic dit si la vérification automatique tourne vraiment, pas seulement le réglage."""
+    u = make()
+    assert u.auto_state() == "oui"
+    monkeypatch.setenv("TRIPCOMPTA_NO_UPDATE_CHECK", "1")
+    assert u.auto_state() == "non (coupée par TRIPCOMPTA_NO_UPDATE_CHECK)" and not u.due()
+    u.set_auto(False)
+    assert u.auto_state() == "non (coupée par TRIPCOMPTA_NO_UPDATE_CHECK), et coupée dans les réglages"
+    monkeypatch.delenv("TRIPCOMPTA_NO_UPDATE_CHECK")
+    assert u.auto_state() == "non (coupée dans les réglages)"
+    assert make(dev=True).auto_state() == "non (version de développement)"

@@ -84,7 +84,7 @@ application que celle du fichier à télécharger.
    **Exécuter quand même**. (Une seule fois. C'est normal : comme sur Mac, l'installeur n'est pas « signé »,
    parce que cette signature est payante.)
 3. Clique sur **Installer**. Pas besoin d'être administrateur : Trip Compta s'installe pour toi seul, avec un
-   raccourci dans le menu Démarrer (et sur le Bureau si tu le coches).
+   raccourci dans le menu Démarrer et un sur le Bureau (décoche la case si tu n'en veux pas sur le Bureau).
 
 Trip Compta s'ouvre dans **sa propre fenêtre**. Pour l'arrêter, ferme simplement cette fenêtre : tout est enregistré.
 **Ctrl+N** ouvre une 2ᵉ fenêtre, **Ctrl+F** cherche dans la page.
@@ -187,6 +187,7 @@ C'est tout. Pour **tout effacer** de cet ordinateur (facultatif) :
 ### Sur Windows
 
 1. **Paramètres → Applications → Applications installées → Trip Compta → Désinstaller**.
+   (Sur Windows 10 : **Paramètres → Applications → Applications et fonctionnalités → Trip Compta → Désinstaller**.)
 
 C'est tout. Pour **tout effacer** de cet ordinateur (facultatif) :
 
