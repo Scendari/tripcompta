@@ -164,6 +164,25 @@ def test_real_window_discreet(tmp_path, end):
     assert p.returncode == 0, p.stderr[-2000:]
 
 
+def test_window_script_refuses_other_arguments(tmp_path):
+    """essai_fenetre.py lancé avec la ligne de commande de pytest (« -q --no-header ») ou importé : il s'arrête
+    sans rien créer (sinon un dossier « -q » apparaît là où l'on est)."""
+    script = ROOT / "tests" / "essai_fenetre.py"
+    for args in (["-q", "--no-header"], [str(tmp_path / "x")], [str(tmp_path / "x"), "autre"]):
+        p = subprocess.run([sys.executable, str(script), *args], cwd=tmp_path, capture_output=True, text=True,
+                           timeout=60)
+        assert p.returncode != 0 and "python tests/essai_fenetre.py" in p.stderr, args
+    import runpy
+    old = sys.argv
+    try:
+        sys.argv = ["pytest", "-q", "--no-header"]
+        with pytest.raises(SystemExit):
+            runpy.run_path(str(script), run_name="essai_fenetre")         # importé, pas lancé
+    finally:
+        sys.argv = old
+    assert list(tmp_path.iterdir()) == []
+
+
 FIRST = r'''
 import os, sys, threading, time
 sys.path.insert(0, sys.argv[1])

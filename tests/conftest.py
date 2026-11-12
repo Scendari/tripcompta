@@ -24,6 +24,18 @@ def _isolated_data(tmp_path_factory):
             os.environ[k] = v
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _no_stray_files_in_repo():
+    """Aucun essai ne laisse de fichier ou de dossier à la racine du dépôt (un dossier « -q » y est déjà apparu)."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    ignored = {".pytest_cache", "__pycache__"}
+    before = {p.name for p in root.iterdir()}
+    yield
+    new = sorted({p.name for p in root.iterdir()} - before - ignored)
+    assert not new, f"essais : fichiers ou dossiers laissés à la racine du dépôt : {new}"
+
+
 @pytest.fixture(autouse=True)
 def _no_leftover_session_token():
     """run.main() appelé dans un essai laisse son jeton de session dans l'environnement : on le retire après."""

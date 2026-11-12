@@ -13,6 +13,10 @@ import types
 import webbrowser
 from pathlib import Path
 
+# Seulement lancé comme programme, avec un vrai dossier : importé (par pytest) ou lancé avec d'autres arguments
+# (« -q », « --no-header »…), il ne crée rien (sinon un dossier « -q » apparaît à la racine du dépôt).
+if __name__ != "__main__" or len(sys.argv) != 3 or sys.argv[1].startswith("-") or sys.argv[2] not in ("fermer", "quitter"):
+    raise SystemExit(__doc__)
 WORK = Path(sys.argv[1])
 END = sys.argv[2]
 ROOT = Path(__file__).resolve().parent.parent
