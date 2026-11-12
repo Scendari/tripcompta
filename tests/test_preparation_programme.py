@@ -187,13 +187,13 @@ def test_lines_order_period_and_item(screen):
     ok(sc.post(f"{sc.url}/duree", dict(days="7")))
     r = ok(sc.post(f"{sc.url}/programme", dict(day="1", text="Arrivée à l'hôtel")))
     assert message(r) == "Jour 1 : « Arrivée à l'hôtel » ajouté" and r.headers["location"].endswith("#jour-1")
-    ok(sc.post(f"{sc.url}/programme", dict(day="1", text="Vol aller", time="7h30", item=str(sc.item("Avion")))))
+    ok(sc.post(f"{sc.url}/programme", dict(day="1", text="Vol aller", time="7h30", items=str(sc.item("Avion")))))
     ok(sc.post(f"{sc.url}/programme", dict(day="1", text="Dîner", time="20:00")))
     ok(sc.post(f"{sc.url}/programme", dict(day="1", text="Courses")))
-    ok(sc.post(f"{sc.url}/programme", dict(day="1", text="Taxi pour l'hôtel", time="11 h", item=str(sc.item("Taxi")))))
-    ok(sc.post(f"{sc.url}/programme", dict(day="2", until="6", text="Plongées le matin", item=str(sc.item("Plongées")),
+    ok(sc.post(f"{sc.url}/programme", dict(day="1", text="Taxi pour l'hôtel", time="11 h", items=str(sc.item("Taxi")))))
+    ok(sc.post(f"{sc.url}/programme", dict(day="2", until="6", text="Plongées le matin", items=str(sc.item("Plongées")),
                                            note="2 plongées par jour")))
-    ok(sc.post(f"{sc.url}/programme", dict(day="3", text="Visite", item=str(sc.item("Hôtel")))))
+    ok(sc.post(f"{sc.url}/programme", dict(day="3", text="Visite", items=str(sc.item("Hôtel")))))
     sc.choose("Forfait Club A")
     sc.post(f"{sc.url}/offres/{sc.offer('Taxi')}/ne-plus-retenir")
     page = sc.cl.get(f"{sc.url}/programme").text
@@ -214,7 +214,7 @@ def test_lines_order_period_and_item(screen):
     sc.post(f"{sc.url}/postes/{sc.item('Taxi')}/supprimer")
     with sc.db.Session() as s:
         line = next(ln for ln in sc.plan(s).lines if ln.text == "Taxi pour l'hôtel")
-        assert line.item_id is None
+        assert line.item_ids() == []
     assert "Taxi :" not in clean(re.search(r'id="jour-1"(.*?)</section>', sc.cl.get(f"{sc.url}/programme").text, re.S).group(1))
     # modifier, supprimer
     r = ok(sc.post(f"{sc.url}/programme/{line.id}", dict(day="2", text="Transfert", time="9h", note="")))
@@ -312,18 +312,54 @@ def test_meals_item_and_launched_project(screen):
     ok(sc.post(f"{sc.url}/programme", dict(day="3", text="Encore modifiable")))
 
 
+def test_line_linked_to_several_items(screen):
+    """Une ligne liée à plusieurs postes (pastilles cochées sous « Lié à ») : « · Avion, Taxi » dans la vue Par jour,
+    le prestataire de chaque poste dans la vue Tableau ; décocher tout : liée à rien ; un poste supprimé : il quitte
+    la ligne, les autres restent ; montants inchangés (affichage seulement)."""
+    sc = screen.reference()
+    ok(sc.post(f"{sc.url}/duree", dict(days="7")))
+    avion, taxi, hotel = sc.item("Avion"), sc.item("Taxi"), sc.item("Hôtel")
+    ok(sc.post(f"{sc.url}/programme", dict(day="1", text="Arrivée", time="7h30", items=[str(taxi), str(avion)])))
+    page = sc.cl.get(f"{sc.url}/programme").text
+    day1 = clean(re.search(r'id="jour-1"(.*?)</section>', page, re.S).group(1))
+    assert "7 h 30 Arrivée · Avion , Taxi" in day1 or "7 h 30 Arrivée · Avion, Taxi" in day1   # dans l'ordre des postes
+    assert "Transavia" not in day1.split("Modifier")[0]
+    form = re.search(r'<form[^>]*class="plan-line-form".*?</form>', page, re.S).group(0)
+    assert f'name="items" value="{avion}" checked' in form and f'name="items" value="{taxi}" checked' in form
+    assert f'name="items" value="{hotel}" >' in form                                     # pas cochée
+    assert '<legend>Lié à</legend>' in form
+    table = sc.cl.get(f"{sc.url}/programme?vue=tableau").text
+    who = clean(re.search(r'id="t-jour-1".*?</tbody>', table, re.S).group(0))
+    assert "Avion : Transavia" in who and "Taxi" in who
+    with sc.db.Session() as s:
+        line = next(ln for ln in sc.plan(s).lines if ln.text == "Arrivée")
+        assert line.item_ids() == [avion, taxi]
+        assert S.compute_plan(sc.plan(s)).budget == 893000                                 # rien ne change au budget
+    ok(sc.post(f"{sc.url}/programme/{line.id}", dict(day="1", text="Arrivée", time="7h30", items=[str(hotel)])))
+    ok(sc.post(f"{sc.url}/postes/{hotel}/supprimer"))
+    with sc.db.Session() as s:
+        assert next(ln for ln in sc.plan(s).lines if ln.text == "Arrivée").item_ids() == []
+        assert s.query(M.PlanLineItem).count() == 0
+    ok(sc.post(f"{sc.url}/programme/{line.id}", dict(day="1", text="Arrivée", time="7h30", items=[str(avion), str(taxi)])))
+    ok(sc.post(f"{sc.url}/programme/{line.id}", dict(day="1", text="Arrivée", time="7h30")))   # rien de coché
+    with sc.db.Session() as s:
+        assert next(ln for ln in sc.plan(s).lines if ln.text == "Arrivée").item_ids() == []
+    r = sc.post(f"{sc.url}/programme/{line.id}", dict(day="1", text="Arrivée", items=["999"]))
+    assert refused(r)
+
+
 # ---------------------------------------------------------------- IA
 
 def test_programme_and_meals_by_ai_same_as_screen(screen):
     sc = meals_ref(screen.reference())
-    sc.post(f"{sc.url}/programme", dict(day="1", text="Vol aller", time="7h30", item=str(sc.item("Avion"))))
+    sc.post(f"{sc.url}/programme", dict(day="1", text="Vol aller", time="7h30", items=str(sc.item("Avion"))))
     sc.post(f"{sc.url}/programme", dict(day="2", until="6", text="Plongées le matin"))
     ops = Ops(sc.db)
     from test_preparation_lancer import REF_JSON
     pid = ops.create_plan("Mer Rouge 2027", 10, lieu="Hurghada")["projet_id"]
     ops.plan_import(pid, REF_JSON)
     res = ops.plan_import(pid, {"duree": 7, "repas": {"par_jour": 35, "jours_sans": [1, 7], "montants": {"4": 50}},
-                                "programme": [{"jour": 1, "heure": "7h30", "texte": "Vol aller", "poste": "Avion"},
+                                "programme": [{"jour": 1, "heure": "7h30", "texte": "Vol aller", "postes": ["Avion"]},
                                               {"jour": 2, "jusqu_au": 6, "texte": "Plongées le matin"}]})
     a, b = ops.plan(sc.pid), ops.plan(pid)
     for k in ("budget", "par_personne", "duree", "programme", "repas"):
@@ -331,12 +367,12 @@ def test_programme_and_meals_by_ai_same_as_screen(screen):
     assert (b["budget"], b["par_personne"]) == (10830.0, 1083.0)
     assert b["repas"] == dict(par_jour=35.0, jours_sans=[1, 7], montants={"4": 50.0}, jours_comptes=5,
                               par_personne=190.0, total=1900.0)
-    assert b["programme"][0] == dict(jour=1, jusqu_au=None, heure="07:30", texte="Vol aller", note=None, poste="Avion")
+    assert b["programme"][0] == dict(jour=1, jusqu_au=None, heure="07:30", texte="Vol aller", note=None, postes=["Avion"])
     assert "Programme, jour 2 à 6 : « Plongées le matin »" in res["actions"]
     # refus comme à l'écran
     with pytest.raises(OpsError) as e:
         ops.plan_import(pid, {"duree": 5, "programme": [{"jour": 9, "texte": "X"}, {"jour": 2, "texte": "Y", "heure": "midi"},
-                                                        {"jour": 2, "texte": "Z", "poste": "Lune"}],
+                                                        {"jour": 2, "texte": "Z", "postes": ["Lune"]}],
                               "repas": {"par_jour": -1, "montants": {"12": 5}}})
     errs = e.value.errors
     assert any("Heure illisible" in x for x in errs)

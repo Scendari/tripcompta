@@ -43,8 +43,9 @@ marge (en % du budget, ou en euros par personne) s'ajoute pour donner le prix av
 - **Durée** : un nombre de jours. Avec une date de départ ET une date de retour, elle est calculée (ne la donne pas).
   Les jours s'appellent Jour 1, Jour 2… (Jour 1 = le jour du départ).
 - **Programme** : une ligne par chose qu'on fait, rattachée à un jour (`jour`), avec si besoin une période
-  (`jusqu_au`), une heure (`heure`, « 9h30 »), une note et un poste (`poste`, le nom d'un poste qui existe, pour
-  l'affichage seulement). Le cas courant : une ligne par jour.
+  (`jusqu_au`), une heure (`heure`, « 9h30 »), une note et les postes concernés (`postes`, la liste des noms de
+  postes qui existent, par exemple `["Vols", "Transferts"]`, pour l'affichage seulement ; aucun, un ou plusieurs).
+  Le cas courant : une ligne par jour.
 - **Enveloppe repas** : un montant moyen par personne et par jour (`par_jour`). Elle compte tous les jours, sauf
   ceux de `jours_sans` ; un jour peut avoir un autre montant (`montants`, `{"4": 50}`, `null` pour revenir à
   l'enveloppe ; 0 compte pour 0). Repas = somme des jours comptés × participants, ajoutée au budget. Elle est
@@ -78,7 +79,7 @@ du projet ») n'est pas à redonner. Les montants en euros (210, « 210,00 », 1
   "echeances": [{"offre": "Transavia", "libelle": "Prix garanti jusqu'à cette date", "date": "2027-01-10"}],
   "duree": 7,
   "programme": [
-    {"jour": 1, "heure": "7h30", "texte": "Vol aller", "poste": "Avion"},
+    {"jour": 1, "heure": "7h30", "texte": "Vol aller puis taxi pour l'hôtel", "postes": ["Avion", "Taxi"]},
     {"jour": 2, "jusqu_au": 6, "texte": "Plongées le matin", "note": "2 plongées par jour"},
     {"jour": 7, "texte": "Retour"}
   ],

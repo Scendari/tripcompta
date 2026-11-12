@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% from "_plan_tabs.html" import plan_head %}
 {% block title %}Programme · {{ plan.name }} · Trip Compta{% endblock %}
-{# Les détails d'une ligne : Heure, Jour, Jusqu'au sur une rangée (7rem 1fr 1fr), puis « Lié à » et la note sur
-   toute la largeur. #}
+{# Les détails d'une ligne : Heure, Jour, Jusqu'au sur une rangée (7rem 1fr 1fr), puis « Lié à » (une pastille à
+   cocher par poste ; aucune cochée : liée à rien) et la note sur toute la largeur. #}
 {% macro line_form(plan, ln, d, u) %}
   <div class="plan-line-more">
     <div class="field"><label for="time-{{ u }}">Heure</label>
@@ -11,8 +11,11 @@
       <select id="day-{{ u }}" name="day">{% for x in range(1, plan.duration + 1) %}<option value="{{ x }}" {{ 'selected' if x == (ln.day if ln else d) }}>Jour {{ x }}</option>{% endfor %}</select></div>
     <div class="field"><label for="until-{{ u }}">Jusqu'au</label>
       <select id="until-{{ u }}" name="until"><option value="">— (un seul jour)</option>{% for x in range(1, plan.duration + 1) %}<option value="{{ x }}" {{ 'selected' if ln and ln.until == x }}>Jour {{ x }}</option>{% endfor %}</select></div>
-    <div class="field plan-line-wide"><label for="item-{{ u }}">Lié à</label>
-      <select id="item-{{ u }}" name="item"><option value="">rien</option>{% for it in plan.items %}<option value="{{ it.id }}" {{ 'selected' if ln and ln.item_id == it.id }}>{{ it.name }}</option>{% endfor %}</select></div>
+    {% set linked = ln.item_ids() if ln else [] %}
+    <fieldset class="field plan-line-wide plan-pick"><legend>Lié à</legend>
+      {% if plan.items %}<div class="plan-pick-chips">{% for it in plan.items %}<label class="chip"><input type="checkbox" name="items" value="{{ it.id }}" {{ 'checked' if it.id in linked }}>{{ it.name }}</label>{% endfor %}</div>
+      {% else %}<p class="hint" style="margin:0">Pas encore de poste : ajoute-les dans « Postes et offres ».</p>{% endif %}
+    </fieldset>
     <div class="field plan-line-wide"><label for="note-{{ u }}">Note</label>
       <input type="text" id="note-{{ u }}" name="note" value="{{ ln.note if ln else '' }}"></div>
   </div>
@@ -147,7 +150,8 @@
       {% elif y.line is defined %}{% set ln = y.line %}
       <td class="prog-what">{% if ln.time %}<b class="prog-time">{{ y.time_text }}</b> {% endif %}{{ ln.text }}{% if ln.until %} <span class="pill du">Jours {{ ln.day }} à {{ ln.until }}</span>{% endif %}
         {% if ln.note %}<span class="prog-note">{{ ln.note }}</span>{% endif %}</td>
-      <td class="prog-who">{% if y.who == 'pas encore choisi' %}<span class="muted">pas encore choisi</span>{% elif y.who %}{{ y.who }}{% endif %}</td>
+      <td class="prog-who">{% if y.who|length == 1 %}{% set w = y.who[0] %}{% if w[1] %}{{ w[1] }}{% else %}<span class="muted">pas encore choisi</span>{% endif %}
+        {% else %}{% for name, label in y.who %}<span class="prog-who-row">{% if label and label|lower != name|lower %}{{ name }} : {{ label }}{% elif label %}{{ label }}{% else %}{{ name }} : <span class="muted">pas encore choisi</span>{% endif %}</span>{% endfor %}{% endif %}</td>
       {% else %}
       <td class="prog-what prog-cont">↳ {{ y.text }}</td><td class="prog-who"></td>
       {% endif %}

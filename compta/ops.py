@@ -1064,7 +1064,7 @@ SPLIT_WORDS = {"euros": P.AMOUNTS, "montant": P.AMOUNTS, "montants": P.AMOUNTS, 
                "pourcentage": P.PERCENT, "pourcentages": P.PERCENT, "%": P.PERCENT}
 PLAN_KEYS = {"projet_id", "nom", "lieu", "debut", "fin", "note", "participants", "marge", "prix_annonce", "postes",
              "renommer_postes", "offres", "retenir", "echeances", "duree", "programme", "repas"}
-LINE_KEYS = {"jour", "jusqu_au", "heure", "texte", "note", "poste"}
+LINE_KEYS = {"jour", "jusqu_au", "heure", "texte", "note", "postes"}
 MEAL_KEYS = {"par_jour", "jours_sans", "jours_avec", "montants"}
 OFFER_KEYS = {"prestataire", "prix", "compte", "pour_combien", "quantite", "de_quoi", "postes", "repartition", "note",
               "retenue", "echeances"}
@@ -1138,7 +1138,7 @@ def plan_detail(plan: M.Plan, today: dt.date | None = None) -> dict:
         voyage_lance=plan.trip_id if plan.trip_id else None,
         duree=plan.duration, duree_calculee_avec_les_dates=bool(plan.start and plan.end),
         programme=[dict(jour=ln.day, jusqu_au=ln.until, heure=ln.time or None, texte=ln.text, note=ln.note or None,
-                        poste=names.get(ln.item_id)) for ln in sorted(plan.lines, key=lambda x: (x.day, bool(x.time),
+                        postes=[names[i] for i in ln.item_ids() if i in names]) for ln in sorted(plan.lines, key=lambda x: (x.day, bool(x.time),
                                                                                                  x.time, x.id))],
         repas=dict(par_jour=to_euros(plan.meal_per_day),
                    jours_sans=sorted(d.day for d in plan.day_meals if not d.meal_on),
@@ -1379,17 +1379,22 @@ def _add_line(s, plan: M.Plan, x, actions):
     if day is None:
         raise OpsError("indique le jour (1 pour le premier jour du séjour)")
     until = _whole(x["jusqu_au"], "jusqu'au jour") if x.get("jusqu_au") not in (None, "") else None
-    item_id = None
-    if x.get("poste"):
-        it = _plan_item(plan, x["poste"])
+    wanted = x.get("postes") or []
+    if isinstance(wanted, str):
+        wanted = [wanted]
+    if not isinstance(wanted, list):
+        raise OpsError("« postes » : la liste des noms de postes, par exemple [\"Vols\", \"Transferts\"]")
+    item_ids = []
+    for name in wanted:
+        it = _plan_item(plan, name)
         if it is None:
-            raise OpsError(f"pas de poste « {x['poste']} » dans ce projet")
-        item_id = it.id
+            raise OpsError(f"pas de poste « {name} » dans ce projet")
+        item_ids.append(it.id)
     text = " ".join(str(x.get("texte") or "").split())
     if any(ln.day == day and E.sort_key(ln.text) == E.sort_key(text) for ln in plan.lines):
         return                                   # déjà dans le programme : rien en double
     ln = W.save_plan_line(s, plan, day=day, until=until, time=x.get("heure") or "", text=text,
-                          note=x.get("note") or "", item_id=item_id)
+                          note=x.get("note") or "", item_ids=item_ids)
     actions.append(f"Programme, jour {ln.day}" + (f" à {ln.until}" if ln.until else "")
                    + (f", {S.time_text(ln.time)}" if ln.time else "") + f" : « {ln.text} »")
 

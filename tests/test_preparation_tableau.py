@@ -36,9 +36,9 @@ def site(tmp_path_factory):
     sc.post(f"{sc.url}/jours/1/repas", {})
     sc.post(f"{sc.url}/jours/7/repas", {})
     sc.post(f"{sc.url}/jours/4/repas", dict(on="1", amount="50"))
-    for x in (dict(day="1", text="Taxi jusqu'à l'hôtel", time="14h", item=str(sc.item("Taxi"))),
-              dict(day="1", text="Vol aller Paris → Hurghada", time="7h30", item=str(sc.item("Avion"))),
-              dict(day="2", until="6", text="Deux plongées chaque matin", item=str(sc.item("Plongées")),
+    for x in (dict(day="1", text="Taxi jusqu'à l'hôtel", time="14h", items=str(sc.item("Taxi"))),
+              dict(day="1", text="Vol aller Paris → Hurghada", time="7h30", items=str(sc.item("Avion"))),
+              dict(day="2", until="6", text="Deux plongées chaque matin", items=str(sc.item("Plongées")),
                    note="Rendez-vous au club à 8 h, avec tout le matériel ; les débutants commencent par un baptême "
                         "dans la baie, les autres partent en bateau vers le récif"),
               dict(day="3", text="Après-midi libre")):

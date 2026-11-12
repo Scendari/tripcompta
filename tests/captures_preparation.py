@@ -162,13 +162,13 @@ def main(out: Path):
         sc.post(f"{sc.url}/jours/1/repas", {})
         sc.post(f"{sc.url}/jours/7/repas", {})
         sc.post(f"{sc.url}/jours/4/repas", dict(on="1", amount="50"))
-        lines = [dict(day="1", text="Vol aller Paris → Hurghada", time="7h30", item=str(sc.item("Avion"))),
-                 dict(day="1", text="Taxi jusqu'à l'hôtel", time="14h", item=str(sc.item("Taxi"))),
-                 dict(day="2", until="6", text="Deux plongées chaque matin", item=str(sc.item("Plongées")),
+        lines = [dict(day="1", text="Vol aller Paris → Hurghada", time="7h30", items=str(sc.item("Avion"))),
+                 dict(day="1", text="Taxi jusqu'à l'hôtel", time="14h", items=str(sc.item("Taxi"))),
+                 dict(day="2", until="6", text="Deux plongées chaque matin", items=str(sc.item("Plongées")),
                       note="Rendez-vous au club à 8 h"),
                  dict(day="2", text="Installation et briefing"), dict(day="3", text="Après-midi libre"),
                  dict(day="4", text="Dîner au restaurant du port", note="Repas plus cher ce soir-là"),
-                 dict(day="5", text="Excursion en minibus", item=str(sc.item("Minibus"))),
+                 dict(day="5", text="Excursion en minibus", items=str(sc.item("Minibus"))),
                  dict(day="6", text="Journée sans plongée avant le vol"), dict(day="7", text="Vol retour", time="10h")]
         for x in lines:
             sc.post(f"{sc.url}/programme", x)

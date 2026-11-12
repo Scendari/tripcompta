@@ -635,9 +635,13 @@ def install(site):
     def line_values(plan, f) -> dict:
         day = number(f, "day", "le jour")
         until = number(f, "until", "jusqu'à quel jour", empty=0) or None
-        item = number(f, "item", "le poste", empty=0) or None
+        items = []                                  # les pastilles cochées sous « Lié à » (aucune : liée à rien)
+        for x in f.getlist("items"):
+            if not str(x).strip().isdigit():
+                raise FormError("Choisis les postes dans la liste.", "items")
+            items.append(int(x))
         return dict(day=day, until=until, time=f.get("time") or "", text=f.get("text") or "", note=f.get("note") or "",
-                    item_id=item)
+                    item_ids=items)
 
     def line_or_404(plan, lid: int) -> M.PlanLine:
         ln = next((x for x in plan.lines if x.id == lid), None)
@@ -656,7 +660,7 @@ def install(site):
             return refuse(back_to, str(e), e.field)
         text = " ".join(str(v["text"]).split())
         ln, err = write(s, f"programme, jour {v['day']} : « {text} » ajouté", lambda: W.save_plan_line(s, plan, **v),
-                        back_to, check=lambda: W.check_line(plan, **{k: v[k] for k in ("day", "text", "until", "time", "item_id")}))
+                        back_to, check=lambda: W.check_line(plan, **{k: v[k] for k in ("day", "text", "until", "time", "item_ids")}))
         return err or back(prog_url(plan, f"jour-{ln.day}"), f"Jour {ln.day} : « {ln.text} » ajouté")
 
     @app.post("/preparer/{pid}/programme/{lid}")
@@ -670,7 +674,7 @@ def install(site):
         except FormError as e:
             return refuse(back_to, str(e), e.field)
         _, err = write(s, f"programme : « {ln.text} » modifié", lambda: W.save_plan_line(s, plan, ln, **v), back_to,
-                       check=lambda: W.check_line(plan, **{k: v[k] for k in ("day", "text", "until", "time", "item_id")}))
+                       check=lambda: W.check_line(plan, **{k: v[k] for k in ("day", "text", "until", "time", "item_ids")}))
         return err or back(prog_url(plan, f"jour-{ln.day}"), f"« {ln.text} » modifié")
 
     @app.post("/preparer/{pid}/programme/{lid}/supprimer")

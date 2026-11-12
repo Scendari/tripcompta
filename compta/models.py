@@ -474,8 +474,23 @@ class PlanLine(Base):
     time: Mapped[str] = mapped_column(String(5), default="")                   # « 09:30 » ; vide : sans heure
     text: Mapped[str] = mapped_column(Text)
     note: Mapped[str] = mapped_column(Text, default="")
-    item_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)     # poste rattaché (affichage seulement)
     plan: Mapped[Plan] = relationship(back_populates="lines")
+    links: Mapped[list["PlanLineItem"]] = relationship(cascade="all, delete-orphan", back_populates="line")
+
+    def item_ids(self) -> list:
+        """Les postes liés (affichage seulement), dans l'ordre des postes du projet."""
+        order = {it.id: n for n, it in enumerate(self.plan.items)}
+        return [ln.item_id for ln in sorted(self.links, key=lambda ln: (order.get(ln.item_id, 1 << 30), ln.item_id))]
+
+
+class PlanLineItem(Base):
+    """Une ligne du programme est liée à ce poste (pour l'affichage seulement : « · Vols, Transferts »)."""
+    __tablename__ = "plan_line_items"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    line_id: Mapped[int] = mapped_column(ForeignKey("plan_lines.id"))
+    item_id: Mapped[int] = mapped_column(ForeignKey("plan_items.id"))
+    line: Mapped[PlanLine] = relationship(back_populates="links")
+    item: Mapped["PlanItem"] = relationship()    # pour l'ordre des suppressions : le lien part avant le poste
 
 
 class PlanDay(Base):

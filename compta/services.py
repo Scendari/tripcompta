@@ -701,29 +701,40 @@ def time_text(hhmm: str) -> str:
 def plan_program(plan: M.Plan) -> list:
     """Le programme jour par jour, de Jour 1 au dernier jour (même vide) : [{day, date, lines, after, meal_on,
     meal_amount, changed}]. `lines` : les lignes qui commencent ce jour-là (sans heure d'abord, dans l'ordre de saisie,
-    puis par heure), chacune avec `item_text` (« Avion : Transavia ») ; `after` : les périodes commencées avant et qui
-    durent encore ce jour-là (rappel)."""
+    puis par heure), chacune avec `item_text` (un poste : « Avion : Transavia » ; plusieurs : « Vols, Transferts ») et
+    `who` (vue Tableau : [(postes, prestataire)], vide si la ligne n'est liée à rien) ; `after` : les périodes
+    commencées avant et qui durent encore ce jour-là (rappel)."""
     n = plan.duration or 0
     r = compute_plan(plan)
     names = {i.id: i.name for i in plan.items}
     labels = {o.id: o.label for o in plan.offers}
     meals = {d.day: d for d in plan.day_meals}
 
+    def ids(ln):
+        return [i for i in ln.item_ids() if i in names]
+
+    def chosen(i):
+        return labels.get((r.by_item.get(i) or {}).get("offer"))
+
     def item_text(ln):
-        if ln.item_id not in names:
+        mine = ids(ln)
+        if len(mine) > 1:
+            return ", ".join(names[i] for i in mine)   # plusieurs postes : leurs noms (les prestataires : vue Tableau)
+        if not mine:
             return ""
-        got = r.by_item.get(ln.item_id) or {}
-        label = labels.get(got.get("offer"))
-        if label and E.sort_key(label) == E.sort_key(names[ln.item_id]):
-            return names[ln.item_id]                   # l'offre porte le nom du poste : « Taxi », pas « Taxi : Taxi »
-        return f"{names[ln.item_id]} : {label or 'pas encore choisi'}"
+        i = mine[0]
+        label = chosen(i)
+        if label and E.sort_key(label) == E.sort_key(names[i]):
+            return names[i]                            # l'offre porte le nom du poste : « Taxi », pas « Taxi : Taxi »
+        return f"{names[i]} : {label or 'pas encore choisi'}"
 
     def who(ln):
-        """Le prestataire d'une ligne rattachée à un poste (vue Tableau) : l'offre retenue, « pas encore choisi »
-        (None : la ligne n'a pas de poste)."""
-        if ln.item_id not in names:
-            return None
-        return labels.get((r.by_item.get(ln.item_id) or {}).get("offer")) or "pas encore choisi"
+        """Les prestataires des postes liés (vue Tableau) : [(noms des postes, offre retenue ou None)], un forfait qui
+        couvre plusieurs de ces postes dit une seule fois (« Hébergement, Plongées » : le forfait)."""
+        groups = {}
+        for i in ids(ln):
+            groups.setdefault(chosen(i) or ("", i), []).append(names[i])
+        return [(", ".join(v), k if isinstance(k, str) else None) for k, v in groups.items()]
 
     out = []
     for d in range(1, n + 1):

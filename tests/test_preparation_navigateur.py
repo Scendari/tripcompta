@@ -31,7 +31,7 @@ def site(tmp_path_factory):
     sc.post(f"{sc.url}/duree", dict(days="7"))
     sc.post(f"{sc.url}/repas", dict(meal_per_day="35"))
     sc.post(f"{sc.url}/programme", dict(day="2", until="5", text="Plongées le matin", time="8h30",
-                                        item=str(sc.item("Plongées"))))
+                                        items=str(sc.item("Plongées"))))
     sc.create(name="Projet vide", people="4", place="")
     empty_url = sc.url
     sc.url, sc.pid = "/preparer/1", 1
@@ -391,7 +391,7 @@ def test_programme_line_edit_stays_in_place(site, browser):
     assert form.bounding_box()["width"] > li.bounding_box()["width"] * .9
     heights = form.evaluate("f => [...f.querySelectorAll('input[type=text], select')].map(e => Math.round(e.getBoundingClientRect().height))")
     assert len(set(heights)) == 1, heights
-    labels = form.evaluate("f => [...f.querySelectorAll('label')].map(l => Math.round(l.getBoundingClientRect().height))")
+    labels = form.evaluate("f => [...f.querySelectorAll('.field > label, .plan-pick legend')].map(l => Math.round(l.getBoundingClientRect().height))")
     assert len(set(labels)) == 1, labels                             # chaque étiquette sur une ligne
     pw.expect(form.locator("input[name=text]")).to_be_focused()
     old = form.locator("input[name=text]").input_value()
@@ -403,6 +403,16 @@ def test_programme_line_edit_stays_in_place(site, browser):
     assert form.locator("input[name=text]").input_value() == old
     sup.hover()
     assert sup.evaluate("e => getComputedStyle(e).backgroundColor") in ("rgba(0, 0, 0, 0)", "transparent")
+    # « Lié à » : une pastille par poste, cochée au clavier (Espace), fond sarcelle clair et coche
+    k = form.evaluate("f => [...f.querySelectorAll('.plan-pick input')].findIndex(i => !i.checked)")
+    chip = form.locator(".plan-pick .chip").nth(k)                  # une pastille pas encore cochée
+    plain = chip.evaluate("e => getComputedStyle(e).backgroundColor")
+    chip.locator("input").focus()
+    page.keyboard.press("Space")
+    assert chip.locator("input").is_checked()
+    assert chip.evaluate("e => getComputedStyle(e).backgroundColor") != plain                # fond sarcelle clair
+    assert chip.evaluate("e => getComputedStyle(e, '::before').content") == '"✓"'
+    assert chip.evaluate("e => getComputedStyle(e).outlineStyle") == "solid"            # le focus se voit
     assert not page.errors, page.errors
 
 
@@ -411,7 +421,7 @@ def test_finishing_touches(site, browser):
     les alignements mesurés : les quatre actions d'un poste à la même hauteur, Modifier et Supprimer de même taille et
     sur la même ligne, partout."""
     from test_ux import _contrast
-    site.post(f"{site.url}/programme", dict(day="3", text="Transfert", item=str(site.item("Taxi"))))
+    site.post(f"{site.url}/programme", dict(day="3", text="Transfert", items=str(site.item("Taxi"))))
     page = new_page(browser)
     page.goto(site.base + site.url)
     fa = site.offer("Forfait Club A")

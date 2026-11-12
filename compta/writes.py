@@ -593,9 +593,9 @@ def delete_plan_item(s, plan: M.Plan, item: M.PlanItem) -> list:
         o.split = ""
         for ln in o.links:
             ln.share = None
-    for ln in plan.lines:                    # une ligne du programme rattachée au poste : détachée, pas supprimée
-        if ln.item_id == item.id:
-            ln.item_id = None
+    for ln in plan.lines:                    # une ligne du programme liée au poste : détachée de lui, pas supprimée
+        for x in [x for x in ln.links if x.item_id == item.id]:
+            ln.links.remove(x)
     s.flush()
     plan.items.remove(item)
     s.flush()
@@ -829,7 +829,7 @@ def _days_word(n) -> str:
     return f"{n} jour{'s' if n > 1 else ''}"
 
 
-def check_line(plan: M.Plan, *, day, text, until=None, time="", item_id=None) -> str:
+def check_line(plan: M.Plan, *, day, text, until=None, time="", item_ids=()) -> str:
     """Refuse (WriteError) une ligne de programme impossible. Ne modifie rien. Renvoie l'heure nettoyée."""
     if not _clean(text):
         raise WriteError("Écris ce qu'on fait ce jour-là.", "text")
@@ -843,23 +843,28 @@ def check_line(plan: M.Plan, *, day, text, until=None, time="", item_id=None) ->
             raise WriteError("« Jusqu'au jour » ne peut pas être avant le jour de départ de la ligne.", "until")
         if until > n:
             raise WriteError(f"Le séjour dure {_days_word(n)} : « jusqu'au jour » va au plus au jour {n}.", "until")
-    if item_id is not None and item_id not in {i.id for i in plan.items}:
-        raise WriteError("Ce poste ne fait pas partie de ce projet.", "item")
+    if set(item_ids or ()) - {i.id for i in plan.items}:
+        raise WriteError("Ce poste ne fait pas partie de ce projet.", "items")
     return clean_time(time)
 
 
 def save_plan_line(s, plan: M.Plan, line: M.PlanLine | None = None, *, day, text, until=None, time="", note="",
-                   item_id=None) -> M.PlanLine:
+                   item_ids=()) -> M.PlanLine:
     """Crée (line=None) ou réécrit une ligne du programme : jour (et jusqu'au jour pour une période), heure, texte,
-    note, poste rattaché (pour l'affichage seulement)."""
+    note, postes liés (aucun, un ou plusieurs ; pour l'affichage seulement)."""
     if line is not None:
         _plan_of(plan, line, "Cette ligne du programme")
-    hour = check_line(plan, day=day, text=text, until=until, time=time, item_id=item_id)
+    hour = check_line(plan, day=day, text=text, until=until, time=time, item_ids=item_ids)
     if line is None:
         line = M.PlanLine(day=day, text=_clean(text))
         plan.lines.append(line)
     line.day, line.until = day, (until if until and until != day else None)
-    line.time, line.text, line.note, line.item_id = hour, _clean(text), str(note or "").strip(), item_id
+    line.time, line.text, line.note = hour, _clean(text), str(note or "").strip()
+    wanted = list(dict.fromkeys(item_ids or ()))             # sans doublon, dans l'ordre donné
+    for x in [x for x in line.links if x.item_id not in wanted]:
+        line.links.remove(x)
+    have = {x.item_id for x in line.links}
+    line.links.extend(M.PlanLineItem(item_id=i) for i in wanted if i not in have)
     s.flush()
     return line
 
