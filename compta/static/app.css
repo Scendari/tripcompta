@@ -163,6 +163,9 @@ form.inline { display: inline; }
 .pill.doit { background: var(--amber-bg); color: var(--amber); }
 .pill.du { background: var(--blue-bg); color: var(--ocean); }
 .pill.grey { background: var(--bg-2); color: var(--muted); }
+/* thème sombre : --bg-2 se confond avec le fond des cartes ; la pastille grise prend un fond plus clair */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pill.grey { background: var(--bg-3); color: var(--text); } }
+:root[data-theme="dark"] .pill.grey { background: var(--bg-3); color: var(--text); }
 .pill.lock { background: var(--bg-2); color: var(--text); }
 
 /* ---------- alertes / messages ---------- */
@@ -916,7 +919,8 @@ textarea.modele.modele-libre { min-height: 11rem; height: 14rem; }
 .home-table td { padding: .8rem 1rem; vertical-align: middle; }
 .home-table tr:last-child td { border-bottom: 0; }
 .home-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.home-table td .pill { white-space: normal; margin: .1rem 0; }
+.home-table td .pill { white-space: nowrap; margin: .1rem 0; }
+.home-table td.pills .pill { white-space: normal; }   /* « 3 213,10 € à recevoir · 10 personnes… » peut passer à la ligne */
 .home-row { position: relative; }
 .home-row:hover td { background: var(--bg); }
 .row-link { font-weight: 700; font-size: var(--fs-text); }

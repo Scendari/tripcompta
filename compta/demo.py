@@ -267,7 +267,7 @@ if __name__ == "__main__":
 # n'est pas encore choisie. Les dates suivent aujourd'hui (départ dans 5 mois environ, échéances dans les semaines
 # qui viennent), pour que « dans 12 jours » reste vrai à chaque ouverture.
 
-PLAN_DEMO_NAME = "Marsa Alam — 10 jours de plongée (exemple)"
+PLAN_DEMO_NAME = "Marsa Alam — 10 jours de plongée"
 
 
 def plan_demo_data(today: dt.date) -> dict:
@@ -332,7 +332,7 @@ def plan_demo_data(today: dt.date) -> dict:
         "programme": [
             {"jour": 1, "heure": "6h40", "texte": "Vol direct Paris → Marsa Alam", "poste": "Vols"},
             {"jour": 1, "heure": "13h30", "texte": "Transfert jusqu'au lodge", "poste": "Transferts"},
-            {"jour": 1, "texte": "Installation, briefing du soir"},
+            {"jour": 1, "heure": "19h", "texte": "Installation, briefing du soir"},
             {"jour": 2, "heure": "8h30", "texte": "Plongée de reprise sur le récif du lodge", "poste": "Plongées"},
             {"jour": 3, "jusqu_au": 4, "texte": "Deux plongées par jour", "poste": "Plongées",
              "note": "Départ du bateau à 8 h, retour vers 14 h"},

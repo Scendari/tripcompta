@@ -59,7 +59,7 @@ def test_open_from_home_and_amounts(tmp_path):
     assert "1 652,00 €" in t
     assert "Projet d'exemple" in sc.text(f"{sc.url}/programme")             # la bannière sur chaque page du projet
     r = sc.post("/preparer/exemple/ouvrir")                                  # une seule fois
-    assert message(r) == "Le projet d'exemple est déjà là" and r.headers["location"].startswith(sc.url)
+    assert message(r) == "Le projet d'exemple est déjà là." and r.headers["location"].startswith(sc.url)
 
 
 def test_kept_apart_on_home(tmp_path):

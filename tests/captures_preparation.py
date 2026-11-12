@@ -57,6 +57,7 @@ def main(out: Path):
         shot("01b-premiere-utilisation-ouvert")
         sc.post("/voyages", dict(name="Hendaye, mai 2027", caisse="asso", place="Hendaye"))
         shot("02-accueil-sans-projet", "/")
+        page.goto(base + "/?onglet=preparer")                   # sans projet, l'accueil s'ouvre sur « Faire la compta »
         page.click("button:has-text('+ Préparer un voyage')")
         shot("02b-accueil-panneau-preparer")
         sc.create(name="Week-end Annecy", people="6", place="", start="2027-06-12", end="2027-06-14")
@@ -215,6 +216,17 @@ def main(out: Path):
         print(out / "45-choix-de-la-vue.png")
         shot("46-programme-tableau-sombre", f"{sc.url}/programme?vue=tableau", pg=dark)
         shot("47-programme-tableau-etroit", f"{sc.url}/programme?vue=tableau", pg=narrow)
+        # ---- accueil en deux onglets et projet d'exemple
+        shot("48-accueil-onglet-preparer", "/?onglet=preparer", full=False)
+        shot("49-accueil-onglet-compta", "/?onglet=compta", full=False)
+        r = sc.post("/preparer/exemple/ouvrir")
+        demo_url = r.headers["location"].split("?")[0]
+        shot("50-accueil-avec-exemple", "/?onglet=preparer", full=False)
+        shot("51-projet-exemple", demo_url, full=False)
+        shot("52-projet-exemple-programme-tableau", f"{demo_url}/programme?vue=tableau")
+        shot("53-accueil-fenetre-etroite", "/?onglet=preparer", pg=narrow)
+        shot("54-accueil-sombre", "/?onglet=preparer", full=False, pg=dark)
+        shot("55-accueil-compta-sombre", "/?onglet=compta", full=False, pg=dark)
         srv.should_exit = True
         browser.close()
 

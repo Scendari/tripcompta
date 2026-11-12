@@ -128,7 +128,7 @@ def install(site):
         from .. import demo
         plan = s.query(M.Plan).filter(M.Plan.is_demo.is_(True)).first()
         if plan is not None:
-            return back(page_url(plan), "Le projet d'exemple est déjà là")
+            return back(page_url(plan), "Le projet d'exemple est déjà là.")
         db.snapshot("ouverture du projet d'exemple")
         plan = demo.seed_plan_demo(s, today())
         s.commit()
