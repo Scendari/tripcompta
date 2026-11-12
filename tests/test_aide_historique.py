@@ -160,6 +160,23 @@ def test_help_page_covers_the_basics_in_plain_words(tmp_path):
         assert jargon not in low, jargon
 
 
+def test_help_page_stays_short_and_easy_to_scan(tmp_path):
+    """Critique Impeccable de l'aide : pas plus de 1 200 mots (1 592 avant), le glossaire en deux groupes, un sommaire
+    nommé, les raccourcis en liste, pas de petit texte au cas par cas ni de style écrit dans la page, pas de « solde »."""
+    import re
+    app, cl, tid, bruno = setup(tmp_path)
+    page = cl.get("/aide").text
+    body = page.split('<div class="help-page">', 1)[1].split("<script>", 1)[0]
+    words = visible(body).split()
+    assert len(words) <= 1200, len(words)
+    assert re.findall(r'<h3 class="help-group">([^<]+)</h3>', body) == ["Pendant le voyage", "Pour préparer", "Au clavier"]
+    assert '<nav class="help-nav" aria-label="Sommaire de l\'aide">' in body
+    assert body.count("<kbd>") >= 3 and '<ul class="help-keys">' in body
+    assert 'class="small"' not in body and "style=" not in body
+    assert "sold" not in visible(body).lower()
+    assert '<div class="data-path">' in body                             # le chemin sur sa propre ligne
+
+
 def test_help_is_linked_and_survives_a_locked_folder(tmp_path):
     app, cl, tid, bruno = setup(tmp_path)
     assert 'href="/aide"' in cl.get("/").text

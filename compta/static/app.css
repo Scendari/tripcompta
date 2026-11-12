@@ -193,14 +193,47 @@ main[data-closed] :is(button, input, select, textarea):disabled { cursor: not-al
 .history-list li form { margin: 0 0 0 auto; }
 .history-list .when { color: var(--muted); font-size: var(--fs-detail); min-width: 9.5rem; }
 .history-list .what::first-letter { text-transform: uppercase; }
-.help-page { max-width: 860px; }
-.help-page h2 { margin-top: 1.6rem; scroll-margin-top: calc(var(--topbar-h, 56px) + .6rem); }
-.help-page dl { margin: 0; }
-.help-page dt { font-weight: 700; margin-top: .7rem; }
-.help-page dd { margin: .1rem 0 0; }
-.help-page .help-nav { display: flex; gap: .5rem; flex-wrap: wrap; margin: .6rem 0 0; }
-.help-page ol, .help-page ul { padding-left: 1.3rem; display: grid; gap: .35rem; }
-.help-page kbd { font: inherit; font-size: .88em; border: 1px solid var(--field); border-bottom-width: 2px; border-radius: 6px; padding: .05rem .4rem; background: var(--card); white-space: nowrap; }
+/* Aide (surface de lecture) : colonne de texte de 44rem au plus (lignes de 75 caractères environ), sommaire collant à
+   droite sur grand écran, en ligne de liens au-dessus en fenêtre étroite. Un seul bord gauche dans une carte : les
+   numéros et les puces débordent dans la marge intérieure. Tout le texte courant au rôle texte. */
+.help-page { max-width: 64rem; }
+.help-page .lead { margin: .2rem 0 0; color: var(--muted); }
+.help-layout { display: grid; grid-template-columns: minmax(0, 44rem) 12rem; gap: 2.5rem; align-items: start; }
+.help-nav { grid-column: 2; grid-row: 1; position: sticky; top: calc(var(--topbar-h, 56px) + 1rem); display: flex; flex-direction: column;
+  gap: .1rem; margin-top: 1.6rem; padding-left: .8rem; border-left: 1px solid var(--border); font-size: var(--fs-detail); }
+.help-nav a { color: var(--muted); padding: .3rem 0; text-decoration: none; }
+.help-nav a:hover { color: var(--teal-strong); text-decoration: underline; }
+.help-nav a[aria-current] { color: var(--teal-strong); font-weight: 600; }
+.help-body { grid-column: 1; grid-row: 1; min-width: 0; }
+.help-page h2 { margin: 1.6rem 0 .6rem; scroll-margin-top: calc(var(--topbar-h, 56px) + .6rem); }
+.help-page .card { padding: 1.1rem 1.3rem 1.1rem 2.4rem; }
+.help-page .card > * { margin: 0; }
+.help-page .card > * + * { margin-top: .75rem; }
+.help-page ol, .help-page ul { padding-left: 0; display: grid; gap: .4rem; }
+
+.help-page li::marker { color: var(--muted); }
+.help-page ol > li::marker { font-weight: 700; color: var(--teal-strong); }
+.help-page .help-group { font-size: var(--fs-heading); margin: 0 0 .1rem; }
+.help-page .card > dl + .help-group, .help-page .card > ul + .help-group { margin-top: 1.4rem; }
+.help-page dl { display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: .55rem 1.2rem; }
+.help-page dt { font-weight: 700; margin: 0; }
+.help-page dd { margin: 0; }
+.help-keys { list-style: none; }
+.help-keys li { padding-left: 0; display: flex; gap: .7rem; align-items: baseline; }
+.help-keys kbd { min-width: 4.6rem; text-align: center; }
+.help-page kbd { font: inherit; font-size: var(--fs-detail); border: 1px solid var(--field); border-bottom-width: 2px; border-radius: 6px; padding: .05rem .4rem; background: var(--card); white-space: nowrap; }
+.help-page .data-path { display: block; margin: .4rem 0 0; }
+@media (max-width: 1100px) {
+  .help-layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .help-nav { grid-column: 1; grid-row: 1; position: static; flex-direction: row; flex-wrap: wrap; gap: .1rem .9rem;
+    margin: .8rem 0 0; padding: 0; border: 0; }
+  .help-body { grid-row: 2; max-width: 44rem; }
+}
+@media (max-width: 640px) {
+  .help-page dl { grid-template-columns: minmax(0, 1fr); gap: .1rem; }
+  .help-page dd { margin-bottom: .55rem; }
+  .help-page .card { padding-left: 2rem; }
+}
 .backup-list { list-style: none; padding: 0; margin: 0; display: grid; gap: .6rem; }
 .backup-list .backup { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; padding: .75rem 1rem; }
 .backup-list .backup .grow { flex: 1 1 22rem; }
