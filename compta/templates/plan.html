@@ -215,9 +215,9 @@
       </div>
       <div class="row plan-offer-actions">
         {% if o.chosen %}
-        <form method="post" action="/preparer/{{ plan.id }}/offres/{{ o.id }}/ne-plus-retenir" class="inline"><button class="btn ghost small">Ne plus retenir</button></form>
+        <form method="post" action="/preparer/{{ plan.id }}/offres/{{ o.id }}/ne-plus-retenir" class="inline" data-keep-place><button class="btn ghost small plan-pick-btn">Ne plus retenir</button></form>
         {% else %}
-        <form method="post" action="/preparer/{{ plan.id }}/offres/{{ o.id }}/retenir" class="inline"><button class="btn small">Retenir</button></form>
+        <form method="post" action="/preparer/{{ plan.id }}/offres/{{ o.id }}/retenir" class="inline" data-keep-place><button class="btn small plan-pick-btn">Retenir</button></form>
         {% endif %}
         <span class="act-pair">
         <a class="act" href="/preparer/{{ plan.id }}/offres/{{ o.id }}/modifier">Modifier</a>

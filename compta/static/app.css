@@ -1532,6 +1532,9 @@ tr.to-check > td:last-child { border-right: 2px solid var(--coral); }
 .up-text { color: var(--amber); }
 .down-text { color: var(--ok); }
 .plan-offer-actions { justify-content: flex-end; gap: .35rem; }
+html.placing body { visibility: hidden; }   /* le temps de remettre la page à sa place (app.js, data-keep-place) */
+/* « Retenir » et « Ne plus retenir » : même largeur, le bouton suivant ne bouge pas quand l'un remplace l'autre */
+.plan-pick-btn { min-width: 9.5em; justify-content: center; text-align: center; }
 .plan-add { margin-top: 1rem; }
 .plan-add h3 { margin-bottom: .5rem; }
 .plan-add input[name=name] { flex: 1; min-width: 12rem; }

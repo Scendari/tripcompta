@@ -384,19 +384,19 @@ def install(site):
         return back(page_url(plan, f"offre-{saved.id}"), f"Offre « {saved.label} » {'modifiée' if offer else 'ajoutée'}")
 
     @app.post("/preparer/{pid}/offres/{oid}/retenir")
-    def offer_choose(pid: int, oid: int, s: Session = Depends(get_s)):
+    def offer_choose(pid: int, oid: int, sur_place: int = 0, s: Session = Depends(get_s)):
         plan = plan_or_404(s, pid)
         o = offer_or_404(plan, oid)
         gone, _ = write(s, f"offre « {o.label} » retenue", lambda: W.choose_offer(s, plan, o), page_url(plan))
         extra = f" (à la place de {', '.join(f'« {g} »' for g in gone)})" if gone else ""
-        return back(page_url(plan, f"offre-{oid}"), f"Offre « {o.label} » retenue{extra}")
+        return back(page_url(plan, "" if sur_place else f"offre-{oid}"), f"Offre « {o.label} » retenue{extra}")
 
     @app.post("/preparer/{pid}/offres/{oid}/ne-plus-retenir")
-    def offer_unchoose(pid: int, oid: int, s: Session = Depends(get_s)):
+    def offer_unchoose(pid: int, oid: int, sur_place: int = 0, s: Session = Depends(get_s)):
         plan = plan_or_404(s, pid)
         o = offer_or_404(plan, oid)
         write(s, f"offre « {o.label} » plus retenue", lambda: W.choose_offer(s, plan, o, chosen=False), page_url(plan))
-        return back(page_url(plan, f"offre-{oid}"), f"L'offre « {o.label} » n'est plus retenue")
+        return back(page_url(plan, "" if sur_place else f"offre-{oid}"), f"L'offre « {o.label} » n'est plus retenue")
 
     @app.post("/preparer/{pid}/offres/{oid}/supprimer")
     def offer_delete(pid: int, oid: int, s: Session = Depends(get_s)):

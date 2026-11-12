@@ -233,6 +233,38 @@
     }
   } catch (e) {}
 
+  // Bouton qui recharge la page sans la faire sauter (form[data-keep-place], « Retenir » une offre) : le bloc où l'on a
+  // cliqué revient à la même hauteur dans la fenêtre, même si ce qui est au-dessus a grandi ou rétréci, et le focus
+  // va au bouton qui a pris la place de celui qu'on a cliqué.
+  const PLACE_KEY = "garder-place";
+  document.querySelectorAll("form[data-keep-place]").forEach((f) => {
+    f.addEventListener("submit", () => {
+      const box = f.parentElement.closest("[id]");
+      if (!box) return;
+      try { sessionStorage.setItem(PLACE_KEY, JSON.stringify({path: location.pathname, id: box.id,
+        top: box.getBoundingClientRect().top})); } catch (e) { return; }
+      // retour sans ancre (sur_place=1) : sinon le navigateur affiche d'abord l'offre tout en haut, puis elle revient
+      if (!/[?&]sur_place=/.test(f.action)) f.action += (f.action.includes("?") ? "&" : "?") + "sur_place=1";
+    });
+  });
+  try {
+    const was = JSON.parse(sessionStorage.getItem(PLACE_KEY) || "null");
+    sessionStorage.removeItem(PLACE_KEY);
+    const box = was && was.path === location.pathname && document.getElementById(was.id);
+    if (!box) document.documentElement.classList.remove("placing");
+    else {
+      const put = () => {
+        scrollBy(0, box.getBoundingClientRect().top - was.top);
+        const b = box.querySelector("form[data-keep-place] button");
+        if (b && document.activeElement !== b) b.focus({preventScroll: true});
+      };
+      put();                                               // tout de suite, avant le premier affichage
+      document.documentElement.classList.remove("placing");
+      // et encore après le chargement (images, polices : ce qui est au-dessus a pu changer de hauteur)
+      if (document.readyState === "complete") setTimeout(put, 0); else addEventListener("load", () => setTimeout(put, 0), {once: true});
+    }
+  } catch (e) { document.documentElement.classList.remove("placing"); }   // jamais de page laissée cachée
+
   // Montants écrits sur les barres : seulement s'ils tiennent dans leur morceau de barre
   function fitSegNums() {
     document.querySelectorAll(".seg-num").forEach((n) => {

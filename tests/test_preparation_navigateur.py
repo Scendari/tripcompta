@@ -555,3 +555,36 @@ def test_menu_after_launch_and_trip_menu_unchanged(site, browser):
         assert not page.errors, page.errors
     finally:
         site.post(f"/v/{tid}/supprimer")                           # le projet peut être relancé : les autres essais
+
+
+def test_choose_keeps_the_page_still(site, browser):
+    """« Retenir » / « Ne plus retenir » : la page ne saute pas. L'offre cliquée revient à la même hauteur dans la
+    fenêtre (dès le premier affichage, pas d'aller-retour vers l'ancre), le bouton garde sa place et sa largeur, et le
+    focus est sur le bouton qui a remplacé celui qu'on a cliqué."""
+    page = new_page(browser)
+    page.add_init_script("""window.__tops = []; const id = sessionStorage.getItem('garder-place');
+      const look = () => { const m = id && JSON.parse(id); const el = m && document.getElementById(m.id);
+        if (el && getComputedStyle(document.body).visibility === 'visible') window.__tops.push(Math.round(el.getBoundingClientRect().top)); requestAnimationFrame(look); };
+      requestAnimationFrame(look);""")
+    page.goto(site.base + site.url)
+    try:
+        for offer, label, after in (("Air France", "Retenir", "Ne plus retenir"),
+                                    ("Air France", "Ne plus retenir", "Retenir")):
+            box = page.locator(f"#offre-{site.offer(offer)}")
+            box.evaluate("el => window.scrollBy(0, el.getBoundingClientRect().top - 420)")
+            btn = box.locator(f"button:has-text('{label}')")
+            before, b1 = box.bounding_box(), btn.bounding_box()
+            btn.click()
+            page.wait_for_url(re.compile(r"/preparer/1\?"))
+            page.wait_for_load_state("load")
+            page.wait_for_timeout(150)
+            box = page.locator(f"#offre-{site.offer(offer)}")
+            now, b2 = box.bounding_box(), box.locator(f"button:has-text('{after}')").bounding_box()
+            assert abs(now["y"] - before["y"]) <= 1, (before, now)
+            assert abs(b2["x"] - b1["x"]) <= 1 and abs(b2["width"] - b1["width"]) <= 1, (b1, b2)
+            tops = page.evaluate("window.__tops")
+            assert tops and all(abs(t - round(before["y"])) <= 1 for t in tops), tops   # jamais affichée ailleurs
+            pw.expect(box.locator(f"button:has-text('{after}')")).to_be_focused()
+    finally:
+        site.choose("Transavia")
+    assert not page.errors, page.errors
