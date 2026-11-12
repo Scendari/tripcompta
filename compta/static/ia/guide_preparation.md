@@ -15,8 +15,8 @@ avec un message que l'organisateur te recopiera : corrige alors et redonne le bl
   s'il le veut, un prix annoncé par personne.
 - **Poste** : une chose à payer (Avion, Hôtel, Plongées, Minibus, Assurance…), en texte libre.
 - **Offre** : le prix d'un prestataire pour un ou plusieurs postes. Plusieurs offres par poste, pour comparer.
-- **Offre retenue** : une seule par poste. Retenir une offre écarte les autres offres retenues qui partagent un
-  de ses postes (rien n'est re-retenu tout seul).
+- **Offre sélectionnée** : une seule par poste. Sélectionner une offre écarte les autres offres sélectionnées qui partagent un
+  de ses postes (rien n'est re-sélectionné tout seul).
 - **Échéance** : ce qu'il faut faire avant le voyage pour une offre (option à confirmer, acompte à verser, reste à payer, prix garanti jusqu'à une date), avec une date et parfois un montant.
 
 ## Comment un prix se compte
@@ -35,7 +35,7 @@ Une offre qui couvre plusieurs postes (forfait « plongée + hébergement ») : 
 répartir son prix entre eux (facultatif) : en euros (les parts du prix saisi, leur somme doit faire le prix) ou en
 pourcentages (somme 100).
 
-Le budget = la somme des offres retenues ; le prix par personne = budget / N, arrondi au centime au-dessus. La
+Le budget = la somme des offres sélectionnées ; le prix par personne = budget / N, arrondi au centime au-dessus. La
 marge (en % du budget, ou en euros par personne) s'ajoute pour donner le prix avec la marge.
 
 ## Le programme du séjour et l'enveloppe repas
@@ -66,7 +66,7 @@ du projet ») n'est pas à redonner. Les montants en euros (210, « 210,00 », 1
   "postes": ["Avion", "Taxi", "Hôtel", "Plongées"],
   "renommer_postes": {"Taxi": "Transferts"},
   "offres": [
-    {"prestataire": "Transavia", "prix": 210, "compte": "par personne", "postes": ["Avion"], "retenue": true},
+    {"prestataire": "Transavia", "prix": 210, "compte": "par personne", "postes": ["Avion"], "selectionnee": true},
     {"prestataire": "Taxi Hurghada", "prix": 60, "compte": "pour un nombre de personnes", "pour_combien": 4,
      "postes": ["Taxi"]},
     {"prestataire": "Forfait Club A", "prix": 580, "compte": "par personne", "postes": ["Hôtel", "Plongées"],
@@ -75,7 +75,7 @@ du projet ») n'est pas à redonner. Les montants en euros (210, « 210,00 », 1
      "echeances": [{"libelle": "Option à confirmer", "date": "2027-01-15"},
                    {"libelle": "Acompte à verser", "date": "2027-02-01", "montant": 1000}]}
   ],
-  "retenir": ["Forfait Club A"],
+  "selectionner": ["Forfait Club A"],
   "echeances": [{"offre": "Transavia", "libelle": "Prix garanti jusqu'à cette date", "date": "2027-01-10"}],
   "duree": 7,
   "programme": [
@@ -95,7 +95,7 @@ Règles :
 - Une offre dont le `prestataire` porte le nom d'une offre existante **modifie** cette offre (seuls les champs
   donnés changent) ; sinon elle est ajoutée. Pour une nouvelle offre : `prestataire`, `prix` et `postes` sont
   obligatoires. Un prix de 0 veut dire « inclus ».
-- `retenue: true` retient l'offre ; `retenir` retient des offres déjà là.
+- `selectionnee: true` sélectionne l'offre ; `selectionner` sélectionne des offres déjà là.
 - Les échéances : dans l'offre (`echeances`) ou à part (`echeances` avec `offre`). Une échéance déjà là (même
   libellé, même date) n'est pas ajoutée deux fois.
 - `duree`, `programme`, `repas` : facultatifs. Une ligne de programme déjà là (même jour, même texte) n'est pas
@@ -107,5 +107,5 @@ Règles :
 ## Le récapitulatif
 
 Avant le bloc, dis en quelques lignes ce que tu proposes : les offres (prix tel que tu l'as lu, comment il se
-compte, pour quels postes), ce qui serait retenu, et ce que tu n'as pas compris dans le devis. Ne calcule pas
+compte, pour quels postes), ce qui serait sélectionné, et ce que tu n'as pas compris dans le devis. Ne calcule pas
 toi-même les totaux définitifs : l'application les montre avant d'enregistrer.

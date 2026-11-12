@@ -11,7 +11,7 @@
 
 <section class="card" aria-labelledby="depenses-h">
   <h2 id="depenses-h" class="section-title">Les dépenses prévues</h2>
-  <p class="hint" style="margin-top:0">Une par offre retenue, en montant <b>prévu</b> : tu saisiras le vrai montant une fois payé. Elles seront pour tout le monde : les participants que tu ajouteras ensuite y seront comptés.</p>
+  <p class="hint" style="margin-top:0">Une par offre sélectionnée, en montant <b>prévu</b> : tu saisiras le vrai montant une fois payé. Elles seront pour tout le monde : les participants que tu ajouteras ensuite y seront comptés.</p>
   <div class="table-wrap"><table class="plan-launch-table" id="lignes">
     <thead><tr><th>Dépense</th><th>Catégorie</th><th class="num">Prévu</th></tr></thead>
     <tbody>
@@ -27,7 +27,7 @@
   {% endif %}
   {% if missing %}
   <ul class="plan-launch-missing" id="postes-sans-offre">
-    {% for name in missing %}<li>⚠️ {{ name }} n'a pas d'offre retenue : rien ne sera créé pour ce poste.</li>{% endfor %}
+    {% for name in missing %}<li>⚠️ {{ name }} n'a pas d'offre sélectionnée : rien ne sera créé pour ce poste.</li>{% endfor %}
   </ul>
   {% endif %}
   <p class="small muted" style="margin-bottom:0">Dans la note du voyage : « Préparé pour {{ plan.people }} personne{{ 's' if plan.people > 1 }}.{% if plan.announced is not none %} Prix annoncé : {{ plan.announced|money }} par personne.{% endif %} »{% if r.margin %} La marge ({{ r.margin|money }}) n'est pas une dépense : elle n'est pas créée.{% endif %}</p>

@@ -1035,7 +1035,7 @@ class Ops:
         return self.plan_import(projet, {"offres": [offre]}, simulation)
 
     def choose_plan_offer(self, projet, offre, simulation=False) -> dict:
-        return self.plan_import(projet, {"retenir": [offre]}, simulation)
+        return self.plan_import(projet, {"selectionner": [offre]}, simulation)
 
     def set_plan(self, projet, changes: dict, simulation=False) -> dict:
         return self.plan_import(projet, {k: v for k, v in changes.items()
@@ -1063,11 +1063,11 @@ COUNTING_NAMES = {P.PER_PERSON: "par personne", P.GROUP: "pour le groupe", P.LOT
 SPLIT_WORDS = {"euros": P.AMOUNTS, "montant": P.AMOUNTS, "montants": P.AMOUNTS, "pourcent": P.PERCENT,
                "pourcentage": P.PERCENT, "pourcentages": P.PERCENT, "%": P.PERCENT}
 PLAN_KEYS = {"projet_id", "nom", "lieu", "debut", "fin", "note", "participants", "marge", "prix_annonce", "postes",
-             "renommer_postes", "offres", "retenir", "echeances", "duree", "programme", "repas"}
+             "renommer_postes", "offres", "selectionner", "echeances", "duree", "programme", "repas"}
 LINE_KEYS = {"jour", "jusqu_au", "heure", "texte", "note", "postes"}
 MEAL_KEYS = {"par_jour", "jours_sans", "jours_avec", "montants"}
 OFFER_KEYS = {"prestataire", "prix", "compte", "pour_combien", "quantite", "de_quoi", "postes", "repartition", "note",
-              "retenue", "echeances"}
+              "selectionnee", "echeances"}
 
 
 def get_plan(s, ref) -> M.Plan:
@@ -1100,7 +1100,7 @@ def _plan_offer(plan: M.Plan, label):
 
 
 def plan_detail(plan: M.Plan, today: dt.date | None = None) -> dict:
-    """Tout sur un projet, en euros : postes, offres (avec « si tu la retiens »), calcul, échéances."""
+    """Tout sur un projet, en euros : postes, offres (avec « si tu la sélectionnes »), calcul, échéances."""
     r = S.compute_plan(plan)
     names = {i.id: i.name for i in plan.items}
     labels = {o.id: o.label for o in plan.offers}
@@ -1117,10 +1117,10 @@ def plan_detail(plan: M.Plan, today: dt.date | None = None) -> dict:
         offers.append(dict(
             prestataire=o.label, prix=to_euros(o.price), compte=COUNTING_NAMES[o.counting],
             pour_combien=o.capacity, quantite=o.quantity, de_quoi=o.quantity_label or None,
-            postes=[names[i] for i in ids], repartition=split, note=o.note or None, retenue=o.chosen,
+            postes=[names[i] for i in ids], repartition=split, note=o.note or None, selectionnee=o.chosen,
             prix_en_clair=S.plan_offer_text(o, plan.people), total=to_euros(r.totals[o.id]),
             par_personne=to_euros(r.offer_per_person[o.id]),
-            si_retenue=None if w is None else dict(
+            si_selectionnee=None if w is None else dict(
                 budget=to_euros(w.budget), ecart=to_euros(w.delta), ecart_par_personne=to_euros(w.delta_per_person),
                 remplace=[labels[x] for x in w.replaces], postes_sans_offre=[names[i] for i in w.lost]),
             echeances=[dict(libelle=d.label, date=d.date.isoformat(), montant=to_euros(d.amount), fait=d.done)
@@ -1244,14 +1244,14 @@ def plan_apply(s, plan: M.Plan, data) -> dict:
         where = f"Offre {n}" + (f" ({x.get('prestataire')})" if isinstance(x, dict) and x.get("prestataire") else "")
         attempt(where, lambda x=x: _apply_offer(s, plan, x, ensure_item, actions))
 
-    for label in data.get("retenir") or []:
+    for label in data.get("selectionner") or []:
         def choose(label=label):
             o = _plan_offer(plan, label)
             if o is None:
                 raise OpsError(f"pas d'offre « {label} » dans ce projet")
             gone = W.choose_offer(s, plan, o)
-            actions.append(f"Offre « {o.label} » retenue" + (f" (à la place de {', '.join(gone)})" if gone else ""))
-        attempt(f"Retenir « {label} »", choose)
+            actions.append(f"Offre « {o.label} » sélectionnée" + (f" (à la place de {', '.join(gone)})" if gone else ""))
+        attempt(f"Sélectionner « {label} »", choose)
 
     for n, d in enumerate(data.get("echeances") or [], 1):
         def deadline(d=d):
@@ -1356,12 +1356,12 @@ def _apply_offer(s, plan: M.Plan, x, ensure_item, actions):
                     raise OpsError(f"répartition : « {name} » n'est pas un des postes de cette offre")
                 shares[it.id] = euros(value, f"part de {name}")
             v["split"], v["shares"] = kind, shares
-    chosen = _truthy(x["retenue"]) if "retenue" in x else None
+    chosen = _truthy(x["selectionnee"]) if "selectionnee" in x else None
     o = W.save_offer(s, plan, old, label=v["label"], price=v["price"], counting=v["counting"], quantity=v["quantity"],
                      quantity_label=v["quantity_label"], capacity=v["capacity"], items=v["items"], split=v["split"],
                      shares=v["shares"], note=v["note"], chosen=chosen)
     actions.append(f"Offre « {o.label} » {'modifiée' if old else 'ajoutée'} : {S.plan_offer_text(o, plan.people)}, "
-                   f"pour {S.plan_and_list(names[i] for i in o.item_ids())}" + (" (retenue)" if o.chosen else ""))
+                   f"pour {S.plan_and_list(names[i] for i in o.item_ids())}" + (" (sélectionnée)" if o.chosen else ""))
     for d in x.get("echeances") or []:
         if not isinstance(d, dict):
             raise OpsError("chaque échéance est {\"libelle\": …, \"date\": …, \"montant\": …}")

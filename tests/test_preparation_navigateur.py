@@ -226,18 +226,18 @@ def test_choose_and_undo_by_clicking(site, browser):
     page = new_page(browser)
     page.goto(site.base + site.url)
     budget = page.locator("#budget").inner_text()
-    page.locator(f"#offre-{site.offer('Air France')} button:has-text('Retenir')").click()
+    page.locator(f"#offre-{site.offer('Air France')} button:has-text('Sélectionner')").click()
     page.wait_for_url(re.compile(r"/preparer/1\?"))
-    assert "Offre « Air France » retenue (à la place de « Transavia »)" in page.locator(".flash").inner_text()
+    assert "Offre « Air France » sélectionnée (à la place de « Transavia »)" in page.locator(".flash").inner_text()
     assert page.locator("#budget").inner_text() != budget
     page.locator(".flash button:has-text('Défaire')").click()
     page.wait_for_url(re.compile(r"/preparer/1\?"))
-    assert "Défait : offre « Air France » retenue." in page.locator(".flash").inner_text()
+    assert "Défait : offre « Air France » sélectionnée." in page.locator(".flash").inner_text()
     assert page.locator("#budget").inner_text() == budget
     page.locator(".flash button:has-text('Rétablir')").click()
     page.wait_for_url(re.compile(r"/preparer/1\?"))
     assert page.locator("#budget").inner_text() != budget
-    page.locator(f"#offre-{site.offer('Transavia')} button:has-text('Retenir')").click()     # remis comme avant
+    page.locator(f"#offre-{site.offer('Transavia')} button:has-text('Sélectionner')").click()     # remis comme avant
     page.wait_for_url(re.compile(r"/preparer/1\?"))
     assert page.locator("#budget").inner_text() == budget
     assert not page.errors, page.errors
@@ -430,7 +430,7 @@ def test_finishing_touches(site, browser):
     short = page.locator(f"#offre-{fa}-{site.item('Plongées')}")
     assert short.count() == 1 and short.locator(".plan-deadlines, button").count() == 0
     text = short.inner_text().replace(" ", " ").replace("\xa0", " ")
-    assert "Forfait Club A" in text and "✓ Retenue" in text and "580,00 € par personne" in text and "voir sous Hôtel" in text
+    assert "Forfait Club A" in text and "✓ Sélectionnée" in text and "580,00 € par personne" in text and "voir sous Hôtel" in text
     short.locator("a:has-text('voir sous Hôtel')").click()
     assert page.url.endswith(f"#offre-{fa}")
     # mesures
@@ -559,7 +559,7 @@ def test_menu_after_launch_and_trip_menu_unchanged(site, browser):
 
 
 def test_choose_keeps_the_page_still(site, browser):
-    """« Retenir » / « Ne plus retenir » : la page ne saute pas. L'offre cliquée revient à la même hauteur dans la
+    """« Sélectionner » / « Désélectionner » : la page ne saute pas. L'offre cliquée revient à la même hauteur dans la
     fenêtre (dès le premier affichage, pas d'aller-retour vers l'ancre), le bouton garde sa place et sa largeur, et le
     focus est sur le bouton qui a remplacé celui qu'on a cliqué."""
     page = new_page(browser)
@@ -569,8 +569,8 @@ def test_choose_keeps_the_page_still(site, browser):
       requestAnimationFrame(look);""")
     page.goto(site.base + site.url)
     try:
-        for offer, label, after in (("Air France", "Retenir", "Ne plus retenir"),
-                                    ("Air France", "Ne plus retenir", "Retenir")):
+        for offer, label, after in (("Air France", "Sélectionner", "Désélectionner"),
+                                    ("Air France", "Désélectionner", "Sélectionner")):
             box = page.locator(f"#offre-{site.offer(offer)}")
             box.evaluate("el => window.scrollBy(0, el.getBoundingClientRect().top - 420)")
             btn = box.locator(f"button:has-text('{label}')")

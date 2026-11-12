@@ -76,7 +76,7 @@
     <textarea id="note" name="note" rows="2">{{ offer.note if offer else '' }}</textarea></div>
 
   <div class="preview plan-preview" id="apercu" aria-live="polite"></div>
-  {% if offer %}<p class="small muted">{% if offer.chosen %}Cette offre est retenue.{% else %}Cette offre n'est pas retenue : tu pourras la retenir depuis la page du projet.{% endif %}</p>{% endif %}
+  {% if offer %}<p class="small muted">{% if offer.chosen %}Cette offre est sélectionnée.{% else %}Cette offre n'est pas sélectionnée : tu pourras la sélectionner depuis la page du projet.{% endif %}</p>{% endif %}
   <div class="row"><a class="btn ghost" href="/preparer/{{ plan.id }}">Annuler</a><button class="btn">{{ 'Enregistrer' if offer else 'Ajouter l\'offre' }}</button></div>
 </form>
 </div>

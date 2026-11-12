@@ -486,7 +486,7 @@ def plan_offer(o: M.PlanOffer) -> P.Offer:
 
 
 def compute_plan(plan: M.Plan, people: int | None = None) -> P.Result:
-    """Budget, prix par personne, marge et « si tu retiens » d'un voyage en préparation (people : un autre nombre
+    """Budget, prix par personne, marge et « si tu sélectionnes » d'un voyage en préparation (people : un autre nombre
     de participants que celui du projet, pour comparer)."""
     return P.compute(people or plan.people, [i.id for i in plan.items], [plan_offer(o) for o in plan.offers],
                      plan.margin_kind, plan.margin_value, plan.announced, plan_meals(plan))
@@ -586,7 +586,7 @@ def when_words(day: dt.date, today: dt.date) -> str:
 
 def plan_deadlines(plan: M.Plan, today: dt.date) -> list:
     """Les échéances du projet, par date : [{d, offer, plan, counts, live, late, days, words}]. `counts` : pas faite,
-    et son offre est retenue ou encore en course (voir preparation.live_offers) ; `live` : l'offre est en course."""
+    et son offre est sélectionnée ou encore en course (voir preparation.live_offers) ; `live` : l'offre est en course."""
     live = P.live_offers(plan_offer(o) for o in plan.offers)
     out = []
     for o in plan.offers:
@@ -625,7 +625,7 @@ def upcoming(s, today: dt.date, days: int = UPCOMING_DAYS) -> list:
 
 def plan_launch_lines(plan: M.Plan) -> list:
     """Les dépenses prévues que « Lancer le voyage » créera : [{label, category, planned, note, offer, included}], une
-    par offre retenue (un forfait réparti : une par poste), dans l'ordre des postes. `included` : 0,00 € (« inclus ») :
+    par offre sélectionnée (un forfait réparti : une par poste), dans l'ordre des postes. `included` : 0,00 € (« inclus ») :
     rien à payer, aucune dépense n'est créée (une dépense à 0 compte comme un montant pas encore connu). La marge
     n'est pas une dépense."""
     r = compute_plan(plan)
@@ -729,7 +729,7 @@ def plan_program(plan: M.Plan) -> list:
         return f"{names[i]} : {label or 'pas encore choisi'}"
 
     def who(ln):
-        """Les prestataires des postes liés (vue Tableau) : [(noms des postes, offre retenue ou None)], un forfait qui
+        """Les prestataires des postes liés (vue Tableau) : [(noms des postes, offre sélectionnée ou None)], un forfait qui
         couvre plusieurs de ces postes dit une seule fois (« Hébergement, Plongées » : le forfait)."""
         groups = {}
         for i in ids(ln):

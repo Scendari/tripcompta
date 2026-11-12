@@ -423,7 +423,7 @@ def save_withdrawal(s, t: M.Trip, pid, date=None, absorber=E.GROUP, kept=(), not
 
 
 # ---------------------------------------------------------------- préparer un voyage (projets, postes, offres)
-# Calcul : compta/preparation.py. Une seule offre retenue par poste : la règle est tenue ici, pas à l'écran.
+# Calcul : compta/preparation.py. Une seule offre sélectionnée par poste : la règle est tenue ici, pas à l'écran.
 
 def _plan_of(plan: M.Plan, obj, what: str):
     if obj is None or obj.plan_id != plan.id:
@@ -603,7 +603,7 @@ def delete_plan_item(s, plan: M.Plan, item: M.PlanItem) -> list:
 
 
 def _unchoose_overlaps(plan: M.Plan, offer: M.PlanOffer) -> list:
-    """Retire « retenue » aux autres offres qui partagent au moins un poste avec `offer`. Renvoie leurs noms."""
+    """Retire « sélectionnée » aux autres offres qui partagent au moins un poste avec `offer`. Renvoie leurs noms."""
     mine = {ln.item_id for ln in offer.links}
     out = []
     for o in plan.offers:
@@ -667,7 +667,7 @@ def save_offer(s, plan: M.Plan, offer: M.PlanOffer | None = None, *, label, pric
     - items : les postes couverts (un ou plusieurs) ;
     - split : "" (un seul bloc), « montant » (shares = {poste: centimes}, dont la somme fait le prix) ou « pourcent »
       (shares = {poste: centièmes de %}, somme 10000) ; ignoré pour une offre d'un seul poste ;
-    - chosen : None = ne pas changer. Une offre retenue (ou qui le reste en changeant de postes) retire « retenue »
+    - chosen : None = ne pas changer. Une offre sélectionnée (ou qui le reste en changeant de postes) retire « sélectionnée »
       aux autres offres qui partagent un poste avec elle.
     """
     if offer is not None:
@@ -696,8 +696,8 @@ def save_offer(s, plan: M.Plan, offer: M.PlanOffer | None = None, *, label, pric
 
 
 def choose_offer(s, plan: M.Plan, offer: M.PlanOffer, chosen: bool = True) -> list:
-    """Retient (ou ne retient plus) une offre. La retenir retire « retenue » à toute offre qui partage au moins un
-    poste avec elle ; rien n'est re-retenu tout seul. Renvoie les noms des offres qui ne sont plus retenues."""
+    """Sélectionne (ou désélectionne) une offre. La sélectionner retire « sélectionnée » à toute offre qui partage au moins un
+    poste avec elle ; rien n'est re-sélectionné tout seul. Renvoie les noms des offres qui ne sont plus sélectionnées."""
     _plan_of(plan, offer, "Cette offre")
     offer.chosen = bool(chosen)
     out = _unchoose_overlaps(plan, offer) if chosen else []
@@ -765,7 +765,7 @@ def delete_deadline(s, plan: M.Plan, deadline: M.PlanDeadline) -> str:
 
 def launch_plan(s, plan: M.Plan, *, cashier: str = "asso", asso_name: str = "", holder: str = "",
                 diving: bool = False, today=None) -> M.Trip:
-    """Crée le voyage (ses comptes) à partir du projet : une dépense PRÉVUE par offre retenue (un forfait réparti :
+    """Crée le voyage (ses comptes) à partir du projet : une dépense PRÉVUE par offre sélectionnée (un forfait réparti :
     une par poste), « pour tout le monde », y compris les participants qui seront ajoutés ensuite. Le projet garde
     le lien (sens unique : modifier le projet ne change plus les comptes du voyage). cashier : « asso » ou « personne »
     (holder : son nom, ajouté aux participants)."""
@@ -774,7 +774,7 @@ def launch_plan(s, plan: M.Plan, *, cashier: str = "asso", asso_name: str = "", 
         raise WriteError("Ce projet a déjà été lancé : son voyage existe.")
     lines = S.plan_launch_lines(plan)
     if not [x for x in lines if not x["included"]]:
-        raise WriteError("Retiens au moins une offre avant de lancer le voyage.")
+        raise WriteError("Sélectionne au moins une offre avant de lancer le voyage.")
     holder = _clean(holder, 200)
     if cashier == "personne" and not holder:
         raise WriteError("Écris le nom de la personne qui tient la caisse", "cashier_name")

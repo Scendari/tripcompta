@@ -99,8 +99,8 @@ def main(out: Path):
         shot("11-projet-fenetre-etroite", sc.url, pg=narrow)
         shot("12-offre-fenetre-etroite", f"{sc.url}/offres/{sc.offer('Forfait Club A')}/modifier", pg=narrow)
         shot("13-accueil-fenetre-etroite", "/", pg=narrow)
-        sc.post(f"{sc.url}/offres/{sc.offer('Taxi')}/ne-plus-retenir")
-        sc.post(f"{sc.url}/offres/{sc.offer('Transavia')}/ne-plus-retenir")
+        sc.post(f"{sc.url}/offres/{sc.offer('Taxi')}/deselectionner")
+        sc.post(f"{sc.url}/offres/{sc.offer('Transavia')}/deselectionner")
         shot("14-budget-incomplet", sc.url)
 
         # ---- tranche 3 : échéances, « À faire bientôt », lancement, IA (aujourd'hui fixé au 10/01/2027)
@@ -109,7 +109,7 @@ def main(out: Path):
         from compta import models as M
         from compta import writes as W
         sc.app.state.aujourdhui = dt.date(2027, 1, 10)
-        sc.post(f"{sc.url}/offres/{sc.offer('Transavia')}/retenir")
+        sc.post(f"{sc.url}/offres/{sc.offer('Transavia')}/selectionner")
         for offer, label, day, amount in (("Forfait Club A", "Option à confirmer", "2027-01-08", ""),
                                           ("Forfait Club A", "Acompte à verser", "2027-01-25", "1000"),
                                           ("Minibus", "Reste à payer", "2027-01-10", "600"),
@@ -131,7 +131,7 @@ def main(out: Path):
             s.commit()
         shot("17-a-faire-bientot-accueil", "/", full=False)
         shot("18-confirmation-lancement", f"{sc.url}/lancer")
-        sc.post(f"{sc.url}/offres/{sc.offer('Taxi')}/ne-plus-retenir")
+        sc.post(f"{sc.url}/offres/{sc.offer('Taxi')}/deselectionner")
         shot("18b-confirmation-lancement-poste-sans-offre", f"{sc.url}/lancer")
         r = sc.post(f"{sc.url}/lancer", dict(caisse="asso", asso_name="Club Subaqua"))
         tid = int(r.headers["location"].split("?")[0].rsplit("/", 1)[1])
@@ -141,7 +141,7 @@ def main(out: Path):
         page.goto(base + f"{sc.url}/ia")
         page.fill("#texte", "Voici ma proposition.\n```json\n" + json.dumps({
             "projet_id": sc.pid, "offres": [{"prestataire": "Navette", "prix": 45, "compte": "pour un nombre de personnes",
-                                             "pour_combien": 8, "postes": ["Taxi"], "retenue": True,
+                                             "pour_combien": 8, "postes": ["Taxi"], "selectionnee": True,
                                              "echeances": [{"libelle": "Acompte à verser", "date": "2027-01-20",
                                                             "montant": 30}]}]}, ensure_ascii=False) + "\n```")
         page.click("button:has-text('Voir ce qui changera')")

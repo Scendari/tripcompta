@@ -5,13 +5,13 @@
 Montants de référence (brief de la tranche 3, projet de référence, N = 10) :
 - retenues d'origine : Transavia 2 100,00 (Avion) ; Taxi 180,00 ; Hôtel X 2 250,00 ; Club B 3 800,00 (Plongées) ;
   Minibus 600,00 ; total prévu 8 930,00 ;
-- forfait retenu sans répartition : Transavia 2 100,00 ; Taxi 180,00 ; Forfait Club A 5 800,00 (catégorie Hôtel, note
+- forfait sélectionné sans répartition : Transavia 2 100,00 ; Taxi 180,00 ; Forfait Club A 5 800,00 (catégorie Hôtel, note
   « Hôtel + Plongées ») ; Minibus 600,00 ; total 8 680,00 ;
 - forfait réparti 300,00 + 280,00 : Forfait Club A (Hôtel) 3 000,00 ; Forfait Club A (Plongées) 2 800,00 ; total 8 680,00 ;
 - N = 9 : 1 890,00 ; 180,00 ; 2 250,00 ; 3 420,00 ; 600,00 ; total 8 340,00 ;
 - sans le Taxi : 4 dépenses, total 8 750,00 ;
 - 10 participants ajoutés après le lancement : chacun doit 893,00 € au prévu ;
-- marge 5 %, forfait retenu : prix avec la marge 911,40 € ; prix annoncé 950,00 € : 38,60 € de plus ; 900,00 € :
+- marge 5 %, forfait sélectionné : prix avec la marge 911,40 € ; prix annoncé 950,00 € : 38,60 € de plus ; 900,00 € :
   11,40 € de moins.
 """
 import datetime as dt
@@ -64,7 +64,7 @@ def test_live_offers_rule():
     offers = [P.Offer(id=10, price=1, items=[a], chosen=True), P.Offer(id=11, price=1, items=[a]),
               P.Offer(id=12, price=1, items=[b]), P.Offer(id=13, price=1, items=[a, b]),
               P.Offer(id=14, price=1, items=[a, c])]
-    # 10 retenue ; 11 écartée (a pris) ; 12, 13, 14 en course (b et c n'ont rien de retenu)
+    # 10 retenue ; 11 écartée (a pris) ; 12, 13, 14 en course (b et c n'ont rien de sélectionné)
     assert P.live_offers(offers) == {10, 12, 13, 14}
     offers[2].chosen = True
     assert P.live_offers(offers) == {10, 12, 14}
@@ -251,7 +251,7 @@ def test_launch_reference(screen):
     for label, cat, cents in REF_LINES:
         assert f"{label} {cat} {E.fmt(cents)}".replace("\xa0", " ").replace(" ", " ") in t
     assert "Total prévu 8 930,00 €" in t and "Qui tient la caisse ?" in t and "C'est un voyage de plongée" in t
-    assert "n'a pas d'offre retenue" not in t
+    assert "n'a pas d'offre sélectionnée" not in t
     tid, r = launch(sc)
     assert message(r) == ("Voyage « Mer Rouge 2027 » lancé : 5 dépenses prévues, pour un total de 8 930,00 €. "
                           "Ajoute maintenant les participants : ils seront comptés dans chaque dépense.")
@@ -299,9 +299,9 @@ def test_launch_at_nine_and_without_taxi(screen):
     assert [x[2] for x in lines_of(sc, tid)] == [189000, 18000, 225000, 342000, 60000]
     sc.post(f"/v/{tid}/supprimer")
     sc.post(f"{sc.url}/participants", dict(people="10"))
-    sc.post(f"{sc.url}/offres/{sc.offer('Taxi')}/ne-plus-retenir")
+    sc.post(f"{sc.url}/offres/{sc.offer('Taxi')}/deselectionner")
     t = sc.text(f"{sc.url}/lancer")
-    assert "Taxi n'a pas d'offre retenue : rien ne sera créé pour ce poste." in t
+    assert "Taxi n'a pas d'offre sélectionnée : rien ne sera créé pour ce poste." in t
     assert "Total prévu 8 750,00 €" in t
     tid, _ = launch(sc)
     assert len(lines_of(sc, tid)) == 4 and sum(x[2] for x in lines_of(sc, tid)) == 875000
@@ -408,9 +408,9 @@ def test_launch_needs_a_chosen_offer(screen):
     sc.add_item("Gîte")
     assert 'id="lancer"' not in sc.cl.get(sc.url).text          # pas de bouton en haut ; le menu y mène, et la page refuse
     r = sc.cl.get(f"{sc.url}/lancer", follow_redirects=False)
-    assert refused(r) and "Retiens au moins une offre" in message(r)
+    assert refused(r) and "Sélectionne au moins une offre" in message(r)
     with sc.db.Session() as s:
-        with pytest.raises(W.WriteError, match="Retiens au moins une offre"):
+        with pytest.raises(W.WriteError, match="Sélectionne au moins une offre"):
             W.launch_plan(s, sc.plan(s))
 
 
@@ -419,15 +419,15 @@ def test_launch_needs_a_chosen_offer(screen):
 REF_JSON = {
     "postes": ["Avion", "Taxi", "Hôtel", "Plongées", "Minibus"],
     "offres": [
-        {"prestataire": "Transavia", "prix": 210, "compte": "par personne", "postes": ["Avion"], "retenue": True},
+        {"prestataire": "Transavia", "prix": 210, "compte": "par personne", "postes": ["Avion"], "selectionnee": True},
         {"prestataire": "Air France", "prix": "320,00", "compte": "par personne", "postes": ["Avion"]},
         {"prestataire": "Taxi", "prix": 60, "compte": "pour un nombre de personnes", "pour_combien": 4,
-         "postes": ["Taxi"], "retenue": True},
+         "postes": ["Taxi"], "selectionnee": True},
         {"prestataire": "Hôtel X", "prix": 90, "compte": "pour un nombre de personnes", "pour_combien": 2,
-         "quantite": 5, "de_quoi": "nuits", "postes": ["Hôtel"], "retenue": True},
+         "quantite": 5, "de_quoi": "nuits", "postes": ["Hôtel"], "selectionnee": True},
         {"prestataire": "Club B", "prix": 38, "compte": "par personne", "quantite": 10, "de_quoi": "plongées",
-         "postes": ["Plongées"], "retenue": True},
-        {"prestataire": "Minibus", "prix": 600, "compte": "pour le groupe", "postes": ["Minibus"], "retenue": True},
+         "postes": ["Plongées"], "selectionnee": True},
+        {"prestataire": "Minibus", "prix": 600, "compte": "pour le groupe", "postes": ["Minibus"], "selectionnee": True},
         {"prestataire": "Forfait Club A", "prix": 580, "compte": "par personne", "postes": ["Hôtel", "Plongées"]},
     ]}
 
@@ -457,12 +457,12 @@ def test_same_project_by_ai_and_on_screen(screen, tmp_path):
     d = ops.plan(pid)
     assert (d["budget"], d["par_personne"]) == (8930.0, 893.0)
     fa = next(o for o in d["offres"] if o["prestataire"] == "Forfait Club A")
-    assert fa["si_retenue"] == dict(budget=8680.0, ecart=-250.0, ecart_par_personne=-25.0,
+    assert fa["si_selectionnee"] == dict(budget=8680.0, ecart=-250.0, ecart_par_personne=-25.0,
                                     remplace=["Hôtel X", "Club B"], postes_sans_offre=[])
     assert sp(fa["prix_en_clair"]) == "580,00 € par personne"
-    # le même forfait retenu, réparti et avec une échéance : mêmes montants à l'écran
+    # le même forfait sélectionné, réparti et avec une échéance : mêmes montants à l'écran
     ops.plan_import(pid, {"offres": [{"prestataire": "Forfait Club A", "repartition": {
-        "type": "euros", "parts": {"Hôtel": 300, "Plongées": 280}}, "retenue": True,
+        "type": "euros", "parts": {"Hôtel": 300, "Plongées": 280}}, "selectionnee": True,
         "echeances": [{"libelle": "Option à confirmer", "date": "15/01/2027"}]}],
         "marge": {"type": "pourcent", "valeur": 5}, "prix_annonce": 950})
     d = ops.plan(pid)
@@ -486,7 +486,7 @@ def test_ai_refuses_like_the_screen(screen):
         {"prestataire": "Forfait C", "prix": 580, "postes": ["Hôtel", "Plongées"],
          "repartition": {"type": "pourcent", "parts": {"Hôtel": 60, "Plongées": 30}}},
         {"prestataire": "X", "prix": 1, "postes": ["Avion"], "couleur": "bleu"}],
-        "retenir": ["Inconnue"], "echeances": [{"offre": "Taxi", "libelle": "", "date": "2027-01-01"}],
+        "selectionner": ["Inconnue"], "echeances": [{"offre": "Taxi", "libelle": "", "date": "2027-01-01"}],
         "bizarre": 1}
     with pytest.raises(OpsError) as e:
         ops.plan_import(sc.pid, bad)
@@ -499,7 +499,7 @@ def test_ai_refuses_like_the_screen(screen):
     assert any(x.startswith("Offre 4 (Forfait B) : Les montants par poste font 570,00") for x in errs)
     assert "Offre 5 (Forfait C) : Les pourcentages par poste font 90 %, il faut 100 %." in errs
     assert "Offre 6 (X) : champs inconnus : couleur" in errs
-    assert "Retenir « Inconnue » : pas d'offre « Inconnue » dans ce projet" in errs
+    assert "Sélectionner « Inconnue » : pas d'offre « Inconnue » dans ce projet" in errs
     assert any(x.startswith("Échéance 1 : Dis ce qu'il faut faire") for x in errs)
     assert sc.db.undo_token() == before and rows(sc.db, sc.pid)["offers"][0][0] == "Transavia"
     with sc.db.Session() as s:
@@ -520,14 +520,14 @@ def test_ai_page_preview_and_save(screen):
     assert "Colle ici le devis" in t                                       # le modèle
     answer = ("Voici ce que je propose : une navette.\n```json\n" + json.dumps({
         "projet_id": sc.pid, "offres": [{"prestataire": "Navette", "prix": 45, "compte": "pour un nombre de personnes",
-                                         "pour_combien": 8, "postes": ["Taxi"], "retenue": True,
+                                         "pour_combien": 8, "postes": ["Taxi"], "selectionnee": True,
                                          "echeances": [{"libelle": "Acompte à verser", "date": "2027-01-20",
                                                         "montant": 30}]}]}) + "\n```")
     before = sc.db.undo_token()
     r = sc.cl.post(f"{sc.url}/ia/apercu", data=dict(texte=answer))
     t = clean(r.text)
     assert "Ce qui va changer" in t
-    assert "Offre « Navette » ajoutée : 45,00 € pour 8 personnes (il en faut 2 pour 10 personnes), pour Taxi (retenue)" in t
+    assert "Offre « Navette » ajoutée : 45,00 € pour 8 personnes (il en faut 2 pour 10 personnes), pour Taxi (sélectionnée)" in t
     assert "Échéance « Acompte à verser » (20/01/2027) pour « Navette »" in t
     assert "Budget : 8 930,00 € → 8 840,00 € · prix par personne : 893,00 € → 884,00 €" in t
     assert sc.db.undo_token() == before                                   # l'aperçu n'enregistre rien
@@ -563,7 +563,7 @@ def test_api_and_mcp(screen):
     r = cl.post("/api/projets", json=dict(nom="Week-end", participants=6))
     assert r.json()["projet_id"] == 2
     r = cl.post("/api/projets/2/import", json=dict(donnees={"offres": [
-        {"prestataire": "Gîte", "prix": 600, "compte": "pour le groupe", "postes": ["Gîte"], "retenue": True}]}))
+        {"prestataire": "Gîte", "prix": 600, "compte": "pour le groupe", "postes": ["Gîte"], "selectionnee": True}]}))
     assert r.json()["apercu"]["par_personne"] == 100.0
     assert cl.get("/api/projets/2").json()["budget"] == 600.0
     r = cl.post("/api/projets/2/import", json=dict(donnees={"participants": 0}))

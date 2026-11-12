@@ -440,7 +440,7 @@ class PlanOffer(Base):
     capacity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)   # places d'un lot
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     quantity_label: Mapped[str] = mapped_column(String(50), default="")      # « nuits », « plongées »
-    chosen: Mapped[bool] = mapped_column(Boolean, default=False)            # offre retenue
+    chosen: Mapped[bool] = mapped_column(Boolean, default=False)            # offre sélectionnée
     split: Mapped[str] = mapped_column(String(20), default="")    # répartition : "" (un bloc) | montant | pourcent
     plan: Mapped[Plan] = relationship(back_populates="offers")
     links: Mapped[list["PlanOfferItem"]] = relationship(cascade="all, delete-orphan", back_populates="offer")

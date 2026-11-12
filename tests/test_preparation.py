@@ -130,7 +130,7 @@ def test_choosing_a_package_unchooses_what_it_replaces_and_nothing_comes_back(re
     assert ref.chosen() == ["O1", "O3", "O6", "O7"]
     r = ref.result()
     assert r.budget == 868000 and r.per_person == 86800 and r.empty == []
-    # « si tu retiens O4 » : O7 serait écartée, et Plongées se retrouverait sans offre
+    # « si tu sélectionnes O4 » : O7 serait écartée, et Plongées se retrouverait sans offre
     w = r.what_if[o["O4"].id]
     assert w.budget == 513000 and ref.names(w.empty) == [PLONGEES] and ref.names(w.lost) == [PLONGEES]
     assert w.replaces == [o["O7"].id]
@@ -144,25 +144,25 @@ def test_choosing_a_package_unchooses_what_it_replaces_and_nothing_comes_back(re
 
 
 def test_one_chosen_offer_per_item_always(ref):
-    """Quelle que soit la suite de choix, chaque poste a au plus une offre retenue."""
+    """Quelle que soit la suite de choix, chaque poste a au plus une offre sélectionnée."""
     s, o = ref.s, ref.o
     for name in ("O2", "O7", "O1", "O5", "O4", "O7", "O2", "O5"):
         W.choose_offer(s, ref.plan, o[name])
         covered = [ln.item_id for x in ref.plan.offers if x.chosen for ln in x.links]
         assert len(covered) == len(set(covered)), name
         assert o[name].chosen
-    # ne plus retenir une offre ne re-retient rien
+    # désélectionner une offre ne re-sélectionne rien
     W.choose_offer(s, ref.plan, o["O5"], chosen=False)
     assert ref.chosen() == ["O2", "O3", "O6"]
 
 
 def test_saving_a_chosen_offer_on_a_new_item_unchooses_the_other(ref):
-    """Une offre retenue qu'on étend à un autre poste écarte l'offre retenue de ce poste (règle dans l'écriture)."""
+    """Une offre sélectionnée qu'on étend à un autre poste écarte l'offre sélectionnée de ce poste (règle dans l'écriture)."""
     s, o, it = ref.s, ref.o, ref.it
     W.save_offer(s, ref.plan, o["O6"], label="Minibus + taxi", price=60000, counting=P.GROUP,
                  items=[it[MINIBUS].id, it[TAXI].id])
     assert o["O6"].chosen and not o["O3"].chosen
-    # une offre non retenue peut couvrir un poste déjà pris sans rien changer
+    # une offre non sélectionnée peut couvrir un poste déjà pris sans rien changer
     W.save_offer(s, ref.plan, o["O2"], label="Air France", price=32000, counting=P.PER_PERSON,
                  items=[it[AVION].id, it[TAXI].id])
     assert o["O1"].chosen and o["O6"].chosen and not o["O2"].chosen

@@ -7,7 +7,7 @@
 <link rel="icon" href="/static/favicon.svg?v={{ STATIC_V }}" type="image/svg+xml">
 <link rel="stylesheet" href="/static/app.css?v={{ STATIC_V }}">
 <script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;var z=localStorage.getItem("texte");if(z==="1"||z==="2")document.documentElement.dataset.text=z}catch(e){}</script>
-{# retour d'un « Retenir » (app.js, data-keep-place) : la page reste cachée le temps de la remettre à sa place #}
+{# retour d'un « Sélectionner » (app.js, data-keep-place) : la page reste cachée le temps de la remettre à sa place #}
 <script>try{var g=JSON.parse(sessionStorage.getItem("garder-place")||"null");if(g&&g.path===location.pathname)document.documentElement.classList.add("placing")}catch(e){}</script>
 </head>
 <body class="{% block bodyclass %}{% endblock %}">

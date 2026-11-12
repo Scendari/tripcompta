@@ -251,7 +251,7 @@
     noteBox.addEventListener("close", () => { if (opener) opener.focus(); opener = null; });
   }
 
-  // Bouton qui recharge la page sans la faire sauter (form[data-keep-place], « Retenir » une offre) : le bloc où l'on a
+  // Bouton qui recharge la page sans la faire sauter (form[data-keep-place], « Sélectionner » une offre) : le bloc où l'on a
   // cliqué revient à la même hauteur dans la fenêtre, même si ce qui est au-dessus a grandi ou rétréci, et le focus
   // va au bouton qui a pris la place de celui qu'on a cliqué.
   const PLACE_KEY = "garder-place";

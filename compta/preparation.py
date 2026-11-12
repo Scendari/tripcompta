@@ -1,8 +1,8 @@
 """Préparer un voyage — calcul, Python pur, sans base de données.
 
 Avant que le voyage existe en comptabilité : des postes (Avion, Hôtel, Plongées…), plusieurs offres par poste, une
-offre retenue par poste, et ce que ça donne : le budget, le prix par personne, la marge, la réserve par rapport au
-prix annoncé, et « si tu retiens cette offre ».
+offre sélectionnée par poste, et ce que ça donne : le budget, le prix par personne, la marge, la réserve par rapport au
+prix annoncé, et « si tu sélectionnes cette offre ».
 
 Tous les montants sont en centimes entiers. Les pourcentages (marge, répartition d'un forfait) sont en centièmes
 de pour cent : 500 = 5 %, 3333 = 33,33 %, 10000 = 100 %.
@@ -10,8 +10,8 @@ de pour cent : 500 = 5 %, 3333 = 33,33 %, 10000 = 100 %.
 Règles :
 - total d'une offre pour N participants : « par personne » prix × quantité × N ; « pour le groupe » prix × quantité ;
   « par lot » (taxi de 4 places, chambre de 2) prix × quantité × plafond(N / capacité) ;
-- budget = somme des totaux des offres retenues, plus l'enveloppe repas (par personne et par jour, sur les jours où
-  elle compte, × participants) ; les postes sans offre retenue sont « pas encore choisis » ;
+- budget = somme des totaux des offres sélectionnées, plus l'enveloppe repas (par personne et par jour, sur les jours où
+  elle compte, × participants) ; les postes sans offre sélectionnée sont « pas encore choisis » ;
 - prix par personne = budget / N, arrondi au centime supérieur ;
 - marge totale = budget × pourcentage arrondi au centime le plus proche (un demi-centime : au-dessus), ou euros par
   personne × N ; prix avec marge = (budget + marge totale) / N, arrondi au centime supérieur ;
@@ -76,15 +76,15 @@ def meals_per_person(m: Optional[Meals]) -> tuple:
 
 @dataclass
 class WhatIf:
-    """Ce que donnerait le choix d'une offre pas encore retenue."""
+    """Ce que donnerait le choix d'une offre pas encore sélectionnée."""
     offer: int
     budget: int
     delta: int                 # budget obtenu − budget actuel
     per_person: int
     delta_per_person: int      # prix par personne obtenu − prix par personne actuel
-    replaces: list             # offres retenues qu'elle écarterait
-    empty: list                # postes sans offre retenue après ce choix
-    lost: list                 # parmi eux, ceux qui avaient une offre retenue avant
+    replaces: list             # offres sélectionnées qu'elle écarterait
+    empty: list                # postes sans offre sélectionnée après ce choix
+    lost: list                 # parmi eux, ceux qui avaient une offre sélectionnée avant
 
 
 @dataclass
@@ -92,7 +92,7 @@ class Result:
     people: int
     totals: dict               # offre -> total pour N participants
     offer_per_person: dict     # offre -> son total par personne (au centime supérieur)
-    chosen: list               # offres retenues
+    chosen: list               # offres sélectionnées
     budget: int
     per_person: int
     empty: list                # postes « pas encore choisi »
@@ -103,7 +103,7 @@ class Result:
     reserve: Optional[int]     # None sans prix annoncé
     reserve_per_person: Optional[int]   # prix annoncé − prix par personne
     above_margin: Optional[int]         # prix annoncé − prix avec la marge (None sans prix annoncé ou sans marge)
-    what_if: dict              # offre non retenue -> WhatIf
+    what_if: dict              # offre non sélectionnée -> WhatIf
     meals_per_person: int = 0  # enveloppe repas, par personne (comprise dans le budget)
     meals_total: int = 0       # … pour tout le groupe
     meals_days: int = 0        # jours où elle compte
@@ -168,16 +168,16 @@ def _empty(items, offers, chosen) -> list:
 
 
 def replaced_by(o: Offer, offers, chosen) -> list:
-    """Les offres retenues qu'écarterait le choix de `o` : celles qui partagent au moins un poste avec elle."""
+    """Les offres sélectionnées qu'écarterait le choix de `o` : celles qui partagent au moins un poste avec elle."""
     mine = set(o.items)
     return [x.id for x in offers if x.id in chosen and x.id != o.id and mine & set(x.items)]
 
 
 def compute(people: int, items, offers, margin_kind: str = PERCENT, margin_value: int = 0,
             announced: Optional[int] = None, meals: Optional[Meals] = None) -> Result:
-    """`items` : les postes du projet, dans l'ordre (identifiants) ; `offers` : [Offer]. Les offres retenues sont
+    """`items` : les postes du projet, dans l'ordre (identifiants) ; `offers` : [Offer]. Les offres sélectionnées sont
     celles marquées `chosen` (une seule par poste : c'est le chemin d'écriture qui y veille). `meals` : l'enveloppe
-    repas, qui entre dans le budget (budget = offres retenues + repas × participants)."""
+    repas, qui entre dans le budget (budget = offres sélectionnées + repas × participants)."""
     if people < 1:
         raise ValueError("Il faut au moins une personne.")
     items, offers = list(items), list(offers)
@@ -229,7 +229,7 @@ def compute(people: int, items, offers, margin_kind: str = PERCENT, margin_value
 
 
 def live_offers(offers) -> set:
-    """Les offres encore « en course » : retenues, ou dont au moins un poste n'a encore aucune offre retenue. Leurs
+    """Les offres encore « en course » : sélectionnées, ou dont au moins un poste n'a encore aucune offre sélectionnée. Leurs
     échéances comptent ; celles des offres écartées ne comptent plus."""
     offers = list(offers)
     covered = {i for o in offers if o.chosen for i in o.items}

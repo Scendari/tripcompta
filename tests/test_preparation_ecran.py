@@ -88,7 +88,7 @@ class Screen:
         return r
 
     def choose(self, label):
-        r = self.post(f"{self.url}/offres/{self.offer(label)}/retenir")
+        r = self.post(f"{self.url}/offres/{self.offer(label)}/selectionner")
         assert not refused(r), message(r)
         return r
 
@@ -150,16 +150,16 @@ def test_reference_project_amounts_on_screen(screen):
     # ce qui est retenu, poste par poste
     assert "Transavia · 2 100,00 €" in item_block(page, sc.item("Avion"))
     assert "Taxi · 180,00 €" in item_block(page, sc.item("Taxi"))
-    # « si tu la retiens »
+    # « si tu la sélectionnes »
     af = offer_block(page, sc.offer("Air France"))
     assert "+1 100,00 € au total, +110,00 € par personne" in af and "remplace Transavia" in af
-    assert "Retenir" in af and "✓ Retenue" not in af
+    assert "Sélectionner" in af and "✓ Sélectionnée" not in af
     fa = offer_block(page, sc.offer("Forfait Club A"))
     assert "−250,00 € au total, −25,00 € par personne" in fa
     assert "remplace Hôtel X et Club B" in fa and "sans offre" not in fa
     assert "couvre aussi Plongées" in fa
     tr = offer_block(page, sc.offer("Transavia"))
-    assert "✓ Retenue" in tr and "Ne plus retenir" in tr and "Si tu la retiens" not in tr
+    assert "✓ Sélectionnée" in tr and "Désélectionner" in tr and "Si tu la sélectionnes" not in tr
     # le forfait apparaît aussi sous Plongées, avec « couvre aussi Hôtel »
     assert "Forfait Club A" in item_block(page, sc.item("Plongées"))
     assert "couvre aussi Hôtel" in item_block(page, sc.item("Plongées"))
@@ -205,14 +205,14 @@ def test_people_margin_and_announced_price_on_screen(screen):
 def test_choose_package_then_hotel_leaves_dives_unchosen(screen):
     sc = screen.reference()
     r = sc.choose("Forfait Club A")
-    assert message(r) == "Offre « Forfait Club A » retenue (à la place de « Hôtel X », « Club B »)"
+    assert message(r) == "Offre « Forfait Club A » sélectionnée (à la place de « Hôtel X », « Club B »)"
     page = sc.cl.get(sc.url).text
     t = clean(page)
     assert "Budget total 8 680,00 €" in t and "Prix par personne 868,00 €" in t
     assert "compris dans Forfait Club A" in item_block(page, sc.item("Hôtel"))
     assert "compris dans Forfait Club A" in item_block(page, sc.item("Plongées"))
     h = offer_block(page, sc.offer("Hôtel X"))
-    assert "Si tu la retiens : remplace Forfait Club A, et Plongées n'aurait plus d'offre (le budget serait incomplet)." in h
+    assert "Si tu la sélectionnes : remplace Forfait Club A, et Plongées n'aurait plus d'offre (le budget serait incomplet)." in h
     assert "3 550,00" not in h and "355,00" not in h and "down-text" not in page.split(f'id="offre-{sc.offer("Hôtel X")}"')[1].split("</li>")[0]
     assert not h.rstrip().endswith("·")
     sc.choose("Hôtel X")
@@ -320,18 +320,18 @@ def test_undo_and_redo_from_the_screen(screen):
     assert q.get("d"), "le message propose « Défaire »"
     page = clean(sc.cl.get(r.headers["location"]).text)
     assert "↶ Défaire" in page
-    assert sc.db.last_action() == "offre « Forfait Club A » retenue"
+    assert sc.db.last_action() == "offre « Forfait Club A » sélectionnée"
     r = sc.post("/annuler", dict(d=q["d"][0]), headers={"referer": f"http://testserver{sc.url}"})
-    assert message(r) == "Défait : offre « Forfait Club A » retenue."
+    assert message(r) == "Défait : offre « Forfait Club A » sélectionnée."
     assert urlparse(r.headers["location"]).path == sc.url
     assert "Budget total 8 930,00 €" in sc.text()
     rq = parse_qs(urlparse(r.headers["location"]).query)
     r = sc.post("/retablir", dict(r=rq["r"][0]), headers={"referer": f"http://testserver{sc.url}"})
-    assert message(r) == "Rétabli : offre « Forfait Club A » retenue."
+    assert message(r) == "Rétabli : offre « Forfait Club A » sélectionnée."
     assert "Budget total 8 680,00 €" in sc.text()
     # les libellés de « Défaire » se lisent sans le code sous les yeux
     labels = [h["label"] for h in sc.db.history()][:12]
-    assert "offre « Forfait Club A » retenue" in labels
+    assert "offre « Forfait Club A » sélectionnée" in labels
     assert "offre « Minibus » ajoutée à « Mer Rouge 2027 »" in labels
     sc.post(f"{sc.url}/postes/{sc.item('Taxi')}/supprimer")
     assert sc.db.last_action() == "poste « Taxi » supprimé"
@@ -390,12 +390,12 @@ def test_suggested_items_and_empty_project(screen):
     sc = screen
     sc.create(name="Week-end", people="4", place="")
     t = sc.text()
-    assert "Pour commencer, trois étapes" in t and "Ajoute tes postes" in t and "Retiens une offre par poste" in t
+    assert "Pour commencer, trois étapes" in t and "Ajoute tes postes" in t and "Sélectionne une offre par poste" in t
     page = sc.cl.get(sc.url).text
     assert '<ol class="plan-steps">' in page                       # numéros visibles (liste numérotée ordinaire)
     assert "Ajoute tes postes : ce qu'il faut payer" in t
     result = clean(re.search(r'<section class="card plan-result".*?</section>', page, re.S).group(0))
-    assert "Apparaît dès que tu retiens une offre." in result
+    assert "Apparaît dès que tu sélectionnes une offre." in result
     assert "0,00" not in result
     for s in ("Transport aller", "Hébergement", "Repas", "Activités", "Transport sur place", "Transport retour",
               "Assurance"):
@@ -405,8 +405,8 @@ def test_suggested_items_and_empty_project(screen):
     assert ">Hébergement</button>" not in page                     # une idée déjà prise n'est plus proposée
     assert "Pour commencer, trois étapes" not in clean(page)
     t = clean(page)
-    assert "pas encore choisi" in t and "Apparaît dès que tu retiens une offre." in t
-    assert "Aucune offre retenue." in t
+    assert "pas encore choisi" in t and "Apparaît dès que tu sélectionnes une offre." in t
+    assert "Aucune offre sélectionnée." in t
     result = clean(re.search(r'<section class="card plan-result".*?</section>', page, re.S).group(0))
     assert "€" not in result.replace("€ par personne", "").replace(" € ", " ")         # aucun montant tant que rien n'est retenu
     assert "Pas encore d'offre pour ce poste." in clean(page)
@@ -435,7 +435,7 @@ def test_home_without_projects_and_first_use(screen):
 def test_home_lists_projects(screen):
     sc = screen.reference()
     sc.choose("Forfait Club A")
-    sc.choose("Hôtel X")                                     # Plongées n'a plus d'offre retenue
+    sc.choose("Hôtel X")                                     # Plongées n'a plus d'offre sélectionnée
     sc.create(name="Week-end Annecy", people="6", place="", start="2027-06-12", end="2027-06-14")
     sc.add_item("Gîte")
     sc.add_item("Repas")
@@ -446,7 +446,7 @@ def test_home_lists_projects(screen):
     assert [r.split()[0] for r in rows] == ["Week-end", "Mer"]                # le plus récent d'abord
     assert " ".join(rows[1].split()) == "Mer Rouge 2027 Hurghada à fixer 10 4 sur 5 — 513,00 €"
     assert 'title="Pas encore choisi : Plongées"' in page
-    assert " ".join(rows[0].split()) == "Week-end Annecy 12/06/2027 → 14/06/2027 6 0 sur 2 — —"   # rien de retenu :
+    assert " ".join(rows[0].split()) == "Week-end Annecy 12/06/2027 → 14/06/2027 6 0 sur 2 — —"   # rien de sélectionné :
     # pas de prix (il serait de 0,00 €)
     assert 'href="/preparer/1"' in page and 'href="/preparer/2"' in page
     # sans voyage, avec des projets : l'accueil ordinaire, pas la page de bienvenue
@@ -472,13 +472,13 @@ def test_unknown_project_item_or_offer_is_a_plain_404(screen):
     for url in ("/preparer/99", f"{sc.url}/offres/99/modifier"):
         r = sc.cl.get(url)
         assert r.status_code == 404 and "n'existe pas" in clean(r.text)
-    for url in (f"{sc.url}/offres/99/retenir", f"{sc.url}/postes/99/supprimer", "/preparer/99/supprimer"):
+    for url in (f"{sc.url}/offres/99/selectionner", f"{sc.url}/postes/99/supprimer", "/preparer/99/supprimer"):
         assert sc.post(url).status_code == 404
     other = Screen.__new__(Screen)
     vars(other).update(vars(sc))
     other.create(name="Autre")
     # une offre d'un autre projet, par l'adresse de celui-ci : introuvable
-    assert sc.post(f"{other.url}/offres/{sc.offer('Transavia')}/retenir").status_code == 404
+    assert sc.post(f"{other.url}/offres/{sc.offer('Transavia')}/selectionner").status_code == 404
 
 
 def test_live_preview(screen):
@@ -515,7 +515,7 @@ def test_no_forbidden_words_in_templates_or_screens(screen):
 def test_help_explains_preparing_a_trip(screen):
     t = screen.text("/aide")
     assert "Préparer un voyage" in t and "+ Préparer un voyage" in t
-    for word in ("Un voyage en préparation", "Un poste", "Une offre", "L'offre retenue", "Le prix par personne",
+    for word in ("Un voyage en préparation", "Un poste", "Une offre", "L'offre sélectionnée", "Le prix par personne",
                  "La marge", "Le prix annoncé"):
         assert word in t, word
 
@@ -545,11 +545,11 @@ def test_no_forbidden_words_in_messages():
 
 
 def test_incomplete_budget_says_so(screen):
-    """Des postes sans offre retenue : « Budget incomplet » le dit une fois (avec un lien vers le poste), le prix par
+    """Des postes sans offre sélectionnée : « Budget incomplet » le dit une fois (avec un lien vers le poste), le prix par
     personne dit « sans … » ; les autres phrases ne le répètent pas."""
     sc = screen.reference()
-    sc.post(f"{sc.url}/offres/{sc.offer('Taxi')}/ne-plus-retenir")
-    sc.post(f"{sc.url}/offres/{sc.offer('Hôtel X')}/ne-plus-retenir")
+    sc.post(f"{sc.url}/offres/{sc.offer('Taxi')}/deselectionner")
+    sc.post(f"{sc.url}/offres/{sc.offer('Hôtel X')}/deselectionner")
     t = sc.text()                                          # 8 930 − 180 − 2 250 = 6 500
     assert "Budget total 6 500,00 €" in t and "Budget incomplet : il manque Taxi , Hôtel" in t
     page = sc.cl.get(sc.url).text
@@ -565,5 +565,5 @@ def test_incomplete_budget_says_so(screen):
     assert '<p class="plan-out" id="reserve">' in sc.cl.get(sc.url).text      # pas en vert : rien n'est sûr encore
     sc.post(f"{sc.url}/prix-annonce", dict(announced="600"))
     assert "il manque 50,00 € par personne (500,00 € en tout)." in sc.text()
-    sc.post(f"{sc.url}/offres/{sc.offer('Transavia')}/ne-plus-retenir")
+    sc.post(f"{sc.url}/offres/{sc.offer('Transavia')}/deselectionner")
     assert "sans Avion, Taxi ni Hôtel" in sc.text()

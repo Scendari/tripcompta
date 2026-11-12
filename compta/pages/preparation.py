@@ -1,4 +1,4 @@
-"""Préparer un voyage : créer un projet, ses postes et ses offres, retenir une offre par poste, et voir le budget,
+"""Préparer un voyage : créer un projet, ses postes et ses offres, sélectionner une offre par poste, et voir le budget,
 le prix par personne, la marge et le prix annoncé. Le calcul est dans compta/preparation.py, les écritures dans
 compta/writes.py.
 
@@ -383,20 +383,20 @@ def install(site):
             return err
         return back(page_url(plan, f"offre-{saved.id}"), f"Offre « {saved.label} » {'modifiée' if offer else 'ajoutée'}")
 
-    @app.post("/preparer/{pid}/offres/{oid}/retenir")
+    @app.post("/preparer/{pid}/offres/{oid}/selectionner")
     def offer_choose(pid: int, oid: int, sur_place: int = 0, s: Session = Depends(get_s)):
         plan = plan_or_404(s, pid)
         o = offer_or_404(plan, oid)
-        gone, _ = write(s, f"offre « {o.label} » retenue", lambda: W.choose_offer(s, plan, o), page_url(plan))
+        gone, _ = write(s, f"offre « {o.label} » sélectionnée", lambda: W.choose_offer(s, plan, o), page_url(plan))
         extra = f" (à la place de {', '.join(f'« {g} »' for g in gone)})" if gone else ""
-        return back(page_url(plan, "" if sur_place else f"offre-{oid}"), f"Offre « {o.label} » retenue{extra}")
+        return back(page_url(plan, "" if sur_place else f"offre-{oid}"), f"Offre « {o.label} » sélectionnée{extra}")
 
-    @app.post("/preparer/{pid}/offres/{oid}/ne-plus-retenir")
+    @app.post("/preparer/{pid}/offres/{oid}/deselectionner")
     def offer_unchoose(pid: int, oid: int, sur_place: int = 0, s: Session = Depends(get_s)):
         plan = plan_or_404(s, pid)
         o = offer_or_404(plan, oid)
-        write(s, f"offre « {o.label} » plus retenue", lambda: W.choose_offer(s, plan, o, chosen=False), page_url(plan))
-        return back(page_url(plan, "" if sur_place else f"offre-{oid}"), f"L'offre « {o.label} » n'est plus retenue")
+        write(s, f"offre « {o.label} » plus sélectionnée", lambda: W.choose_offer(s, plan, o, chosen=False), page_url(plan))
+        return back(page_url(plan, "" if sur_place else f"offre-{oid}"), f"L'offre « {o.label} » n'est plus sélectionnée")
 
     @app.post("/preparer/{pid}/offres/{oid}/supprimer")
     def offer_delete(pid: int, oid: int, s: Session = Depends(get_s)):
@@ -468,7 +468,7 @@ def install(site):
             return back(f"/v/{trip.id}", "Ce projet a déjà été lancé : voici son voyage.")
         r = S.compute_plan(plan)
         if not r.chosen:
-            return refuse(page_url(plan), "Retiens au moins une offre avant de lancer le voyage.")
+            return refuse(page_url(plan), "Sélectionne au moins une offre avant de lancer le voyage.")
         names = {i.id: i.name for i in plan.items}
         stored = S.asso_name(s)
         last = S.last_trip(s)
@@ -503,7 +503,7 @@ def install(site):
         from ..ops import plan_detail
         d = plan_detail(plan, today())
         for o in d["offres"]:
-            for k in ("prix_en_clair", "si_retenue"):
+            for k in ("prix_en_clair", "si_selectionnee"):
                 o.pop(k, None)
         return json.dumps(d, ensure_ascii=False, indent=1)
 

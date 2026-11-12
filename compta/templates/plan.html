@@ -46,7 +46,7 @@
 {% block content %}
 <div class="plan-page">
 {{ plan_head(plan, 'postes', launch=r.chosen and not trip_made) }}
-{% set counted = r.chosen or r.meals_total %}{# quelque chose compte dans le budget : offres retenues ou repas #}
+{% set counted = r.chosen or r.meals_total %}{# quelque chose compte dans le budget : offres sélectionnées ou repas #}
 
 {% if trip_made %}
 <div class="card plan-launched" id="voyage-lance" role="note">
@@ -73,7 +73,7 @@
     <div class="plan-block plan-figure" style="grid-area:budget">
       <div class="plan-label">Budget total</div>
       {% if counted %}<div class="value" id="budget">{{ r.budget|money }}</div>
-      {% else %}<p class="plan-sentence muted" id="budget">Aucune offre retenue.</p>{% endif %}
+      {% else %}<p class="plan-sentence muted" id="budget">Aucune offre sélectionnée.</p>{% endif %}
       {% if r.meals_total %}<div class="plan-meals" id="dont-repas">dont repas <a href="/preparer/{{ plan.id }}/programme#repas">{{ r.meals_total|money }}</a></div>{% endif %}
       {% if missing and counted %}<div class="plan-missing" id="budget-incomplet">Budget incomplet : il manque {% for i in r.empty %}<a href="#poste-{{ i }}">{{ names[i] }}</a>{{ ', ' if not loop.last }}{% endfor %}</div>{% endif %}
     </div>
@@ -82,7 +82,7 @@
       <div class="plan-label">Prix par personne</div>
       {% if counted %}<div class="value lead" id="par-personne">{{ r.per_person|money }}</div>
       {% if missing %}<div class="plan-missing" id="par-personne-sans">sans {{ missing_ni }}</div>{% endif %}
-      {% else %}<p class="plan-sentence muted" id="par-personne">Apparaît dès que tu retiens une offre.</p>{% endif %}
+      {% else %}<p class="plan-sentence muted" id="par-personne">Apparaît dès que tu sélectionnes une offre.</p>{% endif %}
     </div>
 
     <form class="plan-block plan-tool" style="grid-area:margin" method="post" action="/preparer/{{ plan.id }}/marge" id="marge" data-autosave>
@@ -112,7 +112,7 @@
         </div>
       </fieldset>
       <div aria-live="polite">
-      {% if not counted %}{# rien de retenu : pas de montant #}
+      {% if not counted %}{# rien de sélectionné : pas de montant #}
       {% elif r.announced is none %}
       <p class="plan-out" id="reserve">À annoncer au moins : <b>{{ r.price_with_margin|money }}</b></p>
       {% elif r.reserve >= 0 %}
@@ -153,7 +153,7 @@
   <ol class="plan-steps">
     <li><b>Ajoute tes postes</b> : ce qu'il faut payer pour ce voyage (transport, hébergement, activités…).</li>
     <li><b>Ajoute les offres</b> que tu as reçues pour chaque poste, avec leur prix.</li>
-    <li><b>Retiens une offre par poste</b> : Trip Compta calcule le budget et le prix par personne.</li>
+    <li><b>Sélectionne une offre par poste</b> : Trip Compta calcule le budget et le prix par personne.</li>
   </ol>
 </div>
 {% endif %}
@@ -189,7 +189,7 @@
     {% set o = x.o %}
     {% if x.first_item != it.id %}
     <li class="plan-offer plan-offer-short{{ ' chosen' if o.chosen }}" id="offre-{{ o.id }}-{{ it.id }}">
-      <b>{{ o.label }}</b>{% if o.chosen %} <span class="pill ok">✓ Retenue</span>{% endif %}
+      <b>{{ o.label }}</b>{% if o.chosen %} <span class="pill ok">✓ Sélectionnée</span>{% endif %}
       <span class="muted">· couvre aussi {{ x.others|join(', ') }}</span>
       <span>· {{ x.text }}</span>
       {% if x.part is not none %}<span>· part de {{ it.name }} : <b>{{ x.part|money }}</b></span>{% endif %}
@@ -198,7 +198,7 @@
     {% else %}
     <li class="plan-offer{{ ' chosen' if o.chosen }}" id="offre-{{ o.id }}">
       <div class="plan-offer-main">
-        <div class="plan-offer-name"><b>{{ o.label }}</b>{% if o.chosen %} <span class="pill ok">✓ Retenue</span>{% endif %}
+        <div class="plan-offer-name"><b>{{ o.label }}</b>{% if o.chosen %} <span class="pill ok">✓ Sélectionnée</span>{% endif %}
           {% if x.others %}<span class="muted small"> · couvre aussi {{ x.others|join(', ') }}</span>{% endif %}</div>
         {% if o.note %}<div class="plan-offer-note"><span class="plan-offer-note-text">{{ o.note }}</span>
           <button type="button" class="act" data-note="{{ o.note }}" data-note-title="Note : {{ o.label }}">Lire la note</button></div>{% endif %}
@@ -206,9 +206,9 @@
         <div class="plan-offer-total">{{ x.total|money }} pour le groupe{% if x.each_said %} · <b>{{ x.each|money }}</b> par personne{% endif %}</div>
         {% if not o.chosen and x.w %}
         {% if x.lost %}
-        <div class="plan-whatif">Si tu la retiens : {% if x.replaces %}remplace {{ x.replaces|join(' et ') }}, et {% endif %}<span class="warn-text">{{ x.lost_text }} (le budget serait incomplet).</span></div>
+        <div class="plan-whatif">Si tu la sélectionnes : {% if x.replaces %}remplace {{ x.replaces|join(' et ') }}, et {% endif %}<span class="warn-text">{{ x.lost_text }} (le budget serait incomplet).</span></div>
         {% else %}
-        <div class="plan-whatif">Si tu la retiens :
+        <div class="plan-whatif">Si tu la sélectionnes :
           <b class="{{ 'up-text' if x.w.delta > 0 else 'down-text' if x.w.delta < 0 }}">{{ x.w.delta|money_sign }} au total, {{ x.w.delta_per_person|money_sign }} par personne</b>{% if x.replaces %} · remplace {{ x.replaces|join(' et ') }}{% endif %}
         </div>
         {% endif %}
@@ -216,9 +216,9 @@
       </div>
       <div class="row plan-offer-actions">
         {% if o.chosen %}
-        <form method="post" action="/preparer/{{ plan.id }}/offres/{{ o.id }}/ne-plus-retenir" class="inline" data-keep-place><button class="btn ghost small plan-pick-btn">Ne plus retenir</button></form>
+        <form method="post" action="/preparer/{{ plan.id }}/offres/{{ o.id }}/deselectionner" class="inline" data-keep-place><button class="btn ghost small plan-pick-btn">Désélectionner</button></form>
         {% else %}
-        <form method="post" action="/preparer/{{ plan.id }}/offres/{{ o.id }}/retenir" class="inline" data-keep-place><button class="btn small plan-pick-btn">Retenir</button></form>
+        <form method="post" action="/preparer/{{ plan.id }}/offres/{{ o.id }}/selectionner" class="inline" data-keep-place><button class="btn small plan-pick-btn">Sélectionner</button></form>
         {% endif %}
         <span class="act-pair">
         <a class="act" href="/preparer/{{ plan.id }}/offres/{{ o.id }}/modifier">Modifier</a>

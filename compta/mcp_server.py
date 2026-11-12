@@ -269,7 +269,7 @@ def build_server(data_dir: Optional[str] = None):
     @mcp.tool()
     @_safe
     def voir_projet(projet: Ref) -> dict:
-        """Tout sur un projet : postes, offres (prix en clair, total, « si tu la retiens »), budget, prix par
+        """Tout sur un projet : postes, offres (prix en clair, total, « si tu la sélectionnes »), budget, prix par
         personne, marge, prix annoncé, échéances à venir."""
         return ops.plan(projet)
 
@@ -284,7 +284,7 @@ def build_server(data_dir: Optional[str] = None):
     @_safe
     def modifier_projet(projet: Ref, donnees: dict, simulation: bool = True) -> dict:
         """Ajoute ou modifie postes, offres (par personne, pour le groupe, pour un nombre de personnes ; forfaits et
-        répartition), offre retenue, participants, marge, prix annoncé, échéances : format de `lire_guide_preparation`.
+        répartition), offre sélectionnée, participants, marge, prix annoncé, échéances : format de `lire_guide_preparation`.
         Fais d'abord simulation=true et montre les « actions » à l'utilisateur. Lancer le voyage se fait à l'écran."""
         return ops.plan_import(projet, donnees, simulation)
 

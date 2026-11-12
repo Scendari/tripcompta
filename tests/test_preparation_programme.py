@@ -8,7 +8,7 @@ Montants de référence (brief de la tranche 4, calculés à la main) — projet
 - N = 9 : repas 1 710,00 ; budget 10 050,00 ; par personne 1 116,67 ;
 - N = 10, marge 5 % : 541,50 ; prix avec la marge 1 137,15 ; prix annoncé 1 150,00 : 670,00 de côté (67,00 par
   personne), 12,85 de plus que le prix avec la marge ;
-- « si tu retiens » le forfait à 10 : 10 580,00, −250,00, 1 058,00 ;
+- « si tu sélectionnes » le forfait à 10 : 10 580,00, −250,00, 1 058,00 ;
 - 7 jours cochés : 245,00 / 2 450,00, budget 11 380,00, 1 138,00 ; jour 4 à 0,00 : 140,00 / 1 400,00 ;
 - sans enveloppe : 8 930,00 / 893,00 ;
 - durée ramenée à 5 (jour 1 décoché, jour 4 à 50,00) : 155,00 / 1 550,00 ;
@@ -195,7 +195,7 @@ def test_lines_order_period_and_item(screen):
                                            note="2 plongées par jour")))
     ok(sc.post(f"{sc.url}/programme", dict(day="3", text="Visite", items=str(sc.item("Hôtel")))))
     sc.choose("Forfait Club A")
-    sc.post(f"{sc.url}/offres/{sc.offer('Taxi')}/ne-plus-retenir")
+    sc.post(f"{sc.url}/offres/{sc.offer('Taxi')}/deselectionner")
     page = sc.cl.get(f"{sc.url}/programme").text
     day1 = clean(re.search(r'id="jour-1"(.*?)</section>', page, re.S).group(1))
     order = [day1.index(x) for x in ("Arrivée à l'hôtel", "Courses", "7 h 30 Vol aller", "11 h Taxi pour l'hôtel",
@@ -222,7 +222,7 @@ def test_lines_order_period_and_item(screen):
     r = ok(sc.post(f"{sc.url}/programme/{line.id}/supprimer"))
     assert message(r) == "« Transfert » supprimé du programme"
     # aucun calcul ne dépend du programme
-    assert result(sc).budget == 850000                    # forfait retenu, Taxi sans offre : 8 680 − 180
+    assert result(sc).budget == 850000                    # forfait sélectionné, Taxi sans offre : 8 680 − 180
 
 
 def test_line_refusals(screen):
