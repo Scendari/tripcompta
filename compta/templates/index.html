@@ -61,49 +61,53 @@
   <div class="row home-btns">{% if panel %}<button type="button" class="btn ghost" data-toggle-row="#preparer">Fermer</button>{% endif %}<button class="btn">Créer le projet</button></div>
 </form>
 {%- endmacro %}
-{% macro plan_card(x) %}
+{% macro dates(x) %}{% if x.start %}{{ x.start|date }}{% if x.end %} → {{ x.end|date }}{% endif %}{% else %}<span class="muted">à fixer</span>{% endif %}{% endmacro %}
+{% macro plan_row(x) %}
   {% set p = x.plan %}
-  <a class="card trip-card plan-card" href="/preparer/{{ p.id }}">
-    <h3>{{ p.name }}</h3>
-    <div class="muted small">
-      {% if p.start %}{{ p.start|date }}{% if p.end %} → {{ p.end|date }}{% endif %} · {% endif %}{{ p.people }} personne{{ 's' if p.people > 1 }}{% if p.place %} · {{ p.place }}{% endif %}
-    </div>
-    <div class="trip-pills">
-      {% if x.launched %}<span class="pill du">✓ Voyage lancé</span>{% endif %}
-      {% if not p.items %}<span class="pill grey">À compléter</span>
-      {% else %}
-        {% if x.r.chosen or x.r.meals_total %}<span class="pill ok">{{ x.r.per_person|money }} par personne</span>{% endif %}
-        {% if x.missing %}<span class="pill doit">{{ x.missing|length }} poste{{ 's' if x.missing|length > 1 }} pas encore choisi{{ 's' if x.missing|length > 1 }}</span>{% endif %}
-      {% endif %}
-    </div>
-  </a>
+  <tr class="home-row plan-row">
+    <td><a class="row-link plan-link" href="/preparer/{{ p.id }}">{{ p.name }}</a>{% if p.is_demo %} <span class="pill grey demo-pill">Exemple</span>{% endif %}{% if p.place %}<div class="muted small">{{ p.place }}</div>{% endif %}</td>
+    <td class="nowrap{{ ' blank' if not p.start }}" data-label="Dates">{{ dates(p) }}</td>
+    <td class="num" data-label="Personnes">{{ p.people }}</td>
+    <td data-label="Offres choisies">{% if not p.items %}<span class="pill grey">À compléter</span>
+      {% elif x.missing %}<span class="pill doit" title="Pas encore choisi : {{ x.missing|join(', ') }}">{{ x.chosen_n }} sur {{ x.items_n }}</span>
+      {% else %}<span class="pill ok">{{ x.chosen_n }} sur {{ x.items_n }}</span>{% endif %}</td>
+    <td{{ ' class=blank' if not x.next }} data-label="Prochaine échéance">{% if x.next %}{{ x.next.d.label }} · <b class="{{ 'late-text' if x.next.late }}">{{ x.next.words.split(' (')[0] }}</b>{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td class="num{{ ' blank' if not (x.r.chosen or x.r.meals_total) }}" data-label="Par personne">{% if x.r.chosen or x.r.meals_total %}<b>{{ x.r.per_person|money }}</b>{% else %}<span class="muted">—</span>{% endif %}</td>
+  </tr>
 {% endmacro %}
-{% macro plans_section() %}
-<section class="plans-section" id="en-preparation" aria-labelledby="en-preparation-h">
-  <h2 id="en-preparation-h" class="section-title">En préparation</h2>
-  {% if plans %}
-  <div class="trip-grid">{% for x in plans %}{{ plan_card(x) }}{% endfor %}</div>
-  {% else %}
-  <p class="muted">Pas encore de voyage en préparation. « + Préparer un voyage » t'aide à comparer des prix et à trouver un prix par personne, avant de lancer le voyage.</p>
-  {% endif %}
-</section>
+{% macro trip_row(t, r) %}
+  {% set owe = r.accounts|selectattr('balance', 'gt', 0)|list %}
+  <tr class="home-row trip-row">
+    <td><a class="row-link trip-link" href="/v/{{ t.id }}">{{ t.name }}</a>{% if t.is_demo %} <span class="pill grey demo-pill">Exemple</span>{% endif %}{% if t.closed_on %} <span class="pill grey closed-pill">🔒 Clôturé</span>{% endif %}
+      {% if t.place %}<div class="muted small">{{ t.place }}</div>{% endif %}</td>
+    <td class="nowrap{{ ' blank' if not t.start }}" data-label="Dates">{{ dates(t) }}</td>
+    <td class="num" data-label="Participants">{{ t.participants|length }}</td>
+    <td class="pills">{% if not t.participants %}<span class="pill grey">À compléter</span>
+      {% elif r.to_collect == 0 and r.to_refund == 0 %}<span class="pill ok">🟢 Tout est réglé</span>
+      {% else %}
+        {% if r.to_collect %}<span class="pill doit">🟠 {{ r.to_collect|money }} à recevoir{% if owe %} · {{ owe|length }} {{ 'personne ou famille' if owe|length == 1 else 'personnes ou familles' }}{% endif %}</span>{% endif %}
+        {% if r.to_refund %}<span class="pill du">🔵 {{ t|caisse|capfirst }} doit rembourser {{ r.to_refund|money }}</span>{% endif %}
+      {% endif %}</td>
+    <td class="num" data-label="Coût">{{ r.total_cost|money }}</td>
+  </tr>
+{% endmacro %}
+{% macro trip_table(rows) %}
+<div class="card table-wrap home-table-wrap">
+  <table class="home-table">
+    <thead><tr><th>Voyage</th><th>Dates</th><th class="num">Participants</th><th>Où en sont les comptes</th><th class="num">Coût</th></tr></thead>
+    <tbody>{% for t, r in rows %}{{ trip_row(t, r) }}{% endfor %}</tbody>
+  </table>
+</div>
 {% endmacro %}
 
 {% if cards or plans %}
 <div class="page-head home-head">
-  <div class="grow">
-    <h1>Mes voyages</h1>
-    {% set n_real = cards|rejectattr('0.is_demo')|list|length %}
-    <p class="muted">{% if n_real %}{{ n_real }} voyage{{ 's' if n_real > 1 }}{% if n_real < cards|length %} (et le voyage d'exemple){% endif %}. Clique sur un voyage pour l'ouvrir.{% elif cards %}Le voyage d'exemple. Clique sur un voyage pour l'ouvrir.{% else %}Pas encore de voyage lancé : tes voyages en préparation sont plus bas.{% endif %}</p>
-  </div>
+  <div class="grow"><h1>Mes voyages</h1></div>
   <div class="row home-actions">
-    <button type="button" class="btn" data-toggle-row="#nouveau" aria-expanded="false" aria-controls="nouveau">+ Nouveau voyage</button>
-    <button type="button" class="btn ghost" data-toggle-row="#preparer" aria-expanded="false" aria-controls="preparer">+ Préparer un voyage</button>
     <button type="button" class="btn ghost" data-toggle-row="#importer-panel" aria-expanded="false" aria-controls="importer-panel">⤓ Importer un voyage</button>
   </div>
 </div>
-<div id="nouveau" class="home-panel" {{ '' if open_new else 'hidden' }}>{{ new_trip_form(false, true) }}</div>
-<div id="preparer" class="home-panel" {{ '' if open_plan else 'hidden' }}>{{ plan_form(true) }}</div>
+<div id="importer-panel" class="home-panel" {{ '' if open_import else 'hidden' }}>{{ import_form(false, true) }}</div>
 {% if soon %}
 <section class="card soon-card" id="a-faire" aria-labelledby="a-faire-h">
   <h2 id="a-faire-h" class="section-title">À faire bientôt</h2>
@@ -135,9 +139,95 @@ document.querySelectorAll('#a-faire [data-autosubmit]').forEach(function (c) {
 });
 </script>
 {% endif %}
-<div id="importer-panel" class="home-panel" {{ '' if open_import else 'hidden' }}>{{ import_form(false, true) }}</div>
+
+{% set open_cards = cards|rejectattr('0.closed_on')|list %}
+{% set closed_cards = cards|selectattr('0.closed_on')|list %}
+<div class="home-tabs" role="tablist" aria-label="Préparer ou faire la compta" data-auto="{{ '1' if tab_auto else '' }}">
+  <button type="button" class="home-tab" role="tab" id="tab-preparer" aria-controls="onglet-preparer" aria-selected="{{ 'true' if tab == 'preparer' else 'false' }}" data-tab="preparer">Préparer <span class="count">{{ plans|rejectattr('plan.is_demo')|list|length }}</span></button>
+  <button type="button" class="home-tab" role="tab" id="tab-compta" aria-controls="onglet-compta" aria-selected="{{ 'true' if tab == 'compta' else 'false' }}" data-tab="compta">Faire la compta <span class="count">{{ cards|rejectattr('0.is_demo')|list|length }}</span></button>
+</div>
+
+<section class="home-tabpanel" role="tabpanel" id="onglet-preparer" aria-labelledby="tab-preparer" {{ '' if tab == 'preparer' else 'hidden' }}>
+  <div class="tab-head">
+    <p class="muted">Avant le départ : compare les offres, trouve le prix par personne et bâtis le programme.</p>
+    <div class="row home-actions">
+      <button type="button" class="btn" data-toggle-row="#preparer" aria-expanded="false" aria-controls="preparer">+ Préparer un voyage</button>
+    </div>
+  </div>
+  <div id="preparer" class="home-panel" {{ '' if open_plan else 'hidden' }}>{{ plan_form(true) }}</div>
+  {% if plans %}
+  <div class="card table-wrap home-table-wrap">
+    <table class="home-table" id="projets">
+      <thead><tr><th>Projet</th><th>Dates</th><th class="num">Personnes</th><th>Offres choisies</th><th>Prochaine échéance</th><th class="num">Par personne</th></tr></thead>
+      <tbody>{% for x in plans %}{{ plan_row(x) }}{% endfor %}</tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted home-empty">Pas encore de voyage en préparation. « + Préparer un voyage » t'aide à comparer des prix et à trouver un prix par personne, avant de lancer le voyage.</p>
+  {% endif %}
+  {% if not plans|selectattr('plan.is_demo')|list %}
+  <form method="post" action="/preparer/exemple/ouvrir" class="home-example">
+    <span class="muted small">Pour voir comment ça marche :</span> <button class="btn small ghost">🧭 Ouvrir un projet d'exemple</button>
+    <span class="muted small">(10 jours de plongée, entièrement fictif)</span>
+  </form>
+  {% endif %}
+  {% if launched %}
+  <p class="muted small home-launched">Déjà lancés, leurs comptes sont dans « Faire la compta » : {% for x in launched %}<a href="/preparer/{{ x.plan.id }}">{{ x.plan.name }}</a>{{ ', ' if not loop.last }}{% endfor %}.</p>
+  {% endif %}
+</section>
+
+<section class="home-tabpanel" role="tabpanel" id="onglet-compta" aria-labelledby="tab-compta" {{ '' if tab == 'compta' else 'hidden' }}>
+  <div class="tab-head">
+    <p class="muted">Pendant et après le voyage : les dépenses, qui a payé, et qui doit combien à qui.</p>
+    <div class="row home-actions">
+      <button type="button" class="btn" data-toggle-row="#nouveau" aria-expanded="false" aria-controls="nouveau">+ Nouveau voyage</button>
+    </div>
+  </div>
+  <div id="nouveau" class="home-panel" {{ '' if open_new else 'hidden' }}>{{ new_trip_form(false, true) }}</div>
+  {% if open_cards %}
+  {{ trip_table(open_cards) }}
+  {% elif closed_cards %}
+  <p class="muted home-empty">Aucun voyage en cours. « + Nouveau voyage » en crée un ; tes voyages clôturés sont juste dessous.</p>
+  {% else %}
+  <p class="muted home-empty">Pas encore de voyage en cours. Quand un projet est prêt, « Lancer le voyage » le fait arriver ici ; « + Nouveau voyage » en crée un directement.</p>
+  {% endif %}
+  {% if closed_cards %}
+  <details class="closed-trips" id="clotures"{{ ' open' if not open_cards }}>
+    <summary>🔒 Voyages clôturés ({{ closed_cards|length }})</summary>
+    {{ trip_table(closed_cards) }}
+  </details>
+  {% endif %}
+</section>
+
 <script>
-// Accueil : un seul panneau ouvert à la fois (nouveau voyage / importer)
+(function () {
+  // Les deux onglets : sans recharger la page ; l'onglet choisi est retenu (navigateur) et mis dans l'adresse
+  var KEY = 'compta-accueil-onglet', tabs = document.querySelectorAll('.home-tab');
+  function show(name, remember) {
+    tabs.forEach(function (b) {
+      var on = b.dataset.tab === name;
+      b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1;
+      document.getElementById(b.getAttribute('aria-controls')).hidden = !on;
+    });
+    if (remember) {
+      try { localStorage.setItem(KEY, name); } catch (e) {}
+      var u = new URL(location.href); u.searchParams.set('onglet', name); history.replaceState(null, '', u);
+    }
+  }
+  tabs.forEach(function (b, i) {
+    b.addEventListener('click', function () { show(b.dataset.tab, true); });
+    b.addEventListener('keydown', function (e) {      // flèches gauche / droite, comme des onglets
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      var o = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+      o.focus(); show(o.dataset.tab, true); e.preventDefault();
+    });
+  });
+  var cur = document.querySelector('.home-tab[aria-selected=true]');
+  var saved = null; try { saved = localStorage.getItem(KEY); } catch (e) {}
+  if (document.querySelector('.home-tabs').dataset.auto && (saved === 'preparer' || saved === 'compta')) show(saved, false);
+  else show(cur.dataset.tab, false);
+})();
+// Un seul formulaire ouvert à la fois (préparer / nouveau voyage / importer)
 document.querySelectorAll('.home-actions [data-toggle-row]').forEach(function (b) {
   b.addEventListener('click', function () {
     document.querySelectorAll('.home-actions [data-toggle-row]').forEach(function (o) {
@@ -146,55 +236,17 @@ document.querySelectorAll('.home-actions [data-toggle-row]').forEach(function (b
     setTimeout(function () { var t = document.querySelector(b.dataset.toggleRow), f = t && !t.hidden && t.querySelector('input'); if (f) f.focus(); homeButtons(); }, 0);
   });
 });
-// Formulaire ouvert : on cache « + Nouveau voyage » / « Importer » (on les prenait pour le bouton de validation) ;
+// Formulaire ouvert : on cache les boutons « + … » et « Importer » (on les prenait pour le bouton de validation) ;
 // ils reviennent avec « Fermer »
 function homeButtons() {
   var open = Array.prototype.some.call(document.querySelectorAll('.home-panel'), function (p) { return !p.hidden; });
-  var a = document.querySelector('.home-actions'); if (a) a.hidden = open;
+  document.querySelectorAll('.home-actions').forEach(function (a) { a.hidden = open; });
 }
 document.querySelectorAll('.home-panel [data-toggle-row]').forEach(function (b) {
   b.addEventListener('click', function () { setTimeout(homeButtons, 0); });
 });
 homeButtons();
 </script>
-{% macro trip_card(t, r) %}
-  <a class="card trip-card" href="/v/{{ t.id }}">
-    <h3>{{ t.name }}{% if t.is_demo %} <span class="pill grey demo-pill">Exemple</span>{% endif %}{% if t.closed_on %} <span class="pill grey closed-pill">🔒 Clôturé</span>{% endif %}</h3>
-    <div class="muted small">
-      {% if t.start %}{{ t.start|date }}{% if t.end %} → {{ t.end|date }}{% endif %} · {% endif %}{{ t.participants|length }} participant{{ 's' if t.participants|length > 1 }}{% if t.place %} · {{ t.place }}{% endif %}
-    </div>
-    <div class="trip-pills">
-      {% set owe = r.accounts|selectattr('balance', 'gt', 0)|list %}
-      {% if not t.participants %}<span class="pill grey">À compléter</span>
-      {% elif r.to_collect == 0 and r.to_refund == 0 %}<span class="pill ok">🟢 Tout est réglé</span>
-      {% else %}
-        {% if r.to_collect %}<span class="pill doit">🟠 Reste à recevoir : {{ r.to_collect|money }} ({{ owe|map(attribute='name')|join(', ') if owe|length <= 3 else owe|length ~ ' personnes ou familles' }})</span>{% endif %}
-        {% if r.to_refund %}<span class="pill du">🔵 {{ t|caisse|capfirst }} doit rembourser {{ r.to_refund|money }}</span>{% endif %}
-      {% endif %}
-    </div>
-    <div class="muted small" style="margin-top:.5rem">Coût : {{ r.total_cost|money }}</div>
-  </a>
-{% endmacro %}
-{% set open_cards = cards|rejectattr('0.closed_on')|list %}
-{% set closed_cards = cards|selectattr('0.closed_on')|list %}
-{% if open_cards %}
-<div class="trip-grid">
-  {% for t, r in open_cards %}{{ trip_card(t, r) }}{% endfor %}
-</div>
-{% elif closed_cards %}
-<p class="muted">Aucun voyage en cours. « + Nouveau voyage » en crée un ; tes voyages clôturés sont juste dessous.</p>
-{% elif not cards %}
-<p class="muted">Pas encore de voyage en cours. Quand un projet est prêt, « + Nouveau voyage » crée le voyage pour en tenir les comptes.</p>
-{% endif %}
-{% if closed_cards %}
-<details class="closed-trips" id="clotures"{{ ' open' if not open_cards }}>
-  <summary>🔒 Voyages clôturés ({{ closed_cards|length }})</summary>
-  <div class="trip-grid">
-    {% for t, r in closed_cards %}{{ trip_card(t, r) }}{% endfor %}
-  </div>
-</details>
-{% endif %}
-{{ plans_section() }}
 {% else %}
 <div class="home-first">
   <div class="page-head"><div class="grow">
@@ -211,6 +263,10 @@ homeButtons();
   <details class="card home-form plan-first" id="preparer-premier"{{ ' open' if open_plan }}>
     <summary>Pas encore prêt à lancer le voyage ? <b>Prépare-le d'abord</b> : compare des prix et trouve un prix par personne.</summary>
     {{ plan_form(false) }}
+    <form method="post" action="/preparer/exemple/ouvrir" class="home-example">
+      <span class="muted small">Ou regarde d'abord</span> <button class="btn small ghost">🧭 un projet d'exemple</button>
+      <span class="muted small">(10 jours de plongée, entièrement fictif)</span>
+    </form>
   </details>
   {{ import_form(true) }}
   <div class="card home-form" id="dossier-existant">

@@ -122,6 +122,30 @@ def install(site):
             return err
         return back(page_url(plan), "Projet créé. Ajoute maintenant les postes de dépense (transport, hébergement…).")
 
+    # ------------------------------------------------------------------ projet d'exemple (demo.seed_plan_demo)
+    @app.post("/preparer/exemple/ouvrir")
+    def plan_example_open(s: Session = Depends(get_s)):
+        from .. import demo
+        plan = s.query(M.Plan).filter(M.Plan.is_demo.is_(True)).first()
+        if plan is not None:
+            return back(page_url(plan), "Le projet d'exemple est déjà là")
+        db.snapshot("ouverture du projet d'exemple")
+        plan = demo.seed_plan_demo(s, today())
+        s.commit()
+        return back(page_url(plan), "Voici un projet d'exemple, entièrement fictif : explore-le et modifie-le librement.")
+
+    @app.post("/preparer/{pid}/exemple/recommencer")
+    def plan_example_reset(pid: int, s: Session = Depends(get_s)):
+        from .. import demo
+        plan = plan_or_404(s, pid)
+        if not plan.is_demo:
+            raise HTTPException(404, "Ce n'est pas le projet d'exemple")
+        db.snapshot("projet d'exemple remis à neuf")
+        W.delete_plan(s, plan)
+        plan = demo.seed_plan_demo(s, today())
+        s.commit()
+        return back(page_url(plan), "Projet d'exemple remis à neuf.")
+
     @app.post("/preparer/{pid}/modifier")
     async def plan_edit(pid: int, request: Request, s: Session = Depends(get_s)):
         plan = plan_or_404(s, pid)

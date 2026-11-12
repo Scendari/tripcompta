@@ -105,7 +105,7 @@ def test_family_demo_amounts_by_hand(fam):
 def test_family_screens(fam):
     c, app, tid, P = fam
     home = clean(c.get("/").text)
-    assert "Reste à recevoir : 435,00 €" in home
+    assert "435,00 € à recevoir · 2 personnes ou familles" in home
     dash = clean(c.get(f"/v/{tid}").text)
     assert "Famille Lebrun" in dash and "doit encore 160,00 €" in dash and "Famille Roux" in dash
     assert "de 2 personnes ou familles" in dash and "à 1 personne ou famille" in dash and "doivent encore" not in dash

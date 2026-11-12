@@ -98,7 +98,7 @@ l'ordinateur est partagé (club), ou pour les données personnelles des adhéren
 
 | Écran | À quoi ça sert |
 |---|---|
-| **Mes voyages** | la liste des voyages ; **+ Nouveau voyage**, **Importer un voyage** ; un voyage fini se **clôture** (ses comptes sont figés, on peut le rouvrir) et se **duplique** pour préparer le suivant |
+| **Mes voyages** | deux onglets : **Préparer** (les projets pas encore lancés, **+ Préparer un voyage**) et **Faire la compta** (les voyages, **+ Nouveau voyage**), un tableau chacun ; **Importer un voyage** ; « À faire bientôt » au-dessus ; un voyage fini se **clôture** (ses comptes sont figés, on peut le rouvrir) et se **duplique** pour préparer le suivant |
 | 🏠 **Où j'en suis** | « Pour démarrer » (les étapes d'un voyage tout neuf), puis les comptes : coût, déjà versé, reste à recevoir, reste à rembourser ; « À regarder » : les alertes en clair |
 | 👥 **Participants** | ajout de plusieurs personnes d'un coup (un nom par ligne), reprise du groupe d'un autre voyage, **familles**, **rôles** (organisateur, co-organisateurs…), **groupes** (covoiturage, chambre…), le compte de chacun |
 | 🧾 **Dépenses** | par catégorie, prévu / réel (ou « montant pas encore connu »), payé par l'asso, avancé par un participant ou **par plusieurs** (montant de chacun), pour qui (parts) ; **argent reçu** (remboursement d'un fournisseur, subvention) ; chercher, filtrer, trier |

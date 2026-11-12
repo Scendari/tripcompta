@@ -99,7 +99,8 @@ def test_reference_amounts_with_meals(screen):
     assert "À ce prix, il te reste 670,00 € de côté (67,00 € par personne)." in t
     assert "C'est 12,85 € de plus que le prix avec ta marge (1 137,15 €)." in t
     # le home : même budget
-    assert "1 083,00 € par personne" in sc.text("/")
+    row = re.search(r'<tr class="home-row plan-row">(.*?)</tr>', sc.cl.get("/").text, re.S).group(1)
+    assert " ".join(clean(row).split()).endswith(" 1 083,00 €")
 
 
 def test_meal_variants(screen):

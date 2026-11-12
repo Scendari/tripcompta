@@ -424,7 +424,8 @@ def test_home_without_projects_and_first_use(screen):
     page = sc.cl.get("/").text
     t = clean(page)
     assert "+ Préparer un voyage" in t and "+ Nouveau voyage" in t and "Importer un voyage" in t
-    assert "En préparation" in t
+    assert "Préparer 0" in t and "Faire la compta 1" in t                 # les deux onglets, avec leur nombre
+    assert 'id="onglet-preparer" aria-labelledby="tab-preparer" hidden' in page   # pas de projet : la compta d'abord
     assert "Pas encore de voyage en préparation" in t and "comparer des prix" in t
     assert 'id="preparer" class="home-panel"' in page
 
@@ -438,14 +439,14 @@ def test_home_lists_projects(screen):
     sc.add_item("Repas")
     page = sc.cl.get("/").text
     t = clean(page)
-    assert "En préparation" in t
-    card = clean(re.search(r'<a class="card trip-card plan-card" href="/preparer/1">(.*?)</a>', page, re.S).group(1))
-    assert card.startswith(" Mer Rouge 2027 ")
-    assert "10 personnes · Hurghada" in card and "513,00 € par personne" in card
-    assert "1 poste pas encore choisi" in card
-    card = clean(re.search(r'<a class="card trip-card plan-card" href="/preparer/2">(.*?)</a>', page, re.S).group(1))
-    assert "12/06/2027 → 14/06/2027 · 6 personnes" in card and "2 postes pas encore choisis" in card
-    assert "par personne" not in card              # aucune offre retenue : pas de prix (il serait de 0,00 €)
+    assert "Préparer 2" in t and 'id="onglet-compta" aria-labelledby="tab-compta" hidden' in page   # onglet ouvert
+    rows = [clean(x) for x in re.findall(r'<tr class="home-row plan-row">(.*?)</tr>', page, re.S)]
+    assert [r.split()[0] for r in rows] == ["Week-end", "Mer"]                # le plus récent d'abord
+    assert " ".join(rows[1].split()) == "Mer Rouge 2027 Hurghada à fixer 10 4 sur 5 — 513,00 €"
+    assert 'title="Pas encore choisi : Plongées"' in page
+    assert " ".join(rows[0].split()) == "Week-end Annecy 12/06/2027 → 14/06/2027 6 0 sur 2 — —"   # rien de retenu :
+    # pas de prix (il serait de 0,00 €)
+    assert 'href="/preparer/1"' in page and 'href="/preparer/2"' in page
     # sans voyage, avec des projets : l'accueil ordinaire, pas la page de bienvenue
     assert "Bienvenue" not in t and "Pas encore de voyage en cours" in t
 

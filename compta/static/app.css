@@ -170,8 +170,8 @@ form.inline { display: inline; }
 .closed-banner form { margin: 0; }
 .closed-trips { margin-top: 1.4rem; }
 .closed-trips > summary { cursor: pointer; font-weight: 700; padding: .4rem 0; color: var(--muted); }
-.closed-trips .trip-grid { margin-top: .6rem; }
-.closed-trips .trip-card { opacity: .85; }
+.closed-trips .home-table-wrap { margin-top: .6rem; }
+.closed-trips .home-row { opacity: .85; }
 main[data-closed] :is(button, input, select, textarea):disabled { cursor: not-allowed; opacity: .55; }
 .history-list { list-style: none; padding: 0; margin: 0; }
 .history-list li { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; padding: .55rem .2rem; border-bottom: 1px solid var(--border); }
@@ -881,7 +881,8 @@ textarea.modele.modele-libre { min-height: 11rem; height: 14rem; }
 @media (max-width: 900px) { .home-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 480px) { .home-pair { grid-template-columns: 1fr; } }
 .trip-card .pill { white-space: normal; }
-/* Accueil (révisé) : en-tête avec les deux actions, panneaux repliés, voyages en tuiles */
+/* Accueil : en-tête (Importer), « À faire bientôt », deux onglets « Préparer » et « Faire la compta », un tableau
+   chacun ; les formulaires se déplient sur place */
 .home-head { align-items: flex-end; }
 .home-actions { gap: .5rem; flex-wrap: wrap; }
 .home-actions[hidden] { display: none; }
@@ -891,9 +892,43 @@ textarea.modele.modele-libre { min-height: 11rem; height: 14rem; }
 .home-form.panel > .home-h, .home-form.panel > p, .home-form.panel > .home-btns { grid-column: 1 / -1; }
 .home-form.panel .home-pair { gap: .8rem; }
 .home-btns { gap: .5rem; justify-content: flex-end; }
-.trip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 1rem; }
-.trip-grid .trip-card { margin: 0; }
-.trip-pills { margin-top: .7rem; display: flex; flex-wrap: wrap; gap: .35rem; }
+.home-tabs { display: flex; flex-wrap: wrap; gap: .4rem; border-bottom: 1px solid var(--border); margin: 1.4rem 0 1rem; }
+.home-tab { appearance: none; background: none; border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px;
+  display: inline-flex; align-items: center; gap: .55rem; min-height: 3.1rem; padding: 0 1.1rem;
+  font: inherit; font-size: 1.08rem; font-weight: 700; color: var(--muted); cursor: pointer; }
+.home-tab:hover { color: var(--text); }
+.home-tab[aria-selected=true] { color: var(--teal-strong); border-bottom-color: var(--teal-strong); }
+.home-tab .count { font-size: .75rem; font-weight: 700; background: var(--bg-2); color: var(--muted); border-radius: 999px; padding: .05rem .5rem; }
+.home-tab[aria-selected=true] .count { background: var(--accent); color: #fff; }
+.home-tabpanel[hidden] { display: none; }
+.tab-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem 1rem; margin-bottom: 1rem; }
+.tab-head p { margin: 0; }
+.home-table-wrap { padding: 0; overflow-x: auto; }
+.home-table { min-width: 720px; font-size: .9rem; }
+.home-table th { text-transform: none; letter-spacing: 0; font-size: .8rem; background: var(--bg); padding: .7rem 1rem; white-space: nowrap; }
+.home-table td { padding: .8rem 1rem; vertical-align: middle; }
+.home-table tr:last-child td { border-bottom: 0; }
+.home-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.home-table td .pill { white-space: normal; margin: .1rem 0; }
+.home-row { position: relative; }
+.home-row:hover td { background: var(--bg); }
+.row-link { font-weight: 700; font-size: .98rem; }
+.row-link::after { content: ""; position: absolute; inset: 0; }   /* toute la ligne ouvre le voyage */
+.home-table .nowrap { white-space: nowrap; }
+/* fenêtre étroite : une petite carte par ligne (nom, puis « Dates : … », « Coût : … ») ; les cases vides disparaissent */
+@media (max-width: 640px) {
+  .home-table { min-width: 0; }
+  .home-table thead { display: none; }
+  .home-table, .home-table tbody, .home-table tr, .home-table td { display: block; }
+  .home-table tr { padding: .7rem 0; border-bottom: 1px solid var(--border); }
+  .home-table tr:last-child { border-bottom: 0; }
+  .home-table td { border: 0; padding: .15rem 1rem; text-align: left !important; white-space: normal; }
+  .home-table td[data-label]::before { content: attr(data-label) " : "; color: var(--muted); }
+  .home-table td.blank { display: none; }
+}
+.home-empty { margin: .4rem 0 0; }
+.home-launched { margin-top: .8rem; }
+.home-example { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; margin-top: 1rem; }
 @media (max-width: 900px) { .home-form.panel { grid-template-columns: minmax(0, 1fr); } }
 /* Dossier des données */
 .data-foot { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem 1rem; margin-top: 2.5rem; padding-top: .8rem; border-top: 1px dashed var(--border); }
@@ -1370,9 +1405,7 @@ tr.to-check > td:last-child { border-right: 2px solid var(--coral); }
 .exp-tools .exp-count[hidden] { display: none; }
 
 /* ---------- Préparer un voyage (accueil « En préparation », page d'un projet, formulaire d'une offre) ---------- */
-.plans-section { margin-top: 1.6rem; }
 .section-title { font-size: 1.15rem; margin: 0 0 .6rem; }
-.plan-card .trip-pills { margin-top: .5rem; display: flex; flex-wrap: wrap; gap: .3rem; }
 .plan-first { margin-top: 1rem; }
 .plan-first > summary { cursor: pointer; color: var(--muted); font-size: .92rem; list-style-position: outside; }
 .plan-first[open] > summary { margin-bottom: .8rem; }

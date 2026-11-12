@@ -370,7 +370,11 @@ def test_after_launch(screen):
     sc.post(f"{sc.url}/participants", dict(people="12"))
     sc.choose("Air France")
     assert lines_of(sc, tid) == REF_LINES
-    assert "✓ Voyage lancé" in clean(sc.cl.get("/").text)
+    home = sc.cl.get("/").text          # accueil : le projet lancé quitte le tableau « Préparer », un lien reste
+    assert "Déjà lancés, leurs comptes sont dans « Faire la compta » : Mer Rouge 2027 ." in clean(home)   # (le
+    # nom est un lien vers la préparation)
+    assert f'<a href="/preparer/{sc.pid}">Mer Rouge 2027</a>.' in home
+    assert 'id="projets"' not in home and 'class="home-row trip-row"' in home
     dash = sc.cl.get(f"/v/{tid}").text
     assert f'href="/preparer/{sc.pid}" id="voir-preparation"' in dash and "Voir la préparation de ce voyage" in dash
     # le voyage supprimé : le lien disparaît, on peut relancer

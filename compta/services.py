@@ -552,14 +552,18 @@ def plan_offer_text(o: M.PlanOffer, people: int) -> str:
             f"(il en faut {P.ceil_div(people, cap)} pour {_people_word(people)})")
 
 
-def plan_summary(plan: M.Plan) -> dict:
-    """Pour la carte d'un projet sur l'accueil : le calcul et les noms des postes pas encore choisis."""
+def plan_summary(plan: M.Plan, today: dt.date | None = None) -> dict:
+    """Pour la ligne d'un projet sur l'accueil (onglet « Préparer ») : le calcul, les noms des postes pas encore
+    choisis, combien le sont déjà (`chosen_n` sur `items_n`) et, avec `today`, la prochaine échéance qui compte
+    (`next`, voir plan_deadlines ; None s'il n'y en a pas)."""
     r = compute_plan(plan)
     names = {i.id: i.name for i in plan.items}
     from sqlalchemy.orm import object_session
     s = object_session(plan)
     launched = bool(plan.trip_id and s is not None and s.get(M.Trip, plan.trip_id) is not None)
-    return dict(plan=plan, r=r, missing=[names[i] for i in r.empty], launched=launched)
+    nxt = next((x for x in plan_deadlines(plan, today) if x["counts"]), None) if today else None
+    return dict(plan=plan, r=r, missing=[names[i] for i in r.empty], launched=launched,
+                items_n=len(plan.items), chosen_n=len(plan.items) - len(r.empty), next=nxt)
 
 
 def plan_and_list(names) -> str:
@@ -605,7 +609,7 @@ def upcoming(s, today: dt.date, days: int = UPCOMING_DAYS) -> list:
       paiement et des personnes en retard (même règle que « À relancer aujourd'hui »).
     Rangé par date (les relances avec les échéances du jour, avant elles)."""
     out = []
-    for plan in s.query(M.Plan).order_by(M.Plan.id).all():
+    for plan in s.query(M.Plan).filter(M.Plan.is_demo.is_(False)).order_by(M.Plan.id).all():   # pas l'exemple
         for x in plan_deadlines(plan, today):
             if x["counts"] and x["days"] <= days:
                 out.append(dict(x, kind="echeance", date=x["d"].date))

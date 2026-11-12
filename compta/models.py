@@ -399,6 +399,7 @@ class Plan(Base):
     meal_per_day: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)   # enveloppe repas (centimes par
     #                                                                            personne et par jour) ; vide : aucune
     created: Mapped[dt.datetime] = mapped_column(DateTime, default=now)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False)   # projet d'exemple (demo.seed_plan_demo)
 
     items: Mapped[list["PlanItem"]] = relationship(
         back_populates="plan", cascade="all, delete-orphan", order_by="(PlanItem.position, PlanItem.id)")

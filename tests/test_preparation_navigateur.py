@@ -108,16 +108,35 @@ def test_narrow_window_no_horizontal_scroll(site, browser, width):
 def test_home_panels_one_at_a_time(site, browser):
     page = new_page(browser)
     page.goto(site.base + "/")
+    assert page.locator("#onglet-preparer").is_visible() and page.locator("#onglet-compta").is_hidden()   # un projet
     page.click("button:has-text('+ Préparer un voyage')")
     assert page.locator("#preparer").is_visible() and not page.locator("#nouveau").is_visible()
     pw.expect(page.locator("#preparer input[name=name]")).to_be_focused()
     page.click("#preparer button:has-text('Fermer')")
+    page.click("#tab-compta")                                           # l'autre onglet, sans recharger
+    assert page.locator("#onglet-compta").is_visible() and page.locator("#onglet-preparer").is_hidden()
+    assert "onglet=compta" in page.url and page.locator("#tab-compta").get_attribute("aria-selected") == "true"
     page.click("button:has-text('+ Nouveau voyage')")
     assert page.locator("#nouveau").is_visible() and not page.locator("#preparer").is_visible()
-    # un clic sur la carte ouvre le projet
-    page.goto(site.base + "/")
-    page.click("a.plan-card:has-text('Mer Rouge 2027')")
+    page.goto(site.base + "/")                                          # sans paramètre : le dernier onglet revient
+    assert page.locator("#onglet-compta").is_visible()
+    page.focus("#tab-compta")
+    page.keyboard.press("ArrowLeft")                                    # au clavier, comme des onglets
+    assert page.locator("#onglet-preparer").is_visible()
+    pw.expect(page.locator("#tab-preparer")).to_be_focused()
+    # toute la ligne ouvre le projet (ici, un clic sur le nombre de personnes)
+    page.goto(site.base + "/?onglet=preparer")
+    box = page.locator("tr.plan-row:has-text('Mer Rouge 2027') td.num").first.bounding_box()
+    page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    page.wait_for_url(re.compile(r"/preparer/1$"))
     assert page.url.endswith("/preparer/1") and "Ça revient à" in page.locator("main").inner_text()
+    narrow = new_page(browser, width=390)                               # téléphone : une petite carte par ligne
+    narrow.goto(site.base + "/?onglet=preparer")
+    assert narrow.evaluate("document.documentElement.scrollWidth") <= 391
+    row = narrow.locator("tr.plan-row:has-text('Mer Rouge 2027')")
+    assert row.evaluate("e => getComputedStyle(e).display") == "block" and "\n10\n" in row.inner_text()
+    assert row.locator("td.num").first.evaluate("e => getComputedStyle(e, '::before').content") == '"Personnes : "'
+    assert not page.errors and not narrow.errors, (page.errors, narrow.errors)
 
 
 def test_split_box_and_what_is_left(site, browser):

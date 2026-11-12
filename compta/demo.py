@@ -259,3 +259,104 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Préparation d'exemple : 10 jours de plongée à Marsa Alam, 14 plongeurs. Plusieurs offres par poste pour comparer
+# (vols, transferts, trois logements, deux centres de plongée et un forfait logement + plongées) ; la sortie dauphins
+# n'est pas encore choisie. Les dates suivent aujourd'hui (départ dans 5 mois environ, échéances dans les semaines
+# qui viennent), pour que « dans 12 jours » reste vrai à chaque ouverture.
+
+PLAN_DEMO_NAME = "Marsa Alam — 10 jours de plongée (exemple)"
+
+
+def plan_demo_data(today: dt.date) -> dict:
+    """Le projet d'exemple, au format d'import des préparations (static/ia/guide_preparation.md)."""
+    start = today + dt.timedelta(days=150)
+    start += dt.timedelta(days=(5 - start.weekday()) % 7)          # un samedi
+    end = start + dt.timedelta(days=9)                              # 10 jours
+    soon = lambda n: (today + dt.timedelta(days=n)).isoformat()     # noqa: E731
+    before = lambda n: (start - dt.timedelta(days=n)).isoformat()   # noqa: E731
+    return {
+        "nom": PLAN_DEMO_NAME, "lieu": "Marsa Alam, Égypte", "debut": start.isoformat(), "fin": end.isoformat(),
+        "note": "Exemple entièrement fictif. 14 plongeurs, niveau 2 minimum. Trois logements et deux centres de "
+                "plongée à comparer ; la sortie dauphins n'est pas encore choisie.",
+        "marge": {"type": "pourcent", "valeur": 5},
+        "prix_annonce": 1790,
+        "postes": ["Vols", "Transferts", "Hébergement", "Plongées", "Sortie dauphins", "Assurance plongée", "Visa"],
+        "offres": [
+            {"prestataire": "Air Horizon (vol direct)", "prix": 610, "compte": "par personne", "postes": ["Vols"],
+             "note": "Paris → Marsa Alam sans escale, 23 kg en soute + 7 kg en cabine", "retenue": True,
+             "echeances": [{"libelle": "Prix garanti jusqu'à cette date", "date": soon(9)}]},
+            {"prestataire": "Nilair (escale au Caire)", "prix": 495, "compte": "par personne", "postes": ["Vols"],
+             "note": "3 h d'escale à l'aller, bagage plongée en supplément (40 € par trajet)"},
+            {"prestataire": "Minibus Red Sea Transfer", "prix": 140, "compte": "pour un nombre de personnes",
+             "pour_combien": 8, "quantite": 2, "de_quoi": "trajets", "postes": ["Transferts"],
+             "note": "Minibus de 8 places, la place pour les sacs de plongée", "retenue": True,
+             "echeances": [{"libelle": "Donner les horaires des vols", "date": before(14)}]},
+            {"prestataire": "Taxis de l'aéroport", "prix": 50, "compte": "pour un nombre de personnes",
+             "pour_combien": 4, "quantite": 2, "de_quoi": "trajets", "postes": ["Transferts"],
+             "note": "4 places, peu de coffre"},
+            {"prestataire": "Lodge Shams Alam", "prix": 75, "compte": "pour un nombre de personnes",
+             "pour_combien": 2, "quantite": 9, "de_quoi": "nuits", "postes": ["Hébergement"],
+             "note": "Chambre de 2, petit-déjeuner compris, au bord du récif"},
+            {"prestataire": "Hôtel Coral Bay", "prix": 105, "compte": "pour un nombre de personnes",
+             "pour_combien": 2, "quantite": 9, "de_quoi": "nuits", "postes": ["Hébergement"],
+             "note": "Chambre de 2 en demi-pension, piscine",
+             "echeances": [{"libelle": "Option à confirmer", "date": soon(12)}]},
+            {"prestataire": "Écolodge Wadi Gimal", "prix": 60, "compte": "pour un nombre de personnes",
+             "pour_combien": 2, "quantite": 9, "de_quoi": "nuits", "postes": ["Hébergement"],
+             "note": "Bungalow de 2, à 20 minutes du centre de plongée"},
+            {"prestataire": "Centre Blue Reef", "prix": 38, "compte": "par personne", "quantite": 11,
+             "de_quoi": "plongées", "postes": ["Plongées"], "note": "Bateau à la journée, bouteille et plombs compris"},
+            {"prestataire": "Deep South Divers", "prix": 41, "compte": "par personne", "quantite": 12,
+             "de_quoi": "plongées", "postes": ["Plongées"], "note": "Sites du grand sud, Nitrox offert"},
+            {"prestataire": "Forfait Shams Alam (lodge + plongées)", "prix": 690, "compte": "par personne",
+             "postes": ["Hébergement", "Plongées"],
+             "repartition": {"type": "euros", "parts": {"Hébergement": 340, "Plongées": 350}},
+             "note": "9 nuits au lodge en chambre de 2 et 11 plongées avec leur centre", "retenue": True,
+             "echeances": [{"libelle": "Option à confirmer", "date": soon(16)},
+                           {"libelle": "Acompte à verser", "date": soon(30), "montant": 3000},
+                           {"libelle": "Reste à payer", "date": before(30)}]},
+            {"prestataire": "Bateau Sataya (journée)", "prix": 95, "compte": "par personne",
+             "postes": ["Sortie dauphins"], "note": "Départ 6 h 30, déjeuner à bord"},
+            {"prestataire": "Dolphin Day Boat (bateau privé)", "prix": 1250, "compte": "pour le groupe",
+             "postes": ["Sortie dauphins"], "note": "Bateau pour nous seuls, 16 places"},
+            {"prestataire": "Assur'Plongée Loisir", "prix": 42, "compte": "par personne",
+             "postes": ["Assurance plongée"], "note": "Assistance et caisson, pour l'année", "retenue": True},
+            {"prestataire": "Licence du club", "prix": 0, "compte": "par personne", "postes": ["Assurance plongée"],
+             "note": "Comprise dans la licence, mais sans le rapatriement"},
+            {"prestataire": "Visa à l'arrivée", "prix": 25, "compte": "par personne", "postes": ["Visa"],
+             "retenue": True},
+        ],
+        "programme": [
+            {"jour": 1, "heure": "6h40", "texte": "Vol direct Paris → Marsa Alam", "poste": "Vols"},
+            {"jour": 1, "heure": "13h30", "texte": "Transfert jusqu'au lodge", "poste": "Transferts"},
+            {"jour": 1, "texte": "Installation, briefing du soir"},
+            {"jour": 2, "heure": "8h30", "texte": "Plongée de reprise sur le récif du lodge", "poste": "Plongées"},
+            {"jour": 3, "jusqu_au": 4, "texte": "Deux plongées par jour", "poste": "Plongées",
+             "note": "Départ du bateau à 8 h, retour vers 14 h"},
+            {"jour": 5, "heure": "6h30", "texte": "Journée bateau à Sataya, nage avec les dauphins",
+             "poste": "Sortie dauphins"},
+            {"jour": 6, "jusqu_au": 8, "texte": "Deux plongées par jour, sites du sud", "poste": "Plongées",
+             "note": "Elphinstone si la mer le permet"},
+            {"jour": 9, "texte": "Pas de plongée (24 h avant le vol) : visite du parc de Wadi el Gemal"},
+            {"jour": 9, "heure": "20h", "texte": "Dîner de fin de séjour"},
+            {"jour": 10, "heure": "10h", "texte": "Transfert à l'aéroport", "poste": "Transferts"},
+            {"jour": 10, "heure": "13h15", "texte": "Vol retour", "poste": "Vols"},
+        ],
+        "repas": {"par_jour": 25, "jours_sans": [10], "montants": {"9": 45}},
+    }
+
+
+def seed_plan_demo(s, today: dt.date) -> M.Plan:
+    """Ajoute le projet d'exemple (marqué « exemple ») et le renvoie. Passe par le même chemin que les imports
+    (ops.plan_apply) : tout y est vérifié ; un refus lève OpsError."""
+    from . import writes as W
+    from .ops import plan_apply
+    data = plan_demo_data(today)
+    plan = W.save_plan(s, name=data["nom"], people=14, place=data["lieu"])
+    plan.is_demo = True
+    plan_apply(s, plan, dict(data, projet_id=plan.id))
+    s.flush()
+    return plan

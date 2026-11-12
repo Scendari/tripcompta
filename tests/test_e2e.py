@@ -38,11 +38,11 @@ def test_every_screen_and_main_flows(server, page):
 
     # Accueil
     page.goto(base + "/")
-    pw.expect(page.locator(".trip-card").first).to_contain_text("Port-Cros")
+    pw.expect(page.locator(".trip-row").first).to_contain_text("Port-Cros")
     shot(page, "01_accueil")
 
     # Tableau de bord
-    page.click(".trip-card >> nth=0")
+    page.click(".trip-row .trip-link >> nth=0")
     pw.expect(page.locator("h1")).to_have_text("Où j'en suis ?")
     pw.expect(page.locator(".money-kpis .kpi")).to_have_count(4)
     pw.expect(page.locator(".trip-tiles .kpi")).to_have_count(4)

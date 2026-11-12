@@ -39,12 +39,23 @@ def install(site):
             cards.append((t, r))
         q = request.query_params
         stored = S.asso_name(s)
-        plans = [S.plan_summary(p) for p in s.query(M.Plan).order_by(M.Plan.created.desc(), M.Plan.id.desc()).all()]
-        soon = S.upcoming(s, site.today())
-        return render(request, "index.html", cards=cards, plans=plans, soon=soon, data_dir=db.home, open_plan=q.get("preparer") == "1",
+        today = site.today()
+        every = [S.plan_summary(p, today) for p in s.query(M.Plan).order_by(M.Plan.is_demo, M.Plan.created.desc(), M.Plan.id.desc()).all()]   # l'exemple en dernier
+        plans = [x for x in every if not x["launched"]]            # onglet « Préparer » : pas encore lancés
+        launched = [x for x in every if x["launched"]]             # lancés : leur voyage est dans « Faire la compta »
+        soon = S.upcoming(s, today)
+        open_new, open_plan = q.get("nouveau") == "1", q.get("preparer") == "1"
+        # l'onglet ouvert : celui de l'adresse, ou du formulaire demandé ; sinon « Préparer » s'il y a un projet en
+        # cours, « Faire la compta » sinon (`tab_auto` : le navigateur peut alors rouvrir le dernier onglet choisi)
+        tab = q.get("onglet") if q.get("onglet") in ("preparer", "compta") else \
+            "compta" if open_new else "preparer" if open_plan else None
+        tab_auto = tab is None
+        tab = tab or ("preparer" if any(not x["plan"].is_demo for x in plans) else "compta")
+        return render(request, "index.html", cards=cards, plans=plans, launched=launched, soon=soon, data_dir=db.home,
+                      tab=tab, tab_auto=tab_auto, open_plan=open_plan,
                       asso_default="" if stored == "l'asso" else stored,
                       diving_default=bool(trips) and any(S.is_diving(t_) for t_ in trips[:1] if not t_.is_demo),
-                      open_new=q.get("nouveau") == "1", open_import=q.get("importer") == "1")
+                      open_new=open_new, open_import=q.get("importer") == "1")
 
     @app.post("/voyages")
     async def create_trip(request: Request, s: Session = Depends(get_s)):

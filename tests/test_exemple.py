@@ -61,7 +61,7 @@ def test_example_kept_apart_from_real_trips(tmp_path):
     c.post("/exemple/ouvrir")
     home = c.get("/").text
     assert 'data-regle="1"' in home                                                 # l'exemple n'empêche pas la fête
-    assert "1 voyage (et le voyage d&#39;exemple)" in home or "1 voyage (et le voyage d'exemple)" in home
+    assert 'Faire la compta <span class="count">1</span>' in home                   # l'exemple ne compte pas
     assert home.index("Mon vrai voyage") < home.index("Hendaye 2026 – démo")          # l'exemple en dernier
     assert "Exemple</span>" in home
 

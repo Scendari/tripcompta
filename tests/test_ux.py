@@ -298,7 +298,7 @@ def test_first_time_user_only_clicks(server, browser):
     assert d.value.suggested_filename.startswith("Bilan_Ma_premiere_sortie")
     # 9. Revenir à l'accueil : le voyage est « Tout est réglé »
     page.click("nav >> text=Tous les voyages")
-    pw.expect(page.locator(".trip-card:has-text('Ma première sortie')")).to_contain_text("Tout est réglé")
+    pw.expect(page.locator(".trip-row:has-text('Ma première sortie')")).to_contain_text("Tout est réglé")
     assert not page.errors, page.errors
 
 

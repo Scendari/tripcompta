@@ -144,7 +144,7 @@ def test_home_puts_closed_trips_aside(trip):
     page = cl.get("/").text
     main, closed = page.split('id="clotures"')
     assert "Voyages clôturés (1)" in clean(closed) and "Rando 2026" in closed and "🔒 Clôturé" in closed
-    assert "Week-end en cours" in main and "Rando 2026" not in main.split('class="trip-grid"')[-1]
+    assert "Week-end en cours" in main and "Rando 2026" not in main.split('id="onglet-compta"')[1]
     assert "<details class=\"closed-trips\" id=\"clotures\">" in page   # replié tant qu'il reste un voyage en cours
     cl.post(f"/v/{other}/supprimer")
     page = cl.get("/").text

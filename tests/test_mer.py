@@ -62,8 +62,8 @@ def test_list_scrolls_above_the_sea(tmp_path, browser):
         assert pg.evaluate("document.querySelector('.page-scroll').scrollTop") > 300     # la liste défile…
         assert pg.evaluate("window.scrollY") == 0                                          # … pas la page
         assert pg.evaluate("document.querySelector('.harbour').getBoundingClientRect().top") == sea_top
-        last = pg.evaluate("(function(){var c=document.querySelectorAll('.trip-card');return c[c.length-1].getBoundingClientRect().bottom})()")
-        assert last <= sea_top                                                             # dernière carte lisible
+        last = pg.evaluate("(function(){var c=document.querySelectorAll('.trip-row');return c[c.length-1].getBoundingClientRect().bottom})()")
+        assert last <= sea_top                                                             # dernière ligne lisible
     finally:
         srv.should_exit = True
         th.join(5)
