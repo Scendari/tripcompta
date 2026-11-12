@@ -84,8 +84,9 @@ def test_reference_amounts_with_meals(screen):
     t = prog(sc)
     assert "5 jours comptés : 190,00 € par personne, 1 900,00 € pour 10 personnes. Compris dans le budget." in t
     t = sc.text()
-    assert "Budget total 10 830,00 € dont repas : 1 900,00 € · voir le programme" in t
-    assert "Ça revient à 1 083,00 € par personne." in t
+    assert "Budget total 10 830,00 € dont repas 1 900,00 €" in t
+    assert "Prix par personne 1 083,00 €" in t
+    assert f'dont repas <a href="{sc.url}/programme#repas">' in sc.cl.get(sc.url).text      # le montant est le lien
     r9 = result(sc, 9)
     assert (r9.meals_total, r9.budget, r9.per_person) == (171000, 1005000, 111667)
     w = r.what_if[sc.offer("Forfait Club A")]
@@ -95,9 +96,8 @@ def test_reference_amounts_with_meals(screen):
     r = result(sc)
     assert (r.margin, r.price_with_margin, r.reserve, r.reserve_per_person, r.above_margin) == (54150, 113715, 67000, 6700, 1285)
     t = sc.text()
-    assert "Avec la marge : 1 137,15 € par personne, soit 541,50 € de marge." in t
-    assert "À ce prix, il te reste 670,00 € de côté (67,00 € par personne)." in t
-    assert "C'est 12,85 € de plus que le prix avec ta marge (1 137,15 €)." in t
+    assert "Avec ta marge (5 %) : 1 137,15 € par personne 541,50 € au total" in t
+    assert "Il te reste 67,00 € par personne (670,00 € en tout)." in t
     # le home : même budget
     row = re.search(r'<tr class="home-row plan-row">(.*?)</tr>', sc.cl.get("/").text, re.S).group(1)
     assert " ".join(clean(row).split()).endswith(" 1 083,00 €")
@@ -403,14 +403,15 @@ def test_same_header_on_both_pages_and_edit_from_programme(screen):
     assert refused(r) and urlparse(r.headers["location"]).path == f"{sc.url}/programme"
 
 
-def test_meal_field_label_and_ok_on_every_day(screen):
+def test_meal_field_label_and_autosave_on_every_day(screen):
     sc = meals_ref(screen.reference())
     page = sc.cl.get(f"{sc.url}/programme").text
     assert '<label for="meal_per_day">Montant :</label>' in page
     assert page.count('<h2 id="repas-h" class="section-title">Enveloppe repas</h2>') == 1
     for d in range(1, 8):
         block = re.search(rf'id="jour-{d}"(.*?)</form>', page, re.S).group(1)
-        assert '<button class="btn small ghost">OK</button>' in block       # visible, jamais caché
+        assert "data-autosave" in block and "<button" not in block         # enregistré en quittant le champ
+        assert '<span class="euro" aria-hidden="true">€</span></span>' in block   # le « € » dans le champ
         assert "disabled" not in block
 
 

@@ -1,17 +1,19 @@
 {% extends "base.html" %}
 {% from "_plan_tabs.html" import plan_head %}
 {% block title %}Programme · {{ plan.name }} · Trip Compta{% endblock %}
+{# Les détails d'une ligne : Heure, Jour, Jusqu'au sur une rangée (7rem 1fr 1fr), puis « Lié à » et la note sur
+   toute la largeur. #}
 {% macro line_form(plan, ln, d, u) %}
   <div class="plan-line-more">
-    <div class="field"><label for="time-{{ u }}">Heure <span class="hint">(facultatif)</span></label>
+    <div class="field"><label for="time-{{ u }}">Heure</label>
       <input type="text" id="time-{{ u }}" name="time" value="{{ ln.time if ln else '' }}" placeholder="ex. 9h30" class="num-input" maxlength="10"></div>
     <div class="field"><label for="day-{{ u }}">Jour</label>
       <select id="day-{{ u }}" name="day">{% for x in range(1, plan.duration + 1) %}<option value="{{ x }}" {{ 'selected' if x == (ln.day if ln else d) }}>Jour {{ x }}</option>{% endfor %}</select></div>
-    <div class="field"><label for="until-{{ u }}">Jusqu'au jour <span class="hint">(une période)</span></label>
-      <select id="until-{{ u }}" name="until"><option value="">—</option>{% for x in range(1, plan.duration + 1) %}<option value="{{ x }}" {{ 'selected' if ln and ln.until == x }}>Jour {{ x }}</option>{% endfor %}</select></div>
-    <div class="field"><label for="item-{{ u }}">Poste <span class="hint">(facultatif)</span></label>
-      <select id="item-{{ u }}" name="item"><option value="">aucun</option>{% for it in plan.items %}<option value="{{ it.id }}" {{ 'selected' if ln and ln.item_id == it.id }}>{{ it.name }}</option>{% endfor %}</select></div>
-    <div class="field plan-line-note"><label for="note-{{ u }}">Note <span class="hint">(facultatif)</span></label>
+    <div class="field"><label for="until-{{ u }}">Jusqu'au</label>
+      <select id="until-{{ u }}" name="until"><option value="">— (un seul jour)</option>{% for x in range(1, plan.duration + 1) %}<option value="{{ x }}" {{ 'selected' if ln and ln.until == x }}>Jour {{ x }}</option>{% endfor %}</select></div>
+    <div class="field plan-line-wide"><label for="item-{{ u }}">Lié à</label>
+      <select id="item-{{ u }}" name="item"><option value="">rien</option>{% for it in plan.items %}<option value="{{ it.id }}" {{ 'selected' if ln and ln.item_id == it.id }}>{{ it.name }}</option>{% endfor %}</select></div>
+    <div class="field plan-line-wide"><label for="note-{{ u }}">Note</label>
       <input type="text" id="note-{{ u }}" name="note" value="{{ ln.note if ln else '' }}"></div>
   </div>
 {% endmacro %}
@@ -70,12 +72,10 @@
   <div class="plan-day-head">
     <h3 id="jour-{{ d }}-h">Jour {{ d }}{% if x.date %} <span class="plan-day-date">· {{ x.date|longdate }}</span>{% endif %}</h3>
     {% if plan.meal_per_day is not none %}
-    <form method="post" action="/preparer/{{ plan.id }}/jours/{{ d }}/repas" class="row plan-day-meal">
-      <label><input type="checkbox" name="on" value="1" {{ 'checked' if x.meal_on }} data-autosubmit> Repas</label>
+    <form method="post" action="/preparer/{{ plan.id }}/jours/{{ d }}/repas" class="row plan-day-meal" data-autosave>
+      <label><input type="checkbox" id="meal-on-{{ d }}" name="on" value="1" {{ 'checked' if x.meal_on }}> Repas</label>
       <label class="sr-only" for="meal-{{ d }}">Montant des repas du jour {{ d }}, par personne</label>
-      <input type="text" id="meal-{{ d }}" name="amount" value="{{ x.meal_amount|amount_input }}" placeholder="{{ plan.meal_per_day|amount_input }}" inputmode="decimal" class="num-input plan-meal-input{{ ' changed' if x.changed }}{{ ' off' if not x.meal_on }}">
-      <span class="euro" aria-hidden="true">€</span>
-      <button class="btn small ghost">OK</button>
+      <span class="money-field"><input type="text" id="meal-{{ d }}" name="amount" value="{{ x.meal_amount|amount_input }}" placeholder="{{ plan.meal_per_day|amount_input }}" inputmode="decimal" class="num-input plan-meal-input{{ ' changed' if x.changed }}{{ ' off' if not x.meal_on }}"><span class="euro" aria-hidden="true">€</span></span>
     </form>
     {% endif %}
   </div>
@@ -92,16 +92,17 @@
         {% if ln.note %}<div class="muted small">{{ ln.note }}</div>{% endif %}
       </div>
       <div class="row plan-line-actions">
-        <details class="plan-line-edit">
-          <summary class="act">Modifier</summary>
-          <form method="post" action="/preparer/{{ plan.id }}/programme/{{ ln.id }}">
-            <div class="field"><label for="text-l{{ ln.id }}">Ce qu'on fait</label><input type="text" id="text-l{{ ln.id }}" name="text" value="{{ ln.text }}" required></div>
-            {{ line_form(plan, ln, d, 'l' ~ ln.id) }}
-            <button class="btn small">Enregistrer</button>
-          </form>
-        </details>
+        <button type="button" class="act" data-toggle-row="#ligne-{{ ln.id }}" aria-expanded="false" aria-controls="ligne-{{ ln.id }}">Modifier</button>
         <form method="post" action="/preparer/{{ plan.id }}/programme/{{ ln.id }}/supprimer" class="inline" data-confirm="Supprimer « {{ ln.text }} » du programme ?"><button class="act danger">Supprimer</button></form>
       </div>
+      <form method="post" action="/preparer/{{ plan.id }}/programme/{{ ln.id }}" class="plan-line-form" id="ligne-{{ ln.id }}" hidden aria-label="Modifier « {{ ln.text }} »">
+        <div class="field"><label for="text-l{{ ln.id }}">Ce qu'on fait</label><input type="text" id="text-l{{ ln.id }}" name="text" value="{{ ln.text }}" required data-autofocus></div>
+        {{ line_form(plan, ln, d, 'l' ~ ln.id) }}
+        <div class="row plan-line-foot">
+          <button class="btn small">Enregistrer</button>
+          <button type="button" class="btn small ghost" data-toggle-row="#ligne-{{ ln.id }}" data-reset>Annuler</button>
+        </div>
+      </form>
     </li>
     {% endfor %}
     {% for ln in x.after %}
@@ -185,10 +186,7 @@
     a.addEventListener("click", function (ev) { ev.preventDefault(); show(a.dataset.vue, true); });
   });
 })();
-// « Repas » : enregistré dès qu'on coche ou décoche. « plus de détails » : le jour choisi remplace celui du bloc.
-document.querySelectorAll('[data-autosubmit]').forEach(function (c) {
-  c.addEventListener('change', function () { c.form.requestSubmit ? c.form.requestSubmit() : c.form.submit(); });
-});
+// « plus de détails » : le jour choisi remplace celui du bloc.
 document.querySelectorAll('.plan-quick').forEach(function (f) {
   var hidden = f.querySelector('[data-quick-day]'), sel = f.querySelector('select[name=day]');
   var det = f.querySelector('details');

@@ -188,11 +188,50 @@
         if (r && r !== row) { r.hidden = true; o.setAttribute("aria-expanded", "false"); }
       });
     }
+    if (b.hasAttribute("data-reset") && row.reset) row.reset();      // « Annuler » : on oublie ce qui a été tapé
     row.hidden = !row.hidden;
+    const opener = document.querySelector(`[data-toggle-row="${b.dataset.toggleRow}"][aria-expanded]`);
     document.querySelectorAll(`[data-toggle-row="${b.dataset.toggleRow}"][aria-expanded]`)
       .forEach((x) => x.setAttribute("aria-expanded", String(!row.hidden)));
-    if (!row.hidden) { const f = row.querySelector("input[name=amount]"); if (f) f.focus(); }
+    if (!row.hidden) { const f = row.querySelector("input[name=amount], [data-autofocus]"); if (f) f.focus(); }
+    else if (opener && row.contains(document.activeElement || b)) opener.focus();   // fermé de l'intérieur : retour au bouton
   });
+
+  // Enregistrement sans bouton (form[data-autosave]) : un champ s'enregistre quand on le quitte s'il a changé, ou avec
+  // Entrée (envoi normal du formulaire) ; une case ou un choix dès qu'on le change. Après le rechargement, on revient
+  // au même endroit de la page et au champ où l'on était allé (au clavier, Tab ne perd pas sa place).
+  const AUTO_KEY = "autosave-retour";
+  const FOCUSABLE = "a[href], button, input:not([type=hidden]), select, textarea";
+  document.querySelectorAll("form[data-autosave]").forEach((f) => {
+    const send = () => { if (f.requestSubmit) f.requestSubmit(); else f.submit(); };
+    f.addEventListener("change", (ev) => { if (ev.target.matches("input[type=radio], input[type=checkbox], select")) send(); });
+    f.addEventListener("focusout", (ev) => {
+      const t = ev.target;
+      if (t.matches("input[type=text], input[type=number]") && t.value !== t.defaultValue) send();
+    });
+    f.addEventListener("submit", (ev) => {
+      if (f.dataset.sent) { ev.preventDefault(); return; }        // Entrée puis sortie du champ : un seul envoi
+      f.dataset.sent = "1";
+      addEventListener("pagehide", () => {
+        const a = document.activeElement, all = [...document.querySelectorAll(FOCUSABLE)];
+        try { sessionStorage.setItem(AUTO_KEY, JSON.stringify({path: location.pathname, y: scrollY,
+          id: a && a.id ? a.id : "", n: a && a !== document.body ? all.indexOf(a) : -1})); } catch (e) {}
+      }, {once: true});
+    });
+  });
+  try {
+    const back = JSON.parse(sessionStorage.getItem(AUTO_KEY) || "null");
+    sessionStorage.removeItem(AUTO_KEY);
+    if (back && back.path === location.pathname) {
+      // après le chargement : le navigateur va d'abord à l'ancre de l'adresse (#resultat) et lâche le focus
+      const put = () => {
+        scrollTo(0, back.y);
+        const el = (back.id && document.getElementById(back.id)) || (back.n >= 0 && document.querySelectorAll(FOCUSABLE)[back.n]);
+        if (el) el.focus({preventScroll: true});
+      };
+      if (document.readyState === "complete") setTimeout(put, 0); else addEventListener("load", () => setTimeout(put, 0), {once: true});
+    }
+  } catch (e) {}
 
   // Montants écrits sur les barres : seulement s'ils tiennent dans leur morceau de barre
   function fitSegNums() {

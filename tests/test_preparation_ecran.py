@@ -134,11 +134,12 @@ def test_reference_project_amounts_on_screen(screen):
     page = sc.cl.get(sc.url).text
     t = clean(page)
     assert "Budget total 8 930,00 €" in t
-    assert "Ça revient à 893,00 € par personne." in t
+    assert "Prix par personne 893,00 €" in t
     assert "Budget incomplet" not in t
     # le prix de chaque offre, en clair, et son total
     assert "210,00 € par personne" in offer_block(page, sc.offer("Transavia"))
-    assert "2 100,00 € pour le groupe · 210,00 € par personne" in offer_block(page, sc.offer("Transavia"))
+    tr = clean(offer_block(page, sc.offer("Transavia")))
+    assert "2 100,00 € pour le groupe" in tr and tr.count("210,00 € par personne") == 1      # dit une seule fois
     assert "60,00 € pour 4 personnes (il en faut 3 pour 10 personnes)" in offer_block(page, sc.offer("Taxi"))
     assert "180,00 € pour le groupe · 18,00 € par personne" in offer_block(page, sc.offer("Taxi"))
     assert "90,00 € pour 2 personnes × 5 nuits (il en faut 5 pour 10 personnes)" in offer_block(page, sc.offer("Hôtel X"))
@@ -167,34 +168,34 @@ def test_reference_project_amounts_on_screen(screen):
 def test_people_margin_and_announced_price_on_screen(screen):
     sc = screen.reference()
     t = sc.text()
-    assert "Pas de marge pour l'instant." in t and "0,00 € de marge" not in t
-    assert "Pas de prix annoncé. Repère : 893,00 € par personne." in t
+    assert "Avec ta marge" not in t and "au total" not in clean(re.search(r'<section class="card plan-result".*?</section>', sc.cl.get(sc.url).text, re.S).group(0))
+    assert "À annoncer au moins : 893,00 €" in t
     r = sc.post(f"{sc.url}/participants", dict(people="9"))
     assert message(r) == "Calculé pour 9 personnes"
     t = sc.text()
-    assert "Budget total 8 340,00 €" in t and "Ça revient à 926,67 € par personne." in t
+    assert "Budget total 8 340,00 €" in t and "Prix par personne 926,67 €" in t
     sc.post(f"{sc.url}/participants", dict(people="10"))
     r = sc.post(f"{sc.url}/marge", dict(margin_kind="pourcent", margin_value="5"))
     assert message(r) == "Marge : 5 %"
     t = sc.text()
-    assert "Avec la marge : 937,65 € par personne, soit 446,50 € de marge." in t
-    assert "Pas de prix annoncé. Repère : avec ta marge, 937,65 € par personne." in t
+    assert "Avec ta marge (5 %) : 937,65 € par personne 446,50 € au total" in t
+    assert "À annoncer au moins : 937,65 €" in t
     sc.post(f"{sc.url}/marge", dict(margin_kind="euros", margin_value="20"))
-    assert "Avec la marge : 913,00 € par personne, soit 200,00 € de marge." in sc.text()
+    assert "Avec ta marge (20,00 €) : 913,00 € par personne 200,00 € au total" in sc.text()
     sc.post(f"{sc.url}/marge", dict(margin_kind="pourcent", margin_value="5,5"))
-    assert "Avec la marge : 942,12 € par personne" in sc.text()     # 8 930 × 5,5 % = 491,15 ; 9 421,15 / 10
+    assert "Avec ta marge (5,5 %) : 942,12 € par personne" in sc.text()     # 8 930 × 5,5 % = 491,15 ; 9 421,15 / 10
     r = sc.post(f"{sc.url}/prix-annonce", dict(announced="950"))
     assert message(r) == "Prix annoncé : 950,00 €"
-    assert "À ce prix, il te reste 570,00 € de côté (57,00 € par personne)." in sc.text()
+    assert "Il te reste 57,00 € par personne (570,00 € en tout)." in sc.text()
     sc.post(f"{sc.url}/prix-annonce", dict(announced="880,00"))
     page = sc.cl.get(sc.url).text
-    assert re.search(r'<p class="plan-alert" id="reserve" role="alert">', page)
-    assert "À ce prix, il manque 130,00 € (13,00 € par personne)." in clean(page)
+    assert re.search(r'<div aria-live="polite">\s*<p class="plan-alert" id="reserve">', page)   # pas role="alert" : relu à chaque chargement
+    assert "Ce prix ne couvre pas le coût : il manque 13,00 € par personne (130,00 € en tout)." in clean(page)
     sc.post(f"{sc.url}/participants", dict(people="9"))
     sc.post(f"{sc.url}/prix-annonce", dict(announced="950"))
-    assert "il te reste 210,00 € de côté" in sc.text()
+    assert "(210,00 € en tout)" in sc.text()
     r = sc.post(f"{sc.url}/prix-annonce", dict(announced=""))
-    assert message(r) == "Prix annoncé retiré" and "Pas de prix annoncé" in sc.text()
+    assert message(r) == "Prix annoncé retiré" and "À annoncer au moins" in sc.text()
     # changer les participants n'a touché ni la marge ni le lieu
     with sc.db.Session() as s:
         p = sc.plan(s)
@@ -207,7 +208,7 @@ def test_choose_package_then_hotel_leaves_dives_unchosen(screen):
     assert message(r) == "Offre « Forfait Club A » retenue (à la place de « Hôtel X », « Club B »)"
     page = sc.cl.get(sc.url).text
     t = clean(page)
-    assert "Budget total 8 680,00 €" in t and "868,00 € par personne" in t
+    assert "Budget total 8 680,00 €" in t and "Prix par personne 868,00 €" in t
     assert "compris dans Forfait Club A" in item_block(page, sc.item("Hôtel"))
     assert "compris dans Forfait Club A" in item_block(page, sc.item("Plongées"))
     h = offer_block(page, sc.offer("Hôtel X"))
@@ -219,7 +220,8 @@ def test_choose_package_then_hotel_leaves_dives_unchosen(screen):
     t = clean(page)
     assert "Budget total 5 130,00 €" in t
     assert "Budget incomplet : il manque Plongées" in t
-    assert "Pour l'instant, ça revient à 513,00 € par personne (sans Plongées)." in t
+    assert "Prix par personne 513,00 € sans Plongées" in t
+    assert t.count("il manque Plongées") == 1 and "Pour l'instant" not in t
     assert "pas encore choisi" in item_block(page, sc.item("Plongées"))
     assert "Hôtel X · 2 250,00 €" in item_block(page, sc.item("Hôtel"))
 
@@ -393,7 +395,7 @@ def test_suggested_items_and_empty_project(screen):
     assert '<ol class="plan-steps">' in page                       # numéros visibles (liste numérotée ordinaire)
     assert "Ajoute tes postes : ce qu'il faut payer" in t
     result = clean(re.search(r'<section class="card plan-result".*?</section>', page, re.S).group(0))
-    assert "Le prix par personne apparaîtra dès que tu auras retenu une offre." in result
+    assert "Apparaît dès que tu retiens une offre." in result
     assert "0,00" not in result
     for s in ("Transport aller", "Hébergement", "Repas", "Activités", "Transport sur place", "Transport retour",
               "Assurance"):
@@ -403,10 +405,10 @@ def test_suggested_items_and_empty_project(screen):
     assert ">Hébergement</button>" not in page                     # une idée déjà prise n'est plus proposée
     assert "Pour commencer, trois étapes" not in clean(page)
     t = clean(page)
-    assert "pas encore choisi" in t and "Le prix par personne apparaîtra dès que tu auras retenu une offre." in t
-    assert "Aucune offre retenue pour l'instant." in t
+    assert "pas encore choisi" in t and "Apparaît dès que tu retiens une offre." in t
+    assert "Aucune offre retenue." in t
     result = clean(re.search(r'<section class="card plan-result".*?</section>', page, re.S).group(0))
-    assert "€" not in result.replace("en € par personne", "")         # aucun montant tant que rien n'est retenu
+    assert "€" not in result.replace("€ par personne", "").replace(" € ", " ")         # aucun montant tant que rien n'est retenu
     assert "Pas encore d'offre pour ce poste." in clean(page)
     assert f'/offres/nouvelle?poste={sc.item("Hébergement")}' in page
 
@@ -543,22 +545,25 @@ def test_no_forbidden_words_in_messages():
 
 
 def test_incomplete_budget_says_so(screen):
-    """Des postes sans offre retenue : chaque phrase chiffrée dit « pour l'instant »."""
+    """Des postes sans offre retenue : « Budget incomplet » le dit une fois (avec un lien vers le poste), le prix par
+    personne dit « sans … » ; les autres phrases ne le répètent pas."""
     sc = screen.reference()
     sc.post(f"{sc.url}/offres/{sc.offer('Taxi')}/ne-plus-retenir")
     sc.post(f"{sc.url}/offres/{sc.offer('Hôtel X')}/ne-plus-retenir")
     t = sc.text()                                          # 8 930 − 180 − 2 250 = 6 500
-    assert "Budget total 6 500,00 €" in t and "Budget incomplet : il manque Taxi, Hôtel" in t
-    assert "Pour l'instant, ça revient à 650,00 € par personne (sans Taxi ni Hôtel)." in t
-    assert "Pas de prix annoncé. Repère pour l'instant : 650,00 € par personne." in t
+    assert "Budget total 6 500,00 €" in t and "Budget incomplet : il manque Taxi , Hôtel" in t
+    page = sc.cl.get(sc.url).text
+    assert f'<a href="#poste-{sc.item("Taxi")}">Taxi</a>' in page                 # le poste manquant, en lien
+    assert "Prix par personne 650,00 € sans Taxi ni Hôtel" in t and "Pour l'instant" not in t
+    assert "À annoncer au moins : 650,00 €" in t
     sc.post(f"{sc.url}/marge", dict(margin_kind="pourcent", margin_value="5"))
     t = sc.text()                                          # 6 500 × 5 % = 325 ; 6 825 / 10
-    assert "Pour l'instant, avec la marge : 682,50 € par personne, soit 325,00 € de marge." in t
-    assert "Repère pour l'instant : avec ta marge, 682,50 € par personne." in t
+    assert "Avec ta marge (5 %) : 682,50 € par personne 325,00 € au total" in t
+    assert "À annoncer au moins : 682,50 €" in t
     sc.post(f"{sc.url}/prix-annonce", dict(announced="700"))
-    assert "Pour l'instant, à ce prix, il te reste 500,00 € de côté (50,00 € par personne)." in sc.text()
+    assert "Il te reste 50,00 € par personne (500,00 € en tout)." in sc.text()
     assert '<p class="plan-out" id="reserve">' in sc.cl.get(sc.url).text      # pas en vert : rien n'est sûr encore
     sc.post(f"{sc.url}/prix-annonce", dict(announced="600"))
-    assert "À ce prix, il manque déjà 500,00 € (50,00 € par personne)." in sc.text()
+    assert "il manque 50,00 € par personne (500,00 € en tout)." in sc.text()
     sc.post(f"{sc.url}/offres/{sc.offer('Transavia')}/ne-plus-retenir")
-    assert "(sans Avion, Taxi ni Hôtel)" in sc.text()
+    assert "sans Avion, Taxi ni Hôtel" in sc.text()

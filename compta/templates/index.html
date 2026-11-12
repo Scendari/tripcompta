@@ -112,7 +112,8 @@
 <section class="card soon-card" id="a-faire" aria-labelledby="a-faire-h">
   <h2 id="a-faire-h" class="section-title">À faire bientôt</h2>
   <ul class="soon-list">
-  {% for y in soon %}
+    <li class="soon-row soon-head" aria-hidden="true"><span class="soon-check">Fait</span></li>
+{% for y in soon %}
     {% if y.kind == 'relance' %}
     <li class="soon-row soon-relance">
       <span class="soon-check" aria-hidden="true">🔔</span>
@@ -123,7 +124,7 @@
     <li class="soon-row">
       <form method="post" action="/preparer/{{ y.plan.id }}/echeances/{{ d.id }}/fait?retour=accueil" class="inline plan-dl-done soon-check">
         <input type="hidden" name="fait" value="1">
-        <label><input type="checkbox" data-autosubmit> Fait</label>
+        <input type="checkbox" data-autosubmit aria-label="Marquer comme fait : {{ d.label }} ({{ y.plan.name }})">
         <noscript><button class="btn small ghost">OK</button></noscript>
       </form>
       <span class="soon-when{{ ' late' if y.late }}">{{ y.words|capfirst }}</span>

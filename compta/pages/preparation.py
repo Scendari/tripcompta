@@ -212,7 +212,9 @@ def install(site):
         for o in plan.offers:
             w = r.what_if.get(o.id)
             offers[o.id] = dict(o=o, text=S.plan_offer_text(o, plan.people), total=r.totals[o.id],
-                                each=r.offer_per_person[o.id], items=o.item_ids(), w=w,
+                                each=r.offer_per_person[o.id],
+                                items=o.item_ids(), w=w,
+                                each_said=not (o.counting == P.PER_PERSON and o.quantity == 1),   # sinon déjà dit
                                 replaces=[labels[x] for x in w.replaces] if w else [],
                                 lost=[names[i] for i in w.lost] if w else [],
                                 lost_text=S.plan_lost_text([names[i] for i in w.lost]) if w and w.lost else "")
@@ -249,7 +251,7 @@ def install(site):
                       deadline_ideas=S.DEADLINE_IDEAS, today_iso=today().isoformat(),
                       missing_ni=S.plan_ni_list([names[i] for i in r.empty]),
                       suggestions=[x for x in S.PLAN_SUGGESTIONS if E.sort_key(x) not in {E.sort_key(n) for n in names.values()}],
-                      margin_shown=(E.fmt(plan.margin_value) + " par personne" if plan.margin_kind == P.EUROS
+                      margin_short=(E.fmt(plan.margin_value) if plan.margin_kind == P.EUROS
                                     else S.plan_percent(plan.margin_value)),
                       margin_input=(S.plan_amount_input(plan.margin_value) if plan.margin_kind == P.EUROS
                                     else S.plan_percent(plan.margin_value, sign=False)))

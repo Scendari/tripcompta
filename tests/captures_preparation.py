@@ -193,8 +193,9 @@ def main(out: Path):
 
         # ---- thème sombre et fenêtre étroite, regardés à chaque fois (tranche 5)
         page.goto(base + f"{sc.url}/programme")
-        page.locator(".plan-line-edit summary").first.click()
-        page.locator(".plan-line-edit[open]").first.screenshot(path=str(out / "31-ligne-programme-modifier-ouvert.png"))
+        page.locator(".plan-line-actions button[data-toggle-row]").first.click()
+        page.mouse.move(0, 0)
+        page.locator(".plan-line:has(.plan-line-form:not([hidden]))").first.screenshot(path=str(out / "31-ligne-programme-modifier-ouvert.png"))
         print(out / "31-ligne-programme-modifier-ouvert.png")
         dark = browser.new_context(viewport={"width": 1280, "height": 900}, color_scheme="dark", locale="fr-FR",
                                    device_scale_factor=2).new_page()
@@ -227,6 +228,19 @@ def main(out: Path):
         shot("53-accueil-fenetre-etroite", "/?onglet=preparer", pg=narrow)
         shot("54-accueil-sombre", "/?onglet=preparer", full=False, pg=dark)
         shot("55-accueil-compta-sombre", "/?onglet=compta", full=False, pg=dark)
+        # ---- « Ce que ça donne » en deux colonnes, formulaire d'une ligne du programme (critique Impeccable)
+        for name, pg in (("56-exemple-resultat", page), ("57-exemple-resultat-sombre", dark)):
+            pg.goto(base + demo_url)
+            pg.locator("#resultat").screenshot(path=str(out / f"{name}.png"))
+            print(out / f"{name}.png")
+        shot("58-exemple-fenetre-etroite", demo_url, full=False, pg=narrow)
+        for name, pg in (("59-exemple-ligne-modifier", page), ("60-exemple-ligne-modifier-sombre", dark)):
+            pg.goto(base + f"{demo_url}/programme?vue=jour")
+            pg.locator("#jour-1 .plan-line-actions button[data-toggle-row]").nth(1).click()
+            pg.mouse.move(0, 0)
+            pg.locator("#jour-1").screenshot(path=str(out / f"{name}.png"))
+            print(out / f"{name}.png")
+        shot("61-exemple-ligne-modifier-etroite", f"{demo_url}/programme?vue=jour", full=False, pg=narrow)
         srv.should_exit = True
         browser.close()
 

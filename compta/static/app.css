@@ -29,6 +29,8 @@
   --field:       #8a816f;   /* bordure des champs : 3:1 au moins sur le fond */
   --shadow:      0 6px 22px rgba(60,50,30,.10);
   --radius:      12px;
+  accent-color:  var(--teal);   /* cases, boutons radio : sarcelle, lisibles aussi en thème sombre */
+  color-scheme:  light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -36,6 +38,7 @@
     --text: #e8f4f8; --muted: #8ab0c8; --teal: #1fada8; --teal-strong: #4ecdc4; --accent: #13716d; --ocean: #5aa3dd;
     --coral: #ff6b6b; --amber: #f0b45a; --amber-bg: #3a2c12; --ok: #3ccf7f; --ok-bg: #1a3d2a;
     --blue-bg: #13304d; --err-bg: #3d1a1a; --err: #ffa3a3; --field: #4f7594; --shadow: 0 8px 28px rgba(0,0,0,.45);
+    color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
@@ -43,6 +46,7 @@
   --text: #e8f4f8; --muted: #8ab0c8; --teal: #1fada8; --teal-strong: #4ecdc4; --accent: #13716d; --ocean: #5aa3dd;
   --coral: #ff6b6b; --amber: #f0b45a; --amber-bg: #3a2c12; --ok: #3ccf7f; --ok-bg: #1a3d2a;
   --blue-bg: #13304d; --err-bg: #3d1a1a; --err: #ffa3a3; --field: #4f7594; --shadow: 0 8px 28px rgba(0,0,0,.45);
+  color-scheme: dark;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -255,7 +259,11 @@ label { font-weight: 600; font-size: var(--fs-detail); display: block; margin-bo
 .hint { font-size: var(--fs-detail); color: var(--muted); font-weight: 400; margin-top: .2rem; }
 input[type=text], input[type=date], input[type=number], input[type=email], input[type=tel], input[type=search], input[type=password], select, textarea {
   width: 100%; padding: .55rem .7rem; border: 1px solid var(--field); border-radius: 8px; background: var(--card);
-  color: var(--text); font: inherit;
+  color: var(--text); font: inherit; line-height: 1.45;
+}
+/* un menu déroulant a la hauteur d'un champ texte (sinon 40 px contre 43) */
+input[type=text], input[type=date], input[type=number], input[type=email], input[type=tel], input[type=search], input[type=password], select {
+  min-height: calc(1.45em + 1.1rem + 2px);
 }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--teal); outline-offset: 0; border-color: var(--teal); }
 /* choix de fichier : le bouton natif (gris, « vieille interface » sous Windows) prend le style des boutons de l'app */
@@ -1423,28 +1431,49 @@ tr.to-check > td:last-child { border-right: 2px solid var(--coral); }
 .plan-first > form.card { box-shadow: none; border: 0; padding: 0; background: transparent; }
 .plan-page { max-width: 980px; }
 .plan-kicker { margin: 0 0 .2rem; font-size: var(--fs-label); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--teal-strong); }
-.plan-note { white-space: pre-line; margin-top: .4rem; }
+.plan-note { white-space: pre-line; margin-top: .4rem; font-size: var(--fs-detail); color: var(--muted);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; max-width: 60rem; }
 .plan-head-actions { justify-content: flex-end; }
 .plan-edit { margin-bottom: 1rem; }
 .danger-text { color: var(--err) !important; }
 .num-input { max-width: 9rem; font-variant-numeric: tabular-nums; }
-.plan-result { display: grid; gap: 1rem; border-color: var(--teal); }
-.plan-people { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
-.plan-people label { font-weight: 700; font-size: var(--fs-heading); }   /* comme « Marge », « Prix annoncé » */
+/* « Ce que ça donne » : une grille à deux colonnes égales, « Coût » à gauche, « Prix » à droite ; les résultats
+   (budget, prix par personne) sur la même rangée. Une seule étiquette (.plan-label), le gros chiffre réservé aux
+   deux résultats. */
+.plan-result { border-color: var(--teal); }
+.plan-result .section-title { margin: 0 0 .8rem; }
+.plan-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 2rem; row-gap: 1.1rem;
+  grid-template-areas: "hcost hprice" "people ." "budget price" "margin announced"; align-items: start; }
+.plan-col-h { margin: 0; padding-bottom: .35rem; border-bottom: 1px solid var(--border); font-size: var(--fs-text); font-weight: 700; }
+.plan-block { min-width: 0; margin: 0; }
+.plan-label, .plan-tool legend.plan-label, .plan-people label.plan-label {
+  display: block; margin: 0 0 .3rem; padding: 0; font-size: var(--fs-detail); font-weight: 600; color: var(--muted); line-height: 1.3; }
+/* participants : étiquette et champ sur une ligne (la rangée reste basse, la colonne Prix n'a rien en face) */
+.plan-people { display: flex; align-items: center; gap: .7rem; }
+.plan-people label.plan-label { margin: 0; }
 .plan-people input { width: 6rem; }
-.plan-figures { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 1rem; }
-.plan-figure .label { color: var(--muted); font-size: var(--fs-detail); }
-.plan-figure .value { font-size: var(--fs-figure); font-weight: 700; font-variant-numeric: tabular-nums; }
-.plan-sentence { margin: .1rem 0 0; font-size: var(--fs-text); }   /* la phrase au rôle texte ; le montant en chiffre */
-.plan-sentence b { font-size: var(--fs-figure); color: var(--teal-strong); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.plan-figure .value { font-size: var(--fs-figure); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.plan-figure .value.lead { color: var(--teal-strong); }
+.plan-sentence { margin: 0; font-size: var(--fs-text); }
 .plan-missing { margin-top: .3rem; color: var(--amber); font-weight: 600; font-size: var(--fs-detail); }
-.plan-tools { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+.plan-missing a { color: inherit; text-decoration: underline; }
 .plan-tool fieldset { border: 0; padding: 0; margin: 0; }
-.plan-tool legend { font-weight: 700; font-size: var(--fs-heading); padding: 0; margin-bottom: .35rem; }
-.plan-tool .choice { margin-bottom: .45rem; }
+.plan-input-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.plan-input-row .choice { gap: .35rem; }
 .small-choice label { padding: .3rem .65rem; font-size: var(--fs-detail); }
-.plan-out { margin: .5rem 0 0; }
-.plan-alert { margin: .5rem 0 0; padding: .55rem .75rem; border-radius: 9px; background: var(--err-bg); color: var(--err); font-weight: 600; }
+.plan-out { margin: .55rem 0 0; font-variant-numeric: tabular-nums; }
+.plan-detail { margin: .15rem 0 0; font-size: var(--fs-detail); color: var(--muted); font-variant-numeric: tabular-nums; }
+.plan-alert { margin: .55rem 0 0; padding: .45rem .7rem; border-radius: 9px; background: var(--err-bg); color: var(--err); font-weight: 600; font-variant-numeric: tabular-nums; }
+.plan-out b, .plan-alert b, .plan-meals a, .soon-what b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.plan-offer-total b, .plan-whatif b { font-variant-numeric: tabular-nums; }   /* phrase longue : peut passer à la ligne */
+/* un champ de montant avec son « € » dedans */
+.money-field { position: relative; display: inline-flex; align-items: center; }
+.money-field input { padding-right: 1.7rem; }
+.money-field .euro { position: absolute; right: .65rem; color: var(--muted); pointer-events: none; font-size: var(--fs-text); line-height: 1; }
+@media (max-width: 720px) {
+  .plan-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "people" "budget" "price" "margin" "announced"; }
+  .plan-col-h { display: none; }
+}
 .plan-items-head h2 { margin-top: 1.6rem; }
 .plan-empty ol { margin-bottom: 0; }
 .plan-item { margin-top: .8rem; }
@@ -1487,7 +1516,6 @@ tr.to-check > td:last-child { border-right: 2px solid var(--coral); }
 .plan-shares .field { margin-bottom: .5rem; }
 .plan-left { grid-column: 1 / -1; margin: 0; font-size: var(--fs-detail); }
 @media (max-width: 720px) {
-  .plan-figures, .plan-tools { grid-template-columns: minmax(0, 1fr); }
   .plan-offer { grid-template-columns: minmax(0, 1fr); }
   .plan-offer-actions { justify-content: flex-start; }
   .plan-item-head { grid-template-columns: minmax(0, 1fr); }
@@ -1523,9 +1551,10 @@ tr.to-check > td:last-child { border-right: 2px solid var(--coral); }
 .soon-check { grid-column: 1; }
 .soon-when { grid-column: 2; }
 .soon-what { grid-column: 3; }
+.soon-head .soon-check { font-size: var(--fs-label); font-weight: 600; color: var(--muted); }
+.soon-check input { margin: 0; width: 1.1rem; height: 1.1rem; vertical-align: middle; }
 .plan-launch-free { margin: .8rem 0 0; padding-left: 0; list-style: none; color: var(--muted); }
 .plan-launched { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem 1rem; border-color: var(--ok); background: var(--ok-bg); margin-bottom: 1rem; }
-.plan-launch-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; margin: 0 0 1rem; }
 .plan-launch-missing { margin: .8rem 0 0; padding-left: 0; list-style: none; color: var(--amber); font-weight: 600; }
 .plan-launch-table tfoot th { border-top: 2px solid var(--border); }
 @media (max-width: 720px) {
@@ -1534,7 +1563,7 @@ tr.to-check > td:last-child { border-right: 2px solid var(--coral); }
   .soon-what { grid-column: 2; margin-bottom: .45rem; }
 }
 /* Préparer un voyage : onglets, programme du séjour, enveloppe repas */
-.plan-meals { margin-top: .25rem; font-size: var(--fs-detail); color: var(--muted); }
+.plan-meals { margin-top: .25rem; font-size: var(--fs-detail); color: var(--muted); font-variant-numeric: tabular-nums; }
 .plan-stay, .plan-meal-card { margin-bottom: 1rem; }
 .plan-days-form { gap: .5rem; }
 .plan-days-form label { font-weight: 600; margin: 0; }
@@ -1544,22 +1573,31 @@ tr.to-check > td:last-child { border-right: 2px solid var(--coral); }
 .plan-day-date { font-weight: 500; color: var(--muted); }
 .plan-day-meal { gap: .35rem; }
 .plan-day-meal label { display: inline-flex; gap: .3rem; align-items: center; font-weight: 500; margin: 0; }
-.plan-day-meal .num-input { width: 6rem; }
+.plan-day-meal { align-items: center; }
+.plan-day-meal label { min-height: calc(1.45em + 1.1rem + 2px); }
+.plan-day-meal .num-input { width: 6.5rem; }
 .plan-meal-input.changed { border-color: var(--teal); font-weight: 600; }
 .plan-lines { list-style: none; padding: 0; margin: .6rem 0 .3rem; display: grid; gap: .35rem; }
 .plan-line { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .2rem .8rem; padding: .35rem 0; border-top: 1px solid var(--border); }
 .plan-line:first-child { border-top: 0; }
 .plan-line-time { font-weight: 700; font-variant-numeric: tabular-nums; margin-right: .3rem; }
 .plan-line-cont { border-top: 0; padding: 0 0 0 .2rem; }
-.plan-line-edit[open], .plan-line-details[open] { flex-basis: 100%; }
-.plan-line-edit > summary, .plan-line-details > summary { cursor: pointer; list-style: none; display: inline-block; }
-.plan-line-edit > summary::-webkit-details-marker, .plan-line-details > summary::-webkit-details-marker { display: none; }
-.plan-line-edit form { margin-top: .4rem; padding: .6rem .7rem; background: var(--bg-2); border-radius: 9px; }
+.plan-line-details[open] { flex-basis: 100%; }
+.plan-line-details > summary { cursor: pointer; list-style: none; display: inline-block; }
+.plan-line-details > summary::-webkit-details-marker { display: none; }
 .plan-quick { margin-top: .5rem; }
 .plan-quick input[name=text] { flex: 1; min-width: 12rem; }
-.plan-line-more { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 0 .8rem; margin-top: .5rem; }
-.plan-line-more .plan-line-note { grid-column: 1 / -1; }
-.plan-line-more select { width: 100%; }
+/* détails d'une ligne : Heure | Jour | Jusqu'au, puis « Lié à » et la note sur toute la largeur ; étiquettes sur une
+   ligne, champs alignés par le bas */
+.plan-line-more { display: grid; grid-template-columns: 7rem minmax(0, 1fr) minmax(0, 1fr); gap: 0 .8rem; align-items: end; margin-top: .5rem; }
+.plan-line-more .field { margin-bottom: .6rem; }
+.plan-line-more label { white-space: nowrap; }
+.plan-line-more .plan-line-wide { grid-column: 1 / -1; }
+.plan-line-more select, .plan-line-more .num-input { width: 100%; max-width: none; }
+.plan-line-form { grid-column: 1 / -1; margin-top: .3rem; padding: .7rem .8rem; background: var(--bg-2); border-radius: 9px; }
+.plan-line-form > .field { margin-bottom: .2rem; }
+.plan-line-foot { gap: .5rem; margin-top: .1rem; }
+@media (max-width: 480px) { .plan-line-more { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .plan-line-more .field:first-child { grid-column: 1 / -1; } }
 
 /* Préparer un voyage, finitions : un seul style pour les actions secondaires (Modifier, Supprimer, Renommer, ↑ ↓,
    plus de détails…) : même taille, même ligne de base, zone cliquable d'au moins 28 px ; « Supprimer » en rouge */
@@ -1569,6 +1607,7 @@ tr.to-check > td:last-child { border-right: 2px solid var(--coral); }
 .act:hover { background: var(--bg-2); }
 .act:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
 .act.danger { color: var(--err); }
+.act.danger:hover { background: none; text-decoration-thickness: 2px; }   /* pas de fond gris : on dirait un état choisi */
 .act.arrow { min-width: 28px; padding: 0; text-decoration: none; font-size: var(--fs-text); border-color: var(--border); }
 .act:disabled { opacity: .35; cursor: default; background: none; }
 summary.act { list-style: none; }
@@ -1583,11 +1622,8 @@ summary.act::-webkit-details-marker { display: none; }
 /* programme : actions d'une ligne toujours à droite (grand écran), toujours dessous (fenêtre étroite) */
 .plan-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
 .plan-line-cont { display: block; }
-.plan-line-edit[open] { grid-column: 1 / -1; }
 .plan-line-actions { justify-content: flex-end; flex-wrap: wrap; }
-.plan-line-actions .plan-line-edit[open] { flex-basis: 100%; }
 /* repas d'un jour : le « € » sur la ligne du chiffre ; jour sans repas : champ atténué et phrase */
-.plan-day-meal .euro { font-size: var(--fs-text); line-height: 1; color: var(--muted); }
 .plan-meal-input.off { opacity: .55; }
 .plan-day-nomeal { margin: .2rem 0 0; }
 /* ajout rapide : champ plus bas, « plus de détails » nettement détaché */
@@ -1597,8 +1633,6 @@ summary.act::-webkit-details-marker { display: none; }
   .plan-line { grid-template-columns: minmax(0, 1fr); }
   .plan-line-actions { justify-content: flex-start; margin-left: -.4rem; }
 }
-.plan-line:has(.plan-line-edit[open]) { grid-template-columns: minmax(0, 1fr); }   /* formulaire ouvert : toute la largeur */
-.plan-line-actions:has(.plan-line-edit[open]) { justify-content: flex-start; }
 /* menu de gauche d'un voyage en préparation : « En préparation » au-dessus du nom */
 .side .side-kicker { font-size: var(--fs-label); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--teal-strong); padding: 0 .6rem .15rem; }
 /* Programme : choix « Par jour » / « Tableau », et la vue Tableau (lecture seule) */
@@ -1646,4 +1680,12 @@ summary.act::-webkit-details-marker { display: none; }
   .prog-date { display: inline; }
   .prog-sep { display: inline; }
   .prog-total { margin: .2rem .2rem 0; }
+}
+/* fenêtre étroite : pas de pile de boutons avant le premier chiffre. « Lancer le voyage » reste dans le menu ;
+   les boutons de la bannière d'exemple deviennent des liens sur une ligne */
+@media (max-width: 720px) {
+  .plan-head-actions { justify-content: flex-start; }
+  .plan-head-actions #lancer { display: none; }
+  .demo-banner .btn.small { border-color: transparent; background: none; padding: .2rem .3rem; text-decoration: underline; text-underline-offset: 2px; }
+  .demo-banner > .row { flex-wrap: nowrap; gap: .2rem !important; margin-left: -.3rem; }
 }

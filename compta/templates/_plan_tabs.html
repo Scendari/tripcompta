@@ -1,13 +1,15 @@
 {# En-tête de « Postes et offres » et « Programme » : le titre de la page (le nom, les dates et le lieu du projet sont
    dans le menu de gauche, base.html) ; la note du projet sous « Postes et offres » ; « Modifier » (le panneau s'ouvre
-   sur place, on revient sur la page d'où l'on vient) et « Supprimer le projet ». #}
-{% macro plan_head(plan, current) %}
+   sur place, on revient sur la page d'où l'on vient) et « Supprimer le projet » ; avec launch, « Lancer le voyage »
+   (discret : ce n'est pas le premier geste de la page). #}
+{% macro plan_head(plan, current, launch=False) %}
 <div class="page-head">
   <div class="grow">
     <h1>{{ 'Programme' if current == 'programme' else 'Postes et offres' }}</h1>
-    {% if plan.note and current != 'programme' %}<p class="plan-note">{{ plan.note }}</p>{% endif %}
+    {% if plan.note and current != 'programme' %}<p class="plan-note" title="{{ plan.note }}">{{ plan.note }}</p>{% endif %}
   </div>
   <div class="row plan-head-actions">
+    {% if launch %}<a class="btn ghost small" id="lancer" href="/preparer/{{ plan.id }}/lancer">🚀 Lancer le voyage</a>{% endif %}
     <button type="button" class="btn ghost small" data-toggle-row="#modifier" aria-expanded="false" aria-controls="modifier">Modifier</button>
     <form method="post" action="/preparer/{{ plan.id }}/supprimer" class="inline"
           data-confirm="Supprimer le projet « {{ plan.name }} » ? {% if plan.items or plan.offers %}Ses {{ plan.items|length }} poste{{ 's' if plan.items|length > 1 }} et ses {{ plan.offers|length }} offre{{ 's' if plan.offers|length > 1 }} partent avec lui. {% endif %}Tu pourras encore annuler juste après.">

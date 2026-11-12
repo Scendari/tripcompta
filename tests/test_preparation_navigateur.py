@@ -129,7 +129,7 @@ def test_home_panels_one_at_a_time(site, browser):
     box = page.locator("tr.plan-row:has-text('Mer Rouge 2027') td.num").first.bounding_box()
     page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
     page.wait_for_url(re.compile(r"/preparer/1$"))
-    assert page.url.endswith("/preparer/1") and "Ça revient à" in page.locator("main").inner_text()
+    assert page.url.endswith("/preparer/1") and "Prix par personne" in page.locator("main").inner_text()
     narrow = new_page(browser, width=390)                               # téléphone : une petite carte par ligne
     narrow.goto(site.base + "/?onglet=preparer")
     assert narrow.evaluate("document.documentElement.scrollWidth") <= 391
@@ -210,7 +210,7 @@ def test_refused_offer_comes_back_filled(site, browser):
     # projet : le nombre de participants refusé revient près de son champ
     page.fill("#people", "0")
     page.evaluate("document.querySelector('#people').removeAttribute('min')")
-    page.click(".plan-people button")
+    page.press("#people", "Enter")                                   # plus de bouton : Entrée enregistre
     page.wait_for_selector("#champ-refuse")
     assert "au moins une personne" in page.locator("#champ-refuse").inner_text()
     assert page.input_value("#people") == "0"
@@ -313,13 +313,14 @@ def test_day_meal_by_keyboard_and_edit_from_programme(site, browser):
     page = new_page(browser)
     page.goto(site.base + f"{site.url}/programme")
     page.fill("#meal-4", "50")
-    page.locator("#jour-4 button:has-text('OK')").click()
+    page.keyboard.press("Tab")                                       # quitter le champ l'enregistre
     pw.expect(page.locator(".flash")).to_contain_text("Jour 4 : repas comptés à 50,00")
+    assert page.locator("#jour-4 .plan-day-meal button").count() == 0
     box = page.locator("#jour-4 input[name=on]")
     box.focus()
     page.keyboard.press("Space")                                     # décocher au clavier
     pw.expect(page.locator(".flash")).to_contain_text("Jour 4 : pas de repas compté")
-    assert page.input_value("#meal-4") == "50" and page.locator("#jour-4 button:has-text('OK')").is_visible()
+    assert page.input_value("#meal-4") == "50" and page.locator("#jour-4 .money-field").is_visible()
     page.locator("#jour-4 input[name=on]").focus()
     page.keyboard.press("Space")                                     # recocher : le montant du jour revient
     pw.expect(page.locator(".flash")).to_contain_text("Jour 4 : repas comptés à 50,00")
@@ -331,8 +332,77 @@ def test_day_meal_by_keyboard_and_edit_from_programme(site, browser):
     pw.expect(page.locator(".flash")).to_contain_text("Projet modifié")
     assert "/programme" in page.url and "Hurghada, Égypte" in page.locator("aside.side .trip-meta").inner_text()
     page.fill("#meal-4", "")
-    page.locator("#jour-4 button:has-text('OK')").click()             # rendu à l'enveloppe pour les autres essais
+    page.press("#meal-4", "Enter")                                   # rendu à l'enveloppe pour les autres essais
     pw.expect(page.locator(".flash")).to_contain_text("Jour 4 : repas comptés")
+    assert not page.errors, page.errors
+
+
+def test_result_saves_without_button(site, browser):
+    """« Ce que ça donne » : plus de « Recalculer » ni d'« Appliquer ». Un champ s'enregistre avec Entrée ou quand on
+    le quitte (Tab), le choix % / € dès qu'on le change ; le message de confirmation reste ; au clavier, après le
+    rechargement, on est sur le champ suivant, pas en haut de la page."""
+    try:
+        _result_saves_without_button(site, browser)
+    finally:                                                    # remis comme avant pour les autres essais
+        site.post(f"{site.url}/participants", dict(people="10"))
+        site.post(f"{site.url}/marge", dict(margin_kind="pourcent", margin_value="0"))
+        site.post(f"{site.url}/prix-annonce", dict(announced=""))
+
+
+def _result_saves_without_button(site, browser):
+    page = new_page(browser)
+    page.goto(site.base + site.url)
+    assert page.locator("#resultat button").count() == 0
+    page.fill("#people", "9")
+    page.press("#people", "Enter")
+    pw.expect(page.locator(".flash")).to_contain_text("Calculé pour 9 personnes")
+    page.fill("#people", "10")
+    page.keyboard.press("Tab")                                       # quitter le champ
+    pw.expect(page.locator(".flash")).to_contain_text("Calculé pour 10 personnes")
+    pw.expect(page.locator("#dont-repas a")).to_be_focused()         # Tab ne perd pas sa place : le lien qui suit
+    page.fill("#margin_value", "5")
+    page.keyboard.press("Tab")
+    pw.expect(page.locator(".flash")).to_contain_text("Marge : 5 %")
+    pw.expect(page.locator("#margin_pct")).to_be_focused()
+    page.keyboard.press("ArrowRight")                                # % → € au clavier : enregistré tout de suite
+    pw.expect(page.locator(".flash")).to_contain_text("Marge : 5,00 € par personne")
+    assert page.is_checked("#margin_eur")
+    page.fill("#announced", "950")
+    page.press("#announced", "Enter")
+    pw.expect(page.locator(".flash")).to_contain_text("Prix annoncé : 950,00 €")
+    pw.expect(page.locator("#announced")).to_be_focused()            # Entrée : on reste dans le champ
+    pw.expect(page.locator("#announced")).to_be_in_viewport()
+    assert not page.errors, page.errors
+
+
+def test_programme_line_edit_stays_in_place(site, browser):
+    """« Modifier » une ligne du programme : Modifier et Supprimer ne bougent pas, le formulaire s'ouvre dessous sur
+    toute la largeur ; tous les champs ont la même hauteur ; « Annuler » oublie ce qui a été tapé et rend la main au
+    bouton ; « Supprimer » n'a pas de fond gris au survol."""
+    page = new_page(browser)
+    page.goto(site.base + f"{site.url}/programme?vue=jour")
+    li = page.locator(".plan-line:has(.plan-line-form)").first
+    mod, sup = li.locator(".plan-line-actions button[data-toggle-row]"), li.locator(".act.danger")
+    before = (mod.bounding_box(), sup.bounding_box())
+    mod.click()
+    form = li.locator(".plan-line-form")
+    assert form.is_visible() and mod.get_attribute("aria-expanded") == "true"
+    assert (mod.bounding_box(), sup.bounding_box()) == before
+    assert form.bounding_box()["width"] > li.bounding_box()["width"] * .9
+    heights = form.evaluate("f => [...f.querySelectorAll('input[type=text], select')].map(e => Math.round(e.getBoundingClientRect().height))")
+    assert len(set(heights)) == 1, heights
+    labels = form.evaluate("f => [...f.querySelectorAll('label')].map(l => Math.round(l.getBoundingClientRect().height))")
+    assert len(set(labels)) == 1, labels                             # chaque étiquette sur une ligne
+    pw.expect(form.locator("input[name=text]")).to_be_focused()
+    old = form.locator("input[name=text]").input_value()
+    form.locator("input[name=text]").fill("autre chose")
+    form.locator("button:has-text('Annuler')").click()
+    assert form.is_hidden() and mod.get_attribute("aria-expanded") == "false"
+    pw.expect(mod).to_be_focused()
+    mod.click()
+    assert form.locator("input[name=text]").input_value() == old
+    sup.hover()
+    assert sup.evaluate("e => getComputedStyle(e).backgroundColor") in ("rgba(0, 0, 0, 0)", "transparent")
     assert not page.errors, page.errors
 
 
@@ -399,7 +469,7 @@ def test_reference_amounts_unchanged(site, browser):
         sp = lambda s: s.replace("\u202f", " ").replace("\xa0", " ")                              # noqa: E731
         assert sp(page.locator("#budget").inner_text()) == "10 830,00 €"
         assert "1 083,00 €" in sp(page.locator("#par-personne").inner_text())
-        assert "dont repas : 1 900,00 €" in sp(page.locator("#dont-repas").inner_text())
+        assert "dont repas 1 900,00 €" in sp(page.locator("#dont-repas").inner_text())
     finally:                                                    # remis comme avant pour les autres essais
         site.choose("Forfait Club A")
         for d in (1, 7):
@@ -448,7 +518,7 @@ def test_side_menu_on_every_project_page(site, browser):
         assert (page.locator("main a:has-text('Retour au projet')").count() == 1) == ("/offres/" in url), url
     # le bouton du haut et l'entrée du menu mènent à la même page
     page.goto(site.base + site.url)
-    assert page.locator("#lancer a").get_attribute("href") == page.locator("aside.side nav a:has-text('Lancer')").get_attribute("href")
+    assert page.locator("#lancer").get_attribute("href") == page.locator("aside.side nav a:has-text('Lancer')").get_attribute("href")
     # fenêtre étroite : le menu passe au-dessus, sans défilement horizontal
     narrow = new_page(browser, width=390, height=844)
     for url, _ in pages:

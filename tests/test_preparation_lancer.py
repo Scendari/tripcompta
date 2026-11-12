@@ -86,16 +86,16 @@ def test_announced_price_against_price_with_margin(screen):
         r = S.compute_plan(sc.plan(s))
         assert (r.budget, r.margin, r.price_with_margin, r.above_margin) == (868000, 43400, 91140, None)
     sc.post(f"{sc.url}/prix-annonce", dict(announced="950"))
-    t = sc.text()
-    assert "C'est 38,60 € de plus que le prix avec ta marge (911,40 €)." in t
+    t = sc.text()                         # 950 × 10 − 8 680 = 820 ; le prix avec la marge n'est dit qu'une fois
+    assert "Il te reste 82,00 € par personne (820,00 € en tout)." in t
+    assert "Avec ta marge (5 %) : 911,40 € par personne" in t and t.count("911,40") == 1
+    assert "de plus que le prix avec ta marge" not in t
     with sc.db.Session() as s:
         assert S.compute_plan(sc.plan(s)).above_margin == 3860
-    sc.post(f"{sc.url}/prix-annonce", dict(announced="900"))
-    assert "C'est 11,40 € de moins que le prix avec ta marge (911,40 €)." in sc.text()
-    sc.post(f"{sc.url}/prix-annonce", dict(announced="911,40"))
-    assert "C'est exactement le prix avec ta marge." in sc.text()
+    sc.post(f"{sc.url}/prix-annonce", dict(announced="800"))   # 8 000 − 8 680 = −680
+    assert "Ce prix ne couvre pas le coût : il manque 68,00 € par personne (680,00 € en tout)." in sc.text()
     sc.post(f"{sc.url}/marge", dict(margin_kind="pourcent", margin_value="0"))
-    assert "prix avec ta marge" not in sc.text()               # sans marge : pas de phrase
+    assert "Avec ta marge" not in sc.text()                  # sans marge : pas de phrase
 
 
 def test_package_without_split_shows_its_total(screen):
