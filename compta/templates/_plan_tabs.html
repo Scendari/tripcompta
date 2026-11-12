@@ -1,12 +1,13 @@
 {# En-tête de « Postes et offres » et « Programme » : le titre de la page (le nom, les dates et le lieu du projet sont
-   dans le menu de gauche, base.html) ; la note du projet sous « Postes et offres » ; « Modifier » (le panneau s'ouvre
+   dans le menu de gauche, base.html) ; la note du projet sous « Postes et offres » (deux lignes ; « Lire la note » l'ouvre en entier) ; « Modifier » (le panneau s'ouvre
    sur place, on revient sur la page d'où l'on vient) et « Supprimer le projet » ; avec launch, « Lancer le voyage »
    (discret : ce n'est pas le premier geste de la page). #}
 {% macro plan_head(plan, current, launch=False) %}
 <div class="page-head">
   <div class="grow">
     <h1>{{ 'Programme' if current == 'programme' else 'Postes et offres' }}</h1>
-    {% if plan.note and current != 'programme' %}<p class="plan-note" title="{{ plan.note }}">{{ plan.note }}</p>{% endif %}
+    {% if plan.note and current != 'programme' %}<div class="plan-note"><p class="plan-note-text">{{ plan.note }}</p>
+      <button type="button" class="act" data-note="{{ plan.note }}" data-note-title="Note du projet">Lire la note</button></div>{% endif %}
   </div>
   <div class="row plan-head-actions">
     {% if launch %}<a class="btn ghost small" id="lancer" href="/preparer/{{ plan.id }}/lancer">🚀 Lancer le voyage</a>{% endif %}

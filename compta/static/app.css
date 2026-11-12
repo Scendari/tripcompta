@@ -1464,8 +1464,21 @@ tr.to-check > td:last-child { border-right: 2px solid var(--coral); }
 .plan-first > form.card { box-shadow: none; border: 0; padding: 0; background: transparent; }
 .plan-page { max-width: 980px; }
 .plan-kicker { margin: 0 0 .2rem; font-size: var(--fs-label); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--teal-strong); }
-.plan-note { white-space: pre-line; margin-top: .4rem; font-size: var(--fs-detail); color: var(--muted);
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; max-width: 60rem; }
+.plan-note { margin-top: .4rem; max-width: 60rem; font-size: var(--fs-detail); color: var(--muted); }
+.plan-note-text { white-space: pre-line; margin: 0;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.plan-note .act, .plan-offer-note .act { font-size: var(--fs-detail); padding-left: 0; padding-right: 0; }
+/* note d'une offre : sa première ligne, puis « Lire la note » pour tout lire */
+.plan-offer-note { display: flex; align-items: baseline; gap: .6rem; font-size: var(--fs-detail); color: var(--muted); }
+.plan-offer-note-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-offer-note .act { flex: none; }
+/* fenêtre « Lire la note » */
+.note-box { width: min(36rem, calc(100vw - 2rem)); max-height: min(80vh, 40rem); padding: 1.2rem 1.4rem;
+  background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+.note-box::backdrop { background: rgba(20, 16, 10, .35); }
+.note-box-h { font-size: var(--fs-heading); font-weight: 700; margin: 0 0 .6rem; }
+.note-box-text { white-space: pre-line; overflow-wrap: anywhere; line-height: 1.5; }
+.note-box-foot { justify-content: flex-end; margin-top: 1rem; }
 .plan-head-actions { justify-content: flex-end; }
 .plan-edit { margin-bottom: 1rem; }
 .danger-text { color: var(--err) !important; }

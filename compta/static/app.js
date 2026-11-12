@@ -233,6 +233,24 @@
     }
   } catch (e) {}
 
+  // « Lire la note » (button[data-note]) : la note entière dans une fenêtre ; Échap, « Fermer » ou un clic à côté la
+  // ferment, et le focus revient au bouton.
+  const noteBox = document.getElementById("note-box");
+  if (noteBox && noteBox.showModal) {
+    let opener = null;
+    document.addEventListener("click", (ev) => {
+      const b = ev.target.closest("button[data-note]");
+      if (!b) return;
+      opener = b;
+      noteBox.querySelector(".note-box-h").textContent = b.dataset.noteTitle || "Note";
+      noteBox.querySelector(".note-box-text").textContent = b.dataset.note;
+      noteBox.showModal();
+      noteBox.querySelector(".note-box-foot button").focus();
+    });
+    noteBox.addEventListener("click", (ev) => { if (ev.target === noteBox) noteBox.close(); });   // clic à côté
+    noteBox.addEventListener("close", () => { if (opener) opener.focus(); opener = null; });
+  }
+
   // Bouton qui recharge la page sans la faire sauter (form[data-keep-place], « Retenir » une offre) : le bloc où l'on a
   // cliqué revient à la même hauteur dans la fenêtre, même si ce qui est au-dessus a grandi ou rétréci, et le focus
   // va au bouton qui a pris la place de celui qu'on a cliqué.

@@ -200,7 +200,8 @@
       <div class="plan-offer-main">
         <div class="plan-offer-name"><b>{{ o.label }}</b>{% if o.chosen %} <span class="pill ok">✓ Retenue</span>{% endif %}
           {% if x.others %}<span class="muted small"> · couvre aussi {{ x.others|join(', ') }}</span>{% endif %}</div>
-        {% if o.note %}<div class="muted small">{{ o.note }}</div>{% endif %}
+        {% if o.note %}<div class="plan-offer-note"><span class="plan-offer-note-text">{{ o.note }}</span>
+          <button type="button" class="act" data-note="{{ o.note }}" data-note-title="Note : {{ o.label }}">Lire la note</button></div>{% endif %}
         <div class="plan-offer-price">{{ x.text }}</div>
         <div class="plan-offer-total">{{ x.total|money }} pour le groupe{% if x.each_said %} · <b>{{ x.each|money }}</b> par personne{% endif %}</div>
         {% if not o.chosen and x.w %}

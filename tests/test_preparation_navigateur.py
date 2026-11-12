@@ -10,6 +10,7 @@ import time
 
 import pytest
 
+from compta import models as M
 from test_preparation_ecran import Screen, clean
 from test_ux import JARGON, unlabeled_fields
 
@@ -588,3 +589,47 @@ def test_choose_keeps_the_page_still(site, browser):
     finally:
         site.choose("Transavia")
     assert not page.errors, page.errors
+
+
+def test_read_the_note_in_a_window(site, browser):
+    """« Lire la note » : la note du projet (deux lignes en haut) et celle d'une offre (sa première ligne) s'ouvrent en
+    entier dans une fenêtre ; Échap, « Fermer » ou un clic à côté la ferment et le focus revient au bouton."""
+    long = "Club de plongée des Calanques.\nContact : Marie, 06 00 00 00 00.\n" + "Idée : " + "une sortie de nuit, " * 12
+    with site.db.Session() as s:
+        plan, o = site.plan(s), s.get(M.PlanOffer, site.offer("Air France"))
+        old = (plan.note, o.note)
+        plan.note, o.note = long, "Bagage plongée compris. " + "Escale courte à l'aller, " * 6 + "fin."
+        s.commit()
+    try:
+        for width in (1366, 390):
+            page = new_page(browser, width=width)
+            page.goto(site.base + site.url)
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            dialog = page.locator("#note-box")
+            btn = page.locator(".plan-note button:has-text('Lire la note')")
+            btn.click()
+            pw.expect(dialog).to_be_visible()
+            pw.expect(dialog.locator(".note-box-h")).to_have_text("Note du projet")
+            assert dialog.locator(".note-box-text").inner_text().strip() == long.strip()
+            pw.expect(dialog.locator("button:has-text('Fermer')")).to_be_focused()
+            page.keyboard.press("Escape")
+            pw.expect(dialog).to_be_hidden()
+            pw.expect(btn).to_be_focused()
+            obtn = page.locator(f"#offre-{site.offer('Air France')} button:has-text('Lire la note')")
+            obtn.focus()
+            page.keyboard.press("Enter")                                    # au clavier aussi
+            pw.expect(dialog.locator(".note-box-h")).to_have_text("Note : Air France")
+            pw.expect(dialog.locator(".note-box-text")).to_contain_text("fin.")
+            page.keyboard.press("Enter")                                    # « Fermer »
+            pw.expect(dialog).to_be_hidden()
+            pw.expect(obtn).to_be_focused()
+            obtn.click()
+            page.mouse.click(5, 5)                                          # clic à côté
+            pw.expect(dialog).to_be_hidden()
+            line = page.locator(f"#offre-{site.offer('Air France')} .plan-offer-note-text")
+            assert line.evaluate("el => el.scrollWidth > el.clientWidth")   # une ligne, coupée par « … »
+            assert not page.errors, page.errors
+    finally:
+        with site.db.Session() as s:
+            site.plan(s).note, s.get(M.PlanOffer, site.offer("Air France")).note = old
+            s.commit()

@@ -144,6 +144,11 @@
 </div>
 {% block outside %}{% endblock %}{# hors de la zone qui défile (ex. la mer de l'accueil) #}
 {% endif %}
+{# fenêtre « Lire la note » (app.js, boutons data-note) : Échap, « Fermer » ou un clic à côté la ferment #}
+<dialog id="note-box" class="note-box" aria-labelledby="note-box-h">
+  <form method="dialog"><p id="note-box-h" class="note-box-h"></p><div class="note-box-text"></div>
+    <div class="row note-box-foot"><button class="btn">Fermer</button></div></form>
+</dialog>
 <script src="/static/app.js?v={{ STATIC_V }}"></script>
 {% block scripts %}{% endblock %}
 </body>
