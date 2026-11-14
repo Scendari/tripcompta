@@ -354,6 +354,11 @@ def _result_saves_without_button(site, browser):
     page = new_page(browser)
     page.goto(site.base + site.url)
     assert page.locator("#resultat button").count() == 0
+    assert page.locator(".flash").count() == 0                       # page neuve : le message va apparaître au-dessus
+    page.fill("#people", "11")
+    page.keyboard.press("Tab")
+    pw.expect(page.locator(".flash")).to_contain_text("Calculé pour 11 personnes")
+    pw.expect(page.locator("#dont-repas a")).to_be_focused()         # pas décalé par le message (vu sous Windows)
     page.fill("#people", "9")
     page.press("#people", "Enter")
     pw.expect(page.locator(".flash")).to_contain_text("Calculé pour 9 personnes")

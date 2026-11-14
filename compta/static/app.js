@@ -213,9 +213,13 @@
       if (f.dataset.sent) { ev.preventDefault(); return; }        // Entrée puis sortie du champ : un seul envoi
       f.dataset.sent = "1";
       addEventListener("pagehide", () => {
+        // l'élément où l'on est, repéré depuis le dernier élément à identifiant avant lui (le champ qu'on vient de
+        // quitter, en général) : un message apparu plus haut (« Calculé pour… ↶ Défaire ») ne décale rien
         const a = document.activeElement, all = [...document.querySelectorAll(FOCUSABLE)];
+        let i = a && a !== document.body ? all.indexOf(a) : -1, j = i;
+        while (j > 0 && !all[j].id) j--;
         try { sessionStorage.setItem(AUTO_KEY, JSON.stringify({path: location.pathname, y: scrollY,
-          id: a && a.id ? a.id : "", n: a && a !== document.body ? all.indexOf(a) : -1})); } catch (e) {}
+          from: j >= 0 && all[j].id ? all[j].id : "", k: i - j})); } catch (e) {}
       }, {once: true});
     });
   });
@@ -226,7 +230,8 @@
       // après le chargement : le navigateur va d'abord à l'ancre de l'adresse (#resultat) et lâche le focus
       const put = () => {
         scrollTo(0, back.y);
-        const el = (back.id && document.getElementById(back.id)) || (back.n >= 0 && document.querySelectorAll(FOCUSABLE)[back.n]);
+        const all = [...document.querySelectorAll(FOCUSABLE)], from = back.from && document.getElementById(back.from);
+        const el = from && all.indexOf(from) >= 0 && all[all.indexOf(from) + back.k];
         if (el) el.focus({preventScroll: true});
       };
       if (document.readyState === "complete") setTimeout(put, 0); else addEventListener("load", () => setTimeout(put, 0), {once: true});
